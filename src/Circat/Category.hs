@@ -20,8 +20,6 @@ module Circat.Category
   , CategoryProduct(..), CategoryCoproduct(..)
   ) where
 
--- TODO: explicit exports
-
 import Prelude hiding (id,(.),fst,snd)
 import qualified Prelude as P
 

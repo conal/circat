@@ -15,8 +15,9 @@ build-type:          Simple
 Library
   hs-Source-Dirs:      src
   Include-Dirs:        src
-  Build-Depends:       base<5
+  Build-Depends:       base<5, ghc-prim, containers, newtype, transformers
   Exposed-Modules:     
                        Circat.Misc
                        Circat.Category
+                       Circat.Classes
                        Circat.Circuit

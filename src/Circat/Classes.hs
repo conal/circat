@@ -23,20 +23,20 @@ import GHC.Prim (Constraint)
 
 import Circat.Misc ((:*))
 
-class BoolC (~>) where
-  andC, orC :: (Bool :* Bool) ~> Bool
+class BoolCat (~>) where
   notC :: Bool ~> Bool
+  andC, orC :: (Bool :* Bool) ~> Bool
 
-instance BoolC (->) where
+instance BoolCat (->) where
+  notC = not
   andC = uncurry (&&)
   orC  = uncurry (||)
-  notC = not
 
-class EqC (~>) where
+class EqCat (~>) where
   type EqConstraint a :: Constraint
   type EqConstraint a = () ~ () -- or just (), if it works
   eq, neq :: (Eq a, EqConstraint a) => (a :* a) ~> Bool
 
-instance EqC (->) where
+instance EqCat (->) where
   eq  = uncurry (==)
   neq = uncurry (/=)

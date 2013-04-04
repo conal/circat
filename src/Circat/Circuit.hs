@@ -31,11 +31,11 @@ import Control.Arrow (Kleisli(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 
-import Control.Monad.State (State) -- mtl
--- import Control.Newtype (Newtype(..))
+import Control.Monad.Trans.State (State,get,put) -- transformers
 
-import Circat.Misc ((:*),(:+),(<~))
+import Circat.Misc ((:*),(:+),(<~),Unop)
 import Circat.Category
+import Circat.Classes
 
 {--------------------------------------------------------------------
     The circuit monad
@@ -44,8 +44,11 @@ import Circat.Category
 -- The circuit monad:
 type CircuitM = State Maps
 
--- Stub for component type
-type Comp = String
+-- Primitive (stub)
+type Prim = String
+
+-- Component: primitive instance with input sources
+data Comp = Comp Prim [Pin]
 
 data Maps = Maps { comps :: IMap Comp, pins :: IMap Pin }
 
@@ -68,14 +71,39 @@ newtype PinIdx = PinIdx Int
     Pins
 --------------------------------------------------------------------}
 
--- The Pins type family gives a representation for a type in terms of structures of pins.
+-- The Source type family gives a representation for a type in terms of structures of pins.
+class HasPins a where
+  type Source a
+  -- | Generate a difference list of pins. First argument is phantom for Source
+  -- non-injectivity.
+  toPins   :: a -> Source a -> Unop [Pin]
+  -- | Generate a source from a supply of pins
+  fromPins :: a -> State [Pin] (Source a)
 
-type  family  Pins t
+instance HasPins () where
+  type Source () = ()
+  toPins _ () = id
+  fromPins _ = return ()
+    
+pop :: State [a] a
+pop = do { (a:as) <- get ; put as ; return a }
 
-type instance Pins ()       = ()
-type instance Pins Bool     = Pin
-type instance Pins (a :* b) = Pins a :* Pins b
-type instance Pins (a :+ b) = Pins a :+ Pins b   -- ???
+instance HasPins Bool where
+  type Source Bool = Pin
+  toPins _ b = (b :)
+  fromPins _ = pop
+
+instance (HasPins a, HasPins b) => HasPins (a :* b) where
+  type Source (a :* b) = Source a :* Source b
+  toPins ~(a,b) (sa,sb) = toPins b sb . toPins a sa
+  -- fromPins = liftA2 (,) fromPins fromPins
+  fromPins ~(a,b) = do sa <- fromPins a
+                       sb <- fromPins b
+                       return (sa,sb)
+
+-- instance HasPins (a :+ b) where
+--   type Source (a :+ b) = Source a :+ Source b   -- ???
+
 
 {--------------------------------------------------------------------
     Circuit category
@@ -84,18 +112,18 @@ type instance Pins (a :+ b) = Pins a :+ Pins b   -- ???
 infixl 1 :>, :+>
 
 -- | Internal representation for '(:>)'.
-type a :+> b = Kleisli CircuitM (Pins a) (Pins b)
-
--- type a :+> b = Pins a -> CircuitM (Pins b)
-
+type a :+> b = Kleisli CircuitM (Source a) (Source b)
 
 -- First shot at circuit category
 newtype a :> b = C { unC :: a :+> b }
 
--- instance Newtype (a :> b) (Pins a -> CircuitM (Pins b)) where
---   pack = C
---   unpack = unC
+cirk :: (Source a -> CircuitM (Source b)) -> (a :> b)
+cirk = C . Kleisli
 
+-- instance Newtype (a :> b) (Source a -> CircuitM (Source b)) where
+--   pack   = C
+--   unpack = unC
+-- 
 --     Illegal type synonym family application in instance.
 --
 -- So define manually:
@@ -118,16 +146,34 @@ instance CategoryProduct (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
-instance CategoryCoproduct (:>) where
-  lft       = C lft
-  rht       = C rht
-  jam       = C jam
-  ldistribS = C ldistribS
-  rdistribS = C rdistribS
-  (+++)     = inC2 (+++)
-  (|||)     = inC2 (|||)
+-- instance CategoryCoproduct (:>) where
+--   lft       = C lft
+--   rht       = C rht
+--   jam       = C jam
+--   ldistribS = C ldistribS
+--   rdistribS = C rdistribS
+--   (+++)     = inC2 (+++)
+--   (|||)     = inC2 (|||)
 
 -- TODO: Reconsider this CategoryCoproduct instance, which relies on the dubious
 -- 
---   type instance Pins (a :+ b) = Pins a :+ Pins b.
+--   type instance Source (a :+ b) = Source a :+ Source b.
 
+-- class BoolCat (~>) where
+--   notC :: Bool ~> Bool
+--   andC, orC :: (Bool :* Bool) ~> Bool
+
+-- | Instantiate a component, given its primitive, inputs, and number of outputs.
+-- TODO: Rework this interface.
+addComp :: Prim -> [Pin] -> Int -> CircuitM [Pin]
+addComp = error "addComp: not implemented"
+
+instance BoolCat (:>) where
+  notC = cirk $ \ i     -> do [o] <- addComp "not" [ i ] 1
+                              return o
+  andC = cirk $ \ (a,b) -> do [o] <- addComp "and" [a,b] 1
+                              return o
+  orC  = cirk $ \ (a,b) -> do [o] <- addComp "or"  [a,b] 1
+                              return o
+
+-- TODO: Refactor
