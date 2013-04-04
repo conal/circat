@@ -1,5 +1,6 @@
-{-# LANGUAGE TypeFamilies, TypeOperators #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -31,7 +32,7 @@ import Control.Arrow (Kleisli(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 
-import Control.Monad.Trans.State (State,get,put) -- transformers
+import Control.Monad.Trans.State (State,get,put,runState) -- transformers
 
 import Circat.Misc ((:*),(:+),(<~),Unop)
 import Circat.Category
@@ -50,7 +51,11 @@ type Prim = String
 -- Component: primitive instance with input sources
 data Comp = Comp Prim [Pin]
 
-data Maps = Maps { comps :: IMap Comp, pins :: IMap Pin }
+-- data Comp = forall a b. HasPins2 a b => Comp Prim [Pin]
+
+-- TODO: Phantom type parameters for Prim
+
+data Maps = Maps { compMap :: IMap Comp, pinMap :: IMap Pin }
 
 -- These two maps have a identifier supply (represented by the next free
 -- identifier, which is an `Int`):
@@ -67,9 +72,20 @@ type Pin = (Id,PinIdx)
 
 newtype PinIdx = PinIdx Int
 
+
+
 {--------------------------------------------------------------------
     Pins
 --------------------------------------------------------------------}
+
+sourceToPins :: forall a. HasPins a => Source a -> [Pin]
+sourceToPins = ($ []) . toPins (error "toPins: dummy argument" :: a)
+
+pinsToSource :: forall a. HasPins a => [Pin] -> Source a
+pinsToSource pins | null rest = src
+                  | otherwise = error "pinsToSource: wrong number of pins"
+ where
+   (src,rest) = runState (fromPins (error "fromPins dummy argument" :: a)) pins
 
 -- The Source type family gives a representation for a type in terms of structures of pins.
 class HasPins a where
@@ -79,6 +95,8 @@ class HasPins a where
   toPins   :: a -> Source a -> Unop [Pin]
   -- | Generate a source from a supply of pins
   fromPins :: a -> State [Pin] (Source a)
+
+type HasPins2 a b = (HasPins a, HasPins b)
 
 instance HasPins () where
   type Source () = ()
@@ -93,13 +111,14 @@ instance HasPins Bool where
   toPins _ b = (b :)
   fromPins _ = pop
 
-instance (HasPins a, HasPins b) => HasPins (a :* b) where
+instance HasPins2 a b => HasPins (a :* b) where
   type Source (a :* b) = Source a :* Source b
   toPins ~(a,b) (sa,sb) = toPins b sb . toPins a sa
   -- fromPins = liftA2 (,) fromPins fromPins
   fromPins ~(a,b) = do sa <- fromPins a
                        sb <- fromPins b
                        return (sa,sb)
+
 
 -- instance HasPins (a :+ b) where
 --   type Source (a :+ b) = Source a :+ Source b   -- ???
@@ -163,17 +182,23 @@ instance CategoryProduct (:>) where
 --   notC :: Bool ~> Bool
 --   andC, orC :: (Bool :* Bool) ~> Bool
 
--- | Instantiate a component, given its primitive, inputs, and number of outputs.
--- TODO: Rework this interface.
-addComp :: Prim -> [Pin] -> Int -> CircuitM [Pin]
-addComp = error "addComp: not implemented"
+-- -- | Instantiate a component, given its primitive, inputs, and number of outputs.
+-- -- TODO: Rework this interface.
+-- addComp :: Prim -> [Pin] -> Int -> CircuitM [Pin]
+-- addComp = error "addComp: not implemented"
 
-instance BoolCat (:>) where
-  notC = cirk $ \ i     -> do [o] <- addComp "not" [ i ] 1
-                              return o
-  andC = cirk $ \ (a,b) -> do [o] <- addComp "and" [a,b] 1
-                              return o
-  orC  = cirk $ \ (a,b) -> do [o] <- addComp "or"  [a,b] 1
-                              return o
+-- instance BoolCat (:>) where
+--   notC = cirk $ \ i     -> do [o] <- addComp "not" [ i ] 1
+--                               return o
+--   andC = cirk $ \ (a,b) -> do [o] <- addComp "and" [a,b] 1
+--                               return o
+--   orC  = cirk $ \ (a,b) -> do [o] <- addComp "or"  [a,b] 1
+--                               return o
 
 -- TODO: Refactor
+
+-- addComp' :: HasPins2 a => Prim -> (a :> b)
+-- addComp' prim = 
+--   cirk $ \ a -> 
+--     do [o] <- pinsToSource <$> addComp prim (sourceToPins a) 
+              
