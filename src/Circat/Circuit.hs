@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
+{-# LANGUAGE TupleSections, ScopedTypeVariables, ExistentialQuantification #-}
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -32,7 +33,9 @@ import Control.Arrow (Kleisli(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 
-import Control.Monad.Trans.State (State,get,put,runState) -- transformers
+-- mtl
+import Control.Monad.State (MonadState(..),State,runState)
+import Control.Monad.Writer (MonadWriter(..),WriterT)
 
 import Circat.Misc ((:*),(:+),(<~),Unop)
 import Circat.Category
@@ -42,163 +45,87 @@ import Circat.Classes
     The circuit monad
 --------------------------------------------------------------------}
 
--- The circuit monad:
-type CircuitM = State Maps
-
 -- Primitive (stub)
-type Prim = String
+newtype Prim a b = Prim String deriving Show
 
--- Component: primitive instance with input sources
-data Comp = Comp Prim [Pin]
+-- Component: primitive instance with inputs & outputs
+data Comp = forall a b. IsSource2 a b => Comp (Prim a b) a b
 
--- data Comp = forall a b. HasPins2 a b => Comp Prim [Pin]
+deriving instance Show Comp
 
--- TODO: Phantom type parameters for Prim
+-- The circuit monad:
+type CircuitM = WriterT [Comp] (State PinSupply)
 
-data Maps = Maps { compMap :: IMap Comp, pinMap :: IMap Pin }
+-- TODO: Is WriterT [a] efficient, or do we get frequent (++)? I could use a
+-- difference list instead, i.e., Unop [Comp] instead of [Comp].
 
--- These two maps have a identifier supply (represented by the next free
--- identifier, which is an `Int`):
+newtype Pin = Pin Int deriving (Eq,Show,Enum)
+type PinSupply = Pin  -- Next free pin
 
--- Identifier-indexed map with a supply
-type IMap a = (Supply, Map Id a)
-
-newtype Id = Id Int
-type Supply = Id  -- Next free Id
-
--- A pin is defined as a component ID and output pin number:
-
-type Pin = (Id,PinIdx)
-
-newtype PinIdx = PinIdx Int
-
-
+newPin :: CircuitM Pin
+newPin = do { p <- get ; put (succ p) ; return p }
 
 {--------------------------------------------------------------------
     Pins
 --------------------------------------------------------------------}
 
-sourceToPins :: forall a. HasPins a => Source a -> [Pin]
-sourceToPins = ($ []) . toPins (error "toPins: dummy argument" :: a)
+sourcePins :: forall a. IsSource a => a -> [Pin]
+sourcePins s = toPins s []
 
-pinsToSource :: forall a. HasPins a => [Pin] -> Source a
-pinsToSource pins | null rest = src
-                  | otherwise = error "pinsToSource: wrong number of pins"
- where
-   (src,rest) = runState (fromPins (error "fromPins dummy argument" :: a)) pins
+-- The Source type family gives a representation for a type in terms of
+-- structures of pins. Maybe drop the Show constraint later (after testing).
+class Show a => IsSource a where
+  toPins    :: a -> Unop [Pin]  -- difference list
+  genSource :: CircuitM a
 
--- The Source type family gives a representation for a type in terms of structures of pins.
-class HasPins a where
-  type Source a
-  -- | Generate a difference list of pins. First argument is phantom for Source
-  -- non-injectivity.
-  toPins   :: a -> Source a -> Unop [Pin]
-  -- | Generate a source from a supply of pins
-  fromPins :: a -> State [Pin] (Source a)
+genComp :: forall a b. IsSource2 a b =>
+           Prim a b -> a -> CircuitM b
+genComp prim a = do b <- genSource
+                    tell [Comp prim a b]
+                    return b
 
-type HasPins2 a b = (HasPins a, HasPins b)
+type IsSource2 a b = (IsSource a, IsSource b)
 
-instance HasPins () where
-  type Source () = ()
-  toPins _ () = id
-  fromPins _ = return ()
-    
-pop :: State [a] a
-pop = do { (a:as) <- get ; put as ; return a }
+instance IsSource () where
+  toPins () = id
+  genSource = pure ()
 
-instance HasPins Bool where
-  type Source Bool = Pin
-  toPins _ b = (b :)
-  fromPins _ = pop
+instance IsSource Pin where
+  toPins p  = (p :)
+  genSource = newPin
 
-instance HasPins2 a b => HasPins (a :* b) where
-  type Source (a :* b) = Source a :* Source b
-  toPins ~(a,b) (sa,sb) = toPins b sb . toPins a sa
-  -- fromPins = liftA2 (,) fromPins fromPins
-  fromPins ~(a,b) = do sa <- fromPins a
-                       sb <- fromPins b
-                       return (sa,sb)
+instance IsSource2 a b => IsSource (a :* b) where
+  toPins (sa,sb) = toPins sb . toPins sa
+  genSource      = liftA2 (,) genSource genSource
 
-
--- instance HasPins (a :+ b) where
---   type Source (a :+ b) = Source a :+ Source b   -- ???
-
+-- instance IsSource (a :+ b) where ... ???
 
 {--------------------------------------------------------------------
     Circuit category
 --------------------------------------------------------------------}
 
-infixl 1 :>, :+>
+infixl 1 :>
 
--- | Internal representation for '(:>)'.
-type a :+> b = Kleisli CircuitM (Source a) (Source b)
+-- | Circuit category
+type (:>) = Kleisli CircuitM
 
--- First shot at circuit category
-newtype a :> b = C { unC :: a :+> b }
+-- TODO: Will the product & coproduct instances really work here, or do I need a
+-- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefit accrues
+-- from using the categorical instead of monadic form?
 
-cirk :: (Source a -> CircuitM (Source b)) -> (a :> b)
-cirk = C . Kleisli
+newComp :: IsSource2 a b => Prim a b -> a :> b
+newComp prim = Kleisli (genComp prim)
 
--- instance Newtype (a :> b) (Source a -> CircuitM (Source b)) where
---   pack   = C
---   unpack = unC
--- 
---     Illegal type synonym family application in instance.
---
--- So define manually:
+pcomp :: IsSource2 a b => String -> a :> b
+pcomp = newComp . Prim
 
-inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
-inC = C <~ unC
+instance BoolCat (:>) where
+  type Bit (:>) = Pin
+  notC = pcomp "not"
+  orC  = pcomp "or"
+  andC = pcomp "and"
 
-inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
-     -> (a :> b -> a' :> b' -> a'' :> b'')
-inC2 = inC <~ unC
-
-instance Category (:>) where
-  id  = C id
-  (.) = inC2 (.)
-
-instance CategoryProduct (:>) where
-  fst   = C fst
-  snd   = C snd
-  dup   = C dup
-  (***) = inC2 (***)
-  (&&&) = inC2 (&&&)
-
--- instance CategoryCoproduct (:>) where
---   lft       = C lft
---   rht       = C rht
---   jam       = C jam
---   ldistribS = C ldistribS
---   rdistribS = C rdistribS
---   (+++)     = inC2 (+++)
---   (|||)     = inC2 (|||)
-
--- TODO: Reconsider this CategoryCoproduct instance, which relies on the dubious
--- 
---   type instance Source (a :+ b) = Source a :+ Source b.
-
--- class BoolCat (~>) where
---   notC :: Bool ~> Bool
---   andC, orC :: (Bool :* Bool) ~> Bool
-
--- -- | Instantiate a component, given its primitive, inputs, and number of outputs.
--- -- TODO: Rework this interface.
--- addComp :: Prim -> [Pin] -> Int -> CircuitM [Pin]
--- addComp = error "addComp: not implemented"
-
--- instance BoolCat (:>) where
---   notC = cirk $ \ i     -> do [o] <- addComp "not" [ i ] 1
---                               return o
---   andC = cirk $ \ (a,b) -> do [o] <- addComp "and" [a,b] 1
---                               return o
---   orC  = cirk $ \ (a,b) -> do [o] <- addComp "or"  [a,b] 1
---                               return o
-
--- TODO: Refactor
-
--- addComp' :: HasPins2 a => Prim -> (a :> b)
--- addComp' prim = 
---   cirk $ \ a -> 
---     do [o] <- pinsToSource <$> addComp prim (sourceToPins a) 
-              
+instance EqCat (:>) where
+  type EqConstraint (:>) a = IsSource a
+  eq  = pcomp "eq"
+  neq = pcomp "neq"
