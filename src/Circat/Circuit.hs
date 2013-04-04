@@ -26,6 +26,7 @@ import qualified Prelude as P
 import Control.Applicative
 import Control.Monad (void,join,(>=>),(<=<))
 import qualified Control.Arrow as A
+import Control.Arrow (Kleisli(..))
 
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -33,7 +34,7 @@ import qualified Data.Map as M
 import Control.Monad.State (State) -- mtl
 -- import Control.Newtype (Newtype(..))
 
-import Circat.Misc ((:*),(<~))
+import Circat.Misc ((:*),(:+),(<~))
 import Circat.Category
 
 {--------------------------------------------------------------------
@@ -74,8 +75,7 @@ type  family  Pins t
 type instance Pins ()       = ()
 type instance Pins Bool     = Pin
 type instance Pins (a :* b) = Pins a :* Pins b
-
--- type instance Pins (a :+ b) = ???
+type instance Pins (a :+ b) = Pins a :+ Pins b   -- ???
 
 {--------------------------------------------------------------------
     Circuit category
@@ -83,10 +83,11 @@ type instance Pins (a :* b) = Pins a :* Pins b
 
 infixl 1 :>, :+>
 
--- Internal representation for '(:>)'.
-type a :+> b = Pins a -> CircuitM (Pins b)
+-- | Internal representation for '(:>)'.
+type a :+> b = Kleisli CircuitM (Pins a) (Pins b)
 
--- type a :+> b = Kleisli CircuitM (Pins a) (Pins b)
+-- type a :+> b = Pins a -> CircuitM (Pins b)
+
 
 -- First shot at circuit category
 newtype a :> b = C { unC :: a :+> b }
@@ -107,32 +108,26 @@ inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
 inC2 = inC <~ unC
 
 instance Category (:>) where
-  id  = C pure
-  (.) = inC2 (<=<)
+  id  = C id
+  (.) = inC2 (.)
 
--- instance CategoryProduct (:>) where
---   (***) = inC2 $ \ f g -> \ (a,b) -> 
+instance CategoryProduct (:>) where
+  fst   = C fst
+  snd   = C snd
+  dup   = C dup
+  (***) = inC2 (***)
+  (&&&) = inC2 (&&&)
 
+instance CategoryCoproduct (:>) where
+  lft       = C lft
+  rht       = C rht
+  jam       = C jam
+  ldistribS = C ldistribS
+  rdistribS = C rdistribS
+  (+++)     = inC2 (+++)
+  (|||)     = inC2 (|||)
 
--- -- | Category with product. Minimal definition: 'fst', 'snd', and either
--- -- (a) '(&&&)', (b) both '(***)' and 'dup', or (c) both '(&&&)' and '(***)'.
--- -- TODO: Generalize '(:*)' to an associated type. Keep the types fairly pretty.
--- class Category (~>) => CategoryProduct (~>) where
---   fst     :: (a :* b) ~> a
---   snd     :: (a :* b) ~> b
---   dup     :: a ~> (a :* a)
---   dup     =  id &&& id
---   swapP   :: (a :* b) ~> (b :* a)
---   swapP   =  snd &&& fst
---   (***)   :: (a ~> c) -> (b ~> d) -> ((a :* b) ~> (c :* d))
---   f *** g =  f . fst &&& g . snd
---   (&&&)   :: (a ~> c) -> (a ~> d) -> (a ~> (c :* d))
---   f &&& g =  (f *** g) . dup
---   first   :: (a ~> a') -> ((a :* b) ~> (a' :* b))
---   first   =  (*** id)
---   second  :: (b ~> b') -> ((a :* b) ~> (a :* b'))
---   second  =  (id ***)
---   lassocP :: (a :* (b :* c)) ~> ((a :* b) :* c)
---   lassocP =  second fst &&& (snd . snd)
---   rassocP :: ((a :* b) :* c) ~> (a :* (b :* c))
---   rassocP =  (fst . fst) &&& first  snd
+-- TODO: Reconsider this CategoryCoproduct instance, which relies on the dubious
+-- 
+--   type instance Pins (a :+ b) = Pins a :+ Pins b.
+
