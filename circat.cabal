@@ -1,0 +1,22 @@
+Name:                circat
+Version:             0.1
+Cabal-Version:       >= 1.6
+Synopsis:            A categorical framework for circuit construction
+Category:            circuits, categories
+Description: 
+  Experiments in circuit construction using a categorical vocabulary
+Author:              Conal Elliott
+Maintainer:          conal@tabula.com
+Copyright:           (c) 2013 by Tabula, Inc
+License:             AllRightsReserved
+Stability:           experimental
+build-type:          Simple
+
+Library
+  hs-Source-Dirs:      src
+  Include-Dirs:        src
+  Build-Depends:       base<5
+  Exposed-Modules:     
+                       Circat.Misc
+                       Circat.Category
+                       Circat.Circuit
