@@ -24,18 +24,22 @@ import GHC.Prim (Constraint)
 import Circat.Misc ((:*))
 
 class BoolCat (~>) where
-  notC :: Bool ~> Bool
-  andC, orC :: (Bool :* Bool) ~> Bool
+  type Bit (~>)
+  notC :: Bit (~>) ~> Bit (~>)
+  andC, orC :: (Bit (~>) :* Bit (~>)) ~> Bit (~>)
 
 instance BoolCat (->) where
+  type Bit (->) = Bool
   notC = not
   andC = uncurry (&&)
   orC  = uncurry (||)
 
-class EqCat (~>) where
-  type EqConstraint a :: Constraint
-  type EqConstraint a = () ~ () -- or just (), if it works
-  eq, neq :: (Eq a, EqConstraint a) => (a :* a) ~> Bool
+class BoolCat (~>) => EqCat (~>) where
+  type EqConstraint (~>) a :: Constraint
+  type EqConstraint (~>) a = () ~ () -- or just (), if it works
+  eq, neq :: (Eq a, EqConstraint (~>) a) => (a :* a) ~> Bit (~>)
+
+-- TODO: Revisit the type constraints for EqCat.
 
 instance EqCat (->) where
   eq  = uncurry (==)
