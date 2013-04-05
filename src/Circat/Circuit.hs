@@ -207,30 +207,26 @@ renderCmd = "neato"
 type Statement = String
 
 compsDots :: [Comp] -> [Statement]
-compsDots comps = prelude ++ compNodes ++ inEdges ++ outEdges ++ flowEdges
+compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
  where
    tagged :: [a] -> [(Int,a)]
    tagged = zip [0 ..]
    ncomps :: [(Int,Comp)] -- numbered comps
    ncomps = tagged comps
-   prelude = ["ordering=out"]
+   prelude = ["ordering=out","splines=true"]
    compNodes = "node [shape=circle,fixedsize=true]" : map node ncomps
     where
       node (n,Comp prim _ _) = printf "%s [label=%s]" (compLab n) (show prim)
-   inEdges = "node [shape=point]" 
-           : "edge [arrowsize=0,len=0.3,fontsize=8]"
-           : concatMap ins ncomps
+   portEdges = "node [shape=point]" 
+             : "edge [arrowsize=0,len=0.35,fontsize=8]"
+             : concatMap edges ncomps
     where
-      ins (nc,Comp _ is _) = map edge (tagged (sourceBits is))
+      edges (nc,Comp _ ins outs) = map inEdge  (tagged (sourceBits ins ))
+                                ++ map outEdge (tagged (sourceBits outs))
        where
-         edge (ni,_) = printf "%s -> %s [label=%d]" (inLab nc ni) (compLab nc) ni
-   outEdges = "node [shape=point]"
-            : "edge [arrowsize=0,len=0.3,fontsize=8]"
-            : concatMap outs ncomps
-    where
-      outs (nc,Comp _ _ os) = map edge (tagged (sourceBits os))
-       where
-         edge (no,o) = printf "%s -> %s [label=%d]" (compLab nc) (outLab o) no
+         inEdge  (ni,_) = edge (inLab nc ni) (compLab nc) ni
+         outEdge (no,o) = edge (compLab nc) (outLab o) no
+         edge = printf "%s -> %s [label=%d]"
    flowEdges = "edge [arrowsize=0.75,len=1]" : concatMap edge ncomps
     where
       edge (nc,Comp _ srcs _) = map srcEdge (tagged (sourceBits srcs))
