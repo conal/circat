@@ -207,27 +207,42 @@ renderCmd = "neato"
 type Statement = String
 
 compsDots :: [Comp] -> [Statement]
-compsDots comps = compNodes ++ portEdges ++ flowEdges
+compsDots comps = prelude ++ compNodes ++ inEdges ++ outEdges ++ flowEdges
  where
-   tcomps :: [(String,Comp)] -- tagged comps
-   tcomps = [('c' : show i, comp) | i <- [0::Int ..] | comp <- comps]
-   compNodes = "node [shape=circle,fixedsize=true]" : map node tcomps
+   tagged :: [a] -> [(Int,a)]
+   tagged = zip [0 ..]
+   ncomps :: [(Int,Comp)] -- numbered comps
+   ncomps = tagged comps
+   prelude = ["ordering=out"]
+   compNodes = "node [shape=circle,fixedsize=true]" : map node ncomps
     where
-      node (name,Comp prim _ _) = printf "%s [label=%s]" name (show prim)
-   portEdges = "node [shape=point]" 
-             : "edge [arrowsize=0,len=0.3]"
-             : concatMap edge tcomps
+      node (n,Comp prim _ _) = printf "%s [label=%s]" (compLab n) (show prim)
+   inEdges = "node [shape=point]" 
+           : "edge [arrowsize=0,len=0.3,fontsize=8]"
+           : concatMap ins ncomps
     where
-      edge (cname,Comp _ _ os) = map oEdge (sourceBits os)
+      ins (nc,Comp _ is _) = map edge (tagged (sourceBits is))
        where
-         oEdge o = printf "%s -> %s" cname (bitLab o)
-   flowEdges = "edge [arrowsize=0.75,len=1]" : concatMap edge tcomps
+         edge (ni,_) = printf "%s -> %s [label=%d]" (inLab nc ni) (compLab nc) ni
+   outEdges = "node [shape=point]"
+            : "edge [arrowsize=0,len=0.3,fontsize=8]"
+            : concatMap outs ncomps
     where
-      edge (cname,Comp _ is _) = map iEdge ([0::Int ..] `zip` sourceBits is)
+      outs (nc,Comp _ _ os) = map edge (tagged (sourceBits os))
        where
-         iEdge (_,i) = printf "%s -> %s" (bitLab i) cname
-   bitLab :: Bit -> String
-   bitLab (Bit n) = 'b' : show n
+         edge (no,o) = printf "%s -> %s [label=%d]" (compLab nc) (outLab o) no
+   flowEdges = "edge [arrowsize=0.75,len=1]" : concatMap edge ncomps
+    where
+      edge (nc,Comp _ srcs _) = map srcEdge (tagged (sourceBits srcs))
+       where
+         srcEdge (ni,src) =
+           printf "%s -> %s" (outLab src) (inLab nc ni)
+   compLab :: Int -> String
+   compLab = ('c':) . show
+   outLab :: Bit -> String
+   outLab (Bit n) = 'b' : show n
+   inLab :: Int -> Int -> String
+   inLab nc ni = compLab nc ++ "_i" ++ show ni
 
 -- ((Bit 0,Bit 2),[Comp not (Bit 0) (Bit 1),Comp not (Bit 1) (Bit 2)])
 
