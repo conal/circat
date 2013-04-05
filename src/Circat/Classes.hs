@@ -22,14 +22,22 @@ module Circat.Classes where
 import GHC.Prim (Constraint)
 
 import Circat.Misc ((:*))
+import Circat.Category (CategoryProduct)
 
-class BoolCat (~>) where
-  type Bit (~>)
-  notC :: Bit (~>) ~> Bit (~>)
-  andC, orC :: (Bit (~>) :* Bit (~>)) ~> Bit (~>)
+-- | Category with boolean operations.
+-- The 'CategoryProduct' superclass is just for convenient use.
+class CategoryProduct (~>) => BoolCat (~>) where
+  type BoolT (~>)
+  notC :: BoolT (~>) ~> BoolT (~>)
+  andC, orC :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
+
+-- | Convenient notational alternative
+type BCat (~>) b = (BoolCat (~>), b ~ BoolT (~>))
+
+-- The Category superclass is just for convenience.
 
 instance BoolCat (->) where
-  type Bit (->) = Bool
+  type BoolT (->) = Bool
   notC = not
   andC = uncurry (&&)
   orC  = uncurry (||)
@@ -37,9 +45,12 @@ instance BoolCat (->) where
 class BoolCat (~>) => EqCat (~>) where
   type EqConstraint (~>) a :: Constraint
   type EqConstraint (~>) a = () ~ () -- or just (), if it works
-  eq, neq :: (Eq a, EqConstraint (~>) a) => (a :* a) ~> Bit (~>)
+  eq, neq :: (Eq a, EqConstraint (~>) a) => (a :* a) ~> BoolT (~>)
 
 -- TODO: Revisit the type constraints for EqCat.
+
+-- | Convenient notational alternative
+type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 
 instance EqCat (->) where
   eq  = uncurry (==)
