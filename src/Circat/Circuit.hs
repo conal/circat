@@ -146,12 +146,13 @@ instance IsSource2 a b => Show (a :> b) where
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
-cComps :: IsSource2 a b => (a :> b) -> ((a,b),[Comp])
+cComps :: IsSource2 a b => (a :> b) -> [Comp]
 cComps (Kleisli f) =
-  flip evalWS (Bit 0) $
-    do i <- genSource
-       o <- f i
-       return (i,o)
+  snd . flip evalWS (Bit 0) $
+    do i  <- genComp (Prim "In") ()
+       o  <- f i
+       () <- genComp (Prim "Out") o
+       return ()
 
 {--------------------------------------------------------------------
     Visualize circuit as dot graph
@@ -169,10 +170,7 @@ type DGraph = String
 toG :: IsSource2 a b => (a :> b) -> DGraph
 toG cir = "digraph {\n" ++ concatMap wrap (recordDots comps) ++ "}\n"
  where
-   ((a,b),ccomps) = cComps cir
-   comps = map simpleComp ([inComp a] ++ ccomps ++ [outComp b])
-   inComp  i = Comp (Prim "In" ) () i
-   outComp o = Comp (Prim "Out") o ()
+   comps = simpleComp <$> cComps cir
    wrap = ("  " ++) . (++ ";\n")
 
 -- I use neato mainly because it supports the edge length attribute ("len"),
