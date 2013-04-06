@@ -146,6 +146,7 @@ instance IsSource2 a b => Show (a :> b) where
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
+-- Turn a circuit into a list of components, including fake In & Out.
 cComps :: IsSource2 a b => (a :> b) -> [Comp]
 cComps (Kleisli f) =
   snd . flip evalWS (Bit 0) $
@@ -160,8 +161,9 @@ cComps (Kleisli f) =
 
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
-   do writeFile (outFile "dot") (toG circ)
-      void $ system $ printf "neato -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
+  do writeFile (outFile "dot") (toG circ)
+     void $ system $ 
+       printf "neato -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
  where
    outFile suff = "dot/"++name++"."++suff
 
