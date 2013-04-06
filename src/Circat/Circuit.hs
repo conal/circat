@@ -187,13 +187,9 @@ type DGraph = String
 -- cComps :: IsSource2 a b => (a :> b) -> ((a,b),[Comp])
 
 toG :: IsSource2 a b => (a :> b) -> DGraph
-toG c = "digraph G {\n" ++ concatMap wrap (compsDots comps') ++ "}\n"
+toG c = "digraph G {\n" ++ concatMap wrap (compsDots (cComps c)) ++ "}\n"
  where
-   ((a,b),comps) = cComps c
-   comps' = inComp a : outComp b : comps
    wrap = ("  " ++) . (++ ";\n")
-   inComp  i = Comp (Prim "In" ) () i
-   outComp o = Comp (Prim "Out") o ()
 
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
@@ -206,17 +202,23 @@ renderCmd = "neato"
 
 type Statement = String
 
-compsDots :: [Comp] -> [Statement]
-compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
+compsDots :: IsSource2 a b => ((a,b),[Comp]) -> [Statement]
+compsDots ((a,b),ccomps) = prelude ++ compNodes ++ portEdges ++ flowEdges
  where
+   comps = inComp a : outComp b : ccomps
+   inTag = "In"
+   outTag = "Out"
+   inComp  i = Comp (Prim inTag ) () i
+   outComp o = Comp (Prim outTag) o ()
    tagged :: [a] -> [(Int,a)]
    tagged = zip [0 ..]
    ncomps :: [(Int,Comp)] -- numbered comps
    ncomps = tagged comps
    prelude = ["ordering=out","splines=true"]
-   compNodes = "node [shape=circle,fixedsize=true]" : map node ncomps
+   compNodes = "node [fixedsize=true,shape=circle]" : map node ncomps
     where
-      node (n,Comp prim _ _) = printf "%s [label=%s]" (compLab n) (show prim)
+      node (n,Comp prim _ _) =
+        printf "%s [label=%s]" (compLab n) (show prim)
    portEdges = "node [shape=point]" 
              : "edge [arrowsize=0,len=0.35,fontsize=8]"
              : concatMap edges ncomps
@@ -224,9 +226,9 @@ compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
       edges (nc,Comp _ ins outs) = map inEdge  (tagged (sourceBits ins ))
                                 ++ map outEdge (tagged (sourceBits outs))
        where
-         inEdge  (ni,_) = edge (inLab nc ni) (compLab nc) ni
-         outEdge (no,o) = edge (compLab nc) (outLab o) no
-         edge = printf "%s -> %s [label=%d]"
+         inEdge  (ni,_) = edge (inLab nc ni) (compLab nc) "head" ni
+         outEdge (no,o) = edge (compLab nc)  (outLab o)   "tail" no
+         edge = printf "%s -> %s [%slabel=%d]"
    flowEdges = "edge [arrowsize=0.75,len=1]" : concatMap edge ncomps
     where
       edge (nc,Comp _ srcs _) = map srcEdge (tagged (sourceBits srcs))
