@@ -155,61 +155,31 @@ cComps (Kleisli f) =
     Visualize circuit as dot graph
 --------------------------------------------------------------------}
 
-{-
-class AsDots a where
-  asDots :: a -> [D.Statement]
-
-instance AsDots a => AsDots [a] where
-  asDots = concatMap asDots
-
-instance AsDots (a :> b) where
-  asDots = asDots . snd . cComps
-     
-instance AsDots Comp where
-  asDots (Comp prim a b) =
-    D.NodeStatement (NodeId (IntegerId (fromIntegral i)) Nothing) : ...
-
-compsDots :: IsSource2 a b => [Comp] -> [D.Statement]
-compsDots comps = compNodes ++ portEdges ++ flowEdges
- where
-   compNodes = nodeAtt [D.AttributeSetValue (D.NameId "shape") (D.NameId "circle")] : []
-   portEdges = []
-   flowEdges = []
-
-nodeAtt :: [D.Attribute] -> D.Statement
-nodeAtt = D.AttributeStatement D.NodeAttributeStatement
-
--}
-
-type DGraph = String
-
--- data Comp = forall a b. IsSource2 a b => Comp (Prim a b) a b
--- cComps :: IsSource2 a b => (a :> b) -> ((a,b),[Comp])
-
-toG :: IsSource2 a b => (a :> b) -> DGraph
-toG c = "digraph G {\n" ++ concatMap wrap (compsDots (cComps c)) ++ "}\n"
- where
-   wrap = ("  " ++) . (++ ";\n")
-
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
    do writeFile (name++".dot") (toG circ)
-      void $ system (printf "%s -Tsvg %s.dot > dot/%s.svg" renderCmd name name)
+      void $ system (printf "neato -Tsvg %s.dot > dot/%s.svg" name name)
 
--- dot, neato, twopi, circo, fdp, sfdp
-renderCmd :: String
-renderCmd = "neato"
+type DGraph = String
+
+toG :: IsSource2 a b => (a :> b) -> DGraph
+toG cir = "digraph G {\n" ++ concatMap wrap (compsDots comps) ++ "}\n"
+ where
+   ((a,b),ccomps) = cComps cir
+   comps = inComp a : outComp b : ccomps
+   inComp  i = Comp (Prim "In" ) () i
+   outComp o = Comp (Prim "Out") o ()
+   wrap = ("  " ++) . (++ ";\n")
+
+-- I use neato mainly because it supports the edge length attribute ("len"),
+-- which I use for input & output ports. Alternatively, use records with one
+-- side for inputs, one for outputs, and the primitive name in-between.
 
 type Statement = String
 
-compsDots :: IsSource2 a b => ((a,b),[Comp]) -> [Statement]
-compsDots ((a,b),ccomps) = prelude ++ compNodes ++ portEdges ++ flowEdges
+compsDots :: [Comp] -> [Statement]
+compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
  where
-   comps = inComp a : outComp b : ccomps
-   inTag = "In"
-   outTag = "Out"
-   inComp  i = Comp (Prim inTag ) () i
-   outComp o = Comp (Prim outTag) o ()
    tagged :: [a] -> [(Int,a)]
    tagged = zip [0 ..]
    ncomps :: [(Int,Comp)] -- numbered comps
