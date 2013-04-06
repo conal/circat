@@ -30,9 +30,11 @@ import Control.Applicative
 import Control.Monad (void,join,(>=>),(<=<))
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..))
+import Data.Foldable (foldMap)
 
 import System.Process (system)
 
+import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 
@@ -67,7 +69,7 @@ type CircuitM = WriterT [Comp] (State BitSupply)
 -- TODO: Is WriterT [a] efficient, or do we get frequent (++)? I could use a
 -- difference list instead, i.e., Unop [Comp] instead of [Comp].
 
-newtype Bit = Bit Int deriving (Eq,Show,Enum)
+newtype Bit = Bit Int deriving (Eq,Ord,Show,Enum)
 type BitSupply = Bit  -- Next free pin
 
 newBit :: CircuitM Bit
@@ -157,16 +159,18 @@ cComps (Kleisli f) =
 
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
-   do writeFile (name++".dot") (toG circ)
-      void $ system (printf "neato -Tsvg %s.dot > dot/%s.svg" name name)
+   do writeFile (outFile "dot") (toG circ)
+      void $ system $ printf "neato -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
+ where
+   outFile suff = "dot/"++name++"."++suff
 
 type DGraph = String
 
 toG :: IsSource2 a b => (a :> b) -> DGraph
-toG cir = "digraph G {\n" ++ concatMap wrap (compsDots comps) ++ "}\n"
+toG cir = "digraph {\n" ++ concatMap wrap (recordDots comps) ++ "}\n"
  where
    ((a,b),ccomps) = cComps cir
-   comps = map simpleComp (inComp a : outComp b : ccomps)
+   comps = map simpleComp ([inComp a] ++ ccomps ++ [outComp b])
    inComp  i = Comp (Prim "In" ) () i
    outComp o = Comp (Prim "Out") o ()
    wrap = ("  " ++) . (++ ";\n")
@@ -182,18 +186,51 @@ type Comp' = (String,[Bit],[Bit])
 simpleComp :: Comp -> Comp'
 simpleComp (Comp prim a b) = (show prim, sourceBits a, sourceBits b)
 
--- records :: [Comp] -> [Statement]
--- records comps = prelude ++ nodes ++ edges
---  where
---    tagged :: [a] -> [(Int,a)]
---    tagged = zip [0 ..]
---    ncomps :: [(Int,Comp)] -- numbered comps
---    ncomps = tagged comps
---    prelude = ["ordering=out","splines=true"]
---    compNodes = "node [fixedsize=true,shape=circle]" : map node ncomps
---     where
---       node (n,Comp prim a b) =
---         printf "%s [label=%s]" (compLab n) (show prim)
+data Dir = In | Out deriving Show
+type PortNum = Int
+type CompNum = Int
+
+recordDots :: [Comp'] -> [Statement]
+recordDots comps = prelude ++ nodes ++ edges
+ where
+   tagged :: [a] -> [(Int,a)]
+   tagged = zip [0 ..]
+   ncomps :: [(CompNum,Comp')] -- numbered comps
+   ncomps = tagged comps
+   prelude = ["ordering=out","splines=true"]
+   nodes = "node [fixedsize=true,shape=Mrecord]" : (node <$> ncomps)
+    where
+      node (nc,(prim,ins,outs)) =
+        printf "%s [label=\"{%s}|%s|{%s}\"]" 
+          (compLab nc) (labs In ins) prim (labs Out outs)
+       where
+         labs dir bs = intercalate "|" (bracket . portLab dir . fst <$> tagged bs)
+   bracket = ("<"++) . (++">")
+   portLab :: Dir -> PortNum -> String
+   portLab dir np = printf "%s%d" (show dir) np
+   srcMap = sourceMap ncomps
+   edges = concatMap compEdges ncomps
+    where
+      compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
+       where
+         edge (ni,i) = printf "%s -> %s" (port Out (srcMap M.! i)) (port In (snkComp,ni))
+   port :: Dir -> (CompNum,PortNum) -> String
+   port dir (nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
+   compLab nc = 'c' : show nc
+
+-- Map each bit to its source component and output port numbers
+type SourceMap = Map Bit (CompNum,PortNum)
+
+sourceMap :: [(CompNum,Comp')] -> SourceMap
+sourceMap = foldMap sources
+ where
+   sources :: (Int,Comp') -> SourceMap
+   sources (nc,(_,_,outs)) = M.fromList [(b,(nc,np)) | np <- [0 ..] | b <- outs]
+
+--    portLab dir (portNum,bit) = printf "<%s%d>%d" (show dir) portNum bit
+
+
+-- use <$> instead of map
 
 compsDots :: [Comp'] -> [Statement]
 compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
