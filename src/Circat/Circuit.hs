@@ -124,19 +124,19 @@ type (:>) = Kleisli CircuitM
 primC :: IsSource2 a b => Prim a b -> a :> b
 primC = Kleisli . genComp
 
-pcomp :: IsSource2 a b => String -> a :> b
-pcomp = primC . Prim
+namedC :: IsSource2 a b => String -> a :> b
+namedC = primC . Prim
 
 instance BoolCat (:>) where
   type BoolT (:>) = Bit
-  notC = pcomp "not"
-  orC  = pcomp "or"
-  andC = pcomp "and"
+  notC = namedC "not"
+  orC  = namedC "or"
+  andC = namedC "and"
 
 instance EqCat (:>) where
   type EqConstraint (:>) a = IsSource a
-  eq  = pcomp "eq"
-  neq = pcomp "neq"
+  eq  = namedC "eq"
+  neq = namedC "neq"
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
