@@ -153,7 +153,7 @@ runU (Kleisli f) = snd (evalWS (f ()) (Bit 0))
 
 -- Wrap a circuit with fake input and output
 unitize :: IsSource2 a b => (a :> b) -> (() :> ())
-unitize = primC (Prim "Out") <~ primC (Prim "In")
+unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
     Visualize circuit as dot graph
