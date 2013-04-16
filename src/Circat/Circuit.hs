@@ -19,7 +19,7 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit ((:>), outG, bc) where
+module Circat.Circuit ((:>), toG, outG, bc) where
 
 import Prelude hiding (id,(.),fst,snd)
 import qualified Prelude as P
@@ -193,8 +193,8 @@ recordDots comps = prelude ++ nodes ++ edges
    tagged = zip [0 ..]
    ncomps :: [(CompNum,Comp')] -- numbered comps
    ncomps = tagged comps
-   prelude = ["rankdir=LR"]
-   nodes = "node [shape=Mrecord]" : (node <$> ncomps) -- add fixedsize=true
+   prelude = ["rankdir=LR ; node [shape=Mrecord]"] -- maybe add fixedsize=true
+   nodes = node <$> ncomps
     where
       node (nc,(prim,ins,outs)) =
         printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
@@ -263,6 +263,27 @@ _c5 = andC &&& orC
 True
 
 > bc _c3
-(((Bit 0,Bit 1),Bit 5),[Comp (Prim "not") (Bit 0) (Bit 2),Comp (Prim "not") (Bit 1) (Bit 3),Comp (Prim "and") (Bit 2,Bit 3) (Bit 4),Comp (Prim "not") (Bit 4) (Bit 5)])
+[Comp In () (Bit 0,Bit 1),Comp not (Bit 0) (Bit 2),Comp not (Bit 1) (Bit 3),Comp and (Bit 2,Bit 3) (Bit 4),Comp not (Bit 4) (Bit 5),Comp Out (Bit 5) ()]
+
+> putStr $ toG _c3
+digraph {
+  rankdir=LR ; node [shape=Mrecord];
+  c0 [label="{In|{<Out0>|<Out1>}}"];
+  c1 [label="{{<In0>}|not|{<Out0>}}"];
+  c2 [label="{{<In0>}|not|{<Out0>}}"];
+  c3 [label="{{<In0>|<In1>}|and|{<Out0>}}"];
+  c4 [label="{{<In0>}|not|{<Out0>}}"];
+  c5 [label="{{<In0>}|Out}"];
+  c0:Out1 -> c1:In0;
+  c0:Out0 -> c2:In0;
+  c2:Out0 -> c3:In0;
+  c1:Out0 -> c3:In1;
+  c3:Out0 -> c4:In0;
+  c4:Out0 -> c5:In0;
+}
+
+> outG "c3" _c3
+
+-- Then view src/dot/c3.svg
 
 -}
