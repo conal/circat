@@ -198,9 +198,11 @@ recordDots comps = prelude ++ nodes ++ edges
    nodes = "node [shape=Mrecord]" : (node <$> ncomps) -- add fixedsize=true
     where
       node (nc,(prim,ins,outs)) =
-        printf "%s [label=\"{{%s}|%s|{%s}}\"]" 
-          (compLab nc) (labs In ins) prim (labs Out outs)
+        printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
+          (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
+         ports _ "" _ = ""
+         ports l s r = printf "%s{%s}%s" l s r
          labs dir bs = intercalate "|" (bracket . portLab dir . fst <$> tagged bs)
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
