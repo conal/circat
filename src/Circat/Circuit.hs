@@ -24,12 +24,16 @@ module Circat.Circuit ((:>), toG, outG, bc) where
 import Prelude hiding (id,(.),fst,snd)
 import qualified Prelude as P
 
-import Control.Applicative
-import Control.Monad (void)
+import Data.Functor ((<$>))
+import Control.Applicative (pure,liftA2)
+-- import Control.Monad (void)
 import Control.Arrow (Kleisli(..))
 import Data.Foldable (foldMap)
 
-import System.Process (system)
+import qualified System.Info as SI
+import System.Process (system) -- ,readProcess
+import System.Directory (createDirectoryIfMissing)
+import System.Exit (ExitCode(ExitSuccess))
 
 import Data.List (intercalate)
 import Data.Map (Map)
@@ -38,9 +42,7 @@ import qualified Data.Map as M
 -- mtl
 import Control.Monad.State (MonadState(..),State,evalState)
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
-import Text.Printf
-
--- import qualified Language.Dot as D
+import Text.Printf (printf)
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
@@ -161,16 +163,27 @@ unitize = namedC "Out" <~ namedC "In"
 
 -- I could use the language-dot API, but it's easier not to.
 
-outType :: String
-outType = "svg"
+systemSuccess :: String -> IO ()
+systemSuccess cmd = 
+  do status <- system cmd
+     case status of
+       ExitSuccess -> return ()
+       _ -> printf "command \"%s\" failed."
 
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
-  do writeFile (outFile "dot") (toG circ)
-     void $ system $ 
+  do createDirectoryIfMissing False outDir
+     writeFile (outFile "dot") (toG circ)
+     systemSuccess $
        printf "dot -T%s %s -o %s" outType (outFile "dot") (outFile outType)
+     systemSuccess $
+       printf "%s %s" open (outFile outType)
  where
-   outFile suff = "dot/"++name++"."++suff
+   outDir = "out"
+   outFile suff = outDir++"/"++name++"."++suff
+   outType = "png"
+   open | SI.os == "darwin" = "open"
+        | otherwise         = error "unknown open for OS"
 
 type DGraph = String
 
