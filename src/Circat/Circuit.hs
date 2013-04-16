@@ -5,7 +5,7 @@
 {-# LANGUAGE ParallelListComp #-}
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -19,16 +19,13 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit where
-
--- TODO: explicit exports
+module Circat.Circuit ((:>), outG, bc) where
 
 import Prelude hiding (id,(.),fst,snd)
 import qualified Prelude as P
 
 import Control.Applicative
-import Control.Monad (void,join,(>=>),(<=<))
-import qualified Control.Arrow as A
+import Control.Monad (void)
 import Control.Arrow (Kleisli(..))
 import Data.Foldable (foldMap)
 
@@ -39,13 +36,13 @@ import Data.Map (Map)
 import qualified Data.Map as M
 
 -- mtl
-import Control.Monad.State (MonadState(..),State,runState,evalState)
+import Control.Monad.State (MonadState(..),State,evalState)
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf
 
 -- import qualified Language.Dot as D
 
-import Circat.Misc ((:*),(:+),(<~),Unop)
+import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
 import Circat.Classes
 
@@ -120,14 +117,15 @@ infixl 1 :>
 type (:>) = Kleisli CircuitM
 
 -- TODO: Will the product & coproduct instances really work here, or do I need a
--- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefit accrues
--- from using the categorical instead of monadic form?
+-- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
+-- from using the categorical instead of monadic form? Perhaps amenability to
+-- other interpretations, such as timing and demand analysis.
 
-newComp :: IsSource2 a b => Prim a b -> a :> b
-newComp prim = Kleisli (genComp prim)
+primC :: IsSource2 a b => Prim a b -> a :> b
+primC = Kleisli . genComp
 
 pcomp :: IsSource2 a b => String -> a :> b
-pcomp = newComp . Prim
+pcomp = primC . Prim
 
 instance BoolCat (:>) where
   type BoolT (:>) = Bit
@@ -141,19 +139,21 @@ instance EqCat (:>) where
   neq = pcomp "neq"
 
 instance IsSource2 a b => Show (a :> b) where
-  show = show . cComps
+  show = show . runC
 
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-cComps :: IsSource2 a b => (a :> b) -> [Comp]
-cComps (Kleisli f) =
-  snd . flip evalWS (Bit 0) $
-    do i  <- genComp (Prim "In") ()
-       o  <- f i
-       () <- genComp (Prim "Out") o
-       return ()
+runC :: IsSource2 a b => (a :> b) -> [Comp]
+runC = runU . unitize
+
+runU :: (() :> ()) -> [Comp]
+runU (Kleisli f) = snd (evalWS (f ()) (Bit 0))
+
+-- Wrap a circuit with fake input and output
+unitize :: IsSource2 a b => (a :> b) -> (() :> ())
+unitize = primC (Prim "Out") <~ primC (Prim "In")
 
 {--------------------------------------------------------------------
     Visualize circuit as dot graph
@@ -172,8 +172,8 @@ type DGraph = String
 toG :: IsSource2 a b => (a :> b) -> DGraph
 toG cir = "digraph {\n" ++ concatMap wrap (recordDots comps) ++ "}\n"
  where
-   comps = simpleComp <$> cComps cir
-   wrap = ("  " ++) . (++ ";\n")
+   comps = simpleComp <$> runC cir
+   wrap  = ("  " ++) . (++ ";\n")
 
 type Statement = String
 
@@ -216,6 +216,10 @@ recordDots comps = prelude ++ nodes ++ edges
    port :: Dir -> (CompNum,PortNum) -> String
    port dir (nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
+
+-- Note: the rankdir=LR and the outer braces in node lead to a left-to-right
+-- rendering by dot. I expected a top-to-bottom rendering to work as well, but
+-- it looks terrible.
 
 -- Map each bit to its source component and output port numbers
 type SourceMap = Map Bit (CompNum,PortNum)
@@ -279,30 +283,30 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-c0 :: BCat (~>) b => b ~> b
-c0 = id
+_c0 :: BCat (~>) b => b ~> b
+_c0 = id
 
-c1 :: BCat (~>) b => b ~> b
-c1 = notC . notC
+_c1 :: BCat (~>) b => b ~> b
+_c1 = notC . notC
 
-c2 :: BCat (~>) b => (b :* b) ~> b
-c2 = notC . andC
+_c2 :: BCat (~>) b => (b :* b) ~> b
+_c2 = notC . andC
 
-c3 :: BCat (~>) b => (b :* b) ~> b
-c3 = notC . andC . (notC *** notC)
+_c3 :: BCat (~>) b => (b :* b) ~> b
+_c3 = notC . andC . (notC *** notC)
 
-c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
-c4 = swapP  -- no components
+_c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
+_c4 = swapP  -- no components
 
-c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
-c5 = andC &&& orC
+_c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
+_c5 = andC &&& orC
 
 {- For instance,
 
-> c3 (True,False)
+> _c3 (True,False)
 True
 
-> bc c3
+> bc _c3
 (((Bit 0,Bit 1),Bit 5),[Comp (Prim "not") (Bit 0) (Bit 2),Comp (Prim "not") (Bit 1) (Bit 3),Comp (Prim "and") (Bit 2,Bit 3) (Bit 4),Comp (Prim "not") (Bit 4) (Bit 5)])
 
 -}
