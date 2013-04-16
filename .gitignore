@@ -6,7 +6,7 @@ Stuff
 TAGS
 tags
 tarballs
-dot/
+out/
 
 # Mac OS generates
 .DS_Store

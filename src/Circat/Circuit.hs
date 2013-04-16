@@ -6,7 +6,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -142,7 +142,7 @@ primC = Kleisli . genComp
 namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
-instance CategoryBool (:>) where
+instance BoolCat (:>) where
   type BoolT (:>) = Bit
   notC = namedC "not"
   orC  = namedC "or"
@@ -152,6 +152,9 @@ instance EqCat (:>) where
   type EqConstraint (:>) a = IsSource a
   eq  = namedC "eq"
   neq = namedC "neq"
+
+instance AddCat (:>) where
+  addC  = namedC "add"
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
@@ -330,3 +333,42 @@ digraph {
 
 -- Simple adders
 
+-- add :: IsNat n => Vec n (b :* b) :* b ~> b :* Vec n b
+-- add = addV nat
+
+-- In: addends and carry; out: carry and sum
+addB :: BCat (~>) b =>
+        ((b :* b) :* b) ~> (b :* b)
+addB = undefined
+
+addV :: (BoolCat (~>), ConstCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
+        Nat n -> (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+
+addV Zero     = rconst ZVec . snd
+
+addV (Succ n) = 
+    second toVecS' . rassocP . first (addV n) . lassocP
+  . second addB    . rassocP . first unVecS'
+ where
+   toVecS' = toVecS . swapP
+   unVecS' = swapP . unVecS
+
+{- Derivation:
+
+-- C carry, A addend pair, R result
+
+first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
+rassocP          :: (As n :* A) :* C  :>  As n :* AC
+second addB      :: As n :* AC        :>  As n :* CR
+lassocP          :: As n :* CRs       :>  AsC n :* R
+first (addV' n)  :: AsC n :* R        :>  CRs n :* R
+rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
+second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
+
+-}
+
+-- addB :: (Bool,Bool) -> Bool -> (Bool,Bool)
+-- addB (a,b) cin = (axb /= cin, anb || cin && axb)
+--  where
+--    axb = a /= b
+--    anb = a && b

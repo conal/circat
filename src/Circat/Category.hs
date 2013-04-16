@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TupleSections #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -18,10 +18,13 @@
 module Circat.Category
   ( module Control.Category
   , ProductCat(..), CoproductCat(..)
+  , ConstCat(..), UnitCat(..), lconst, rconst
   ) where
 
-import Prelude hiding (id,(.),fst,snd)
+import Prelude hiding (id,(.),fst,snd,const)
 import qualified Prelude as P
+
+import GHC.Prim (Constraint)
 
 import Control.Category
 import qualified Control.Arrow as A
@@ -120,3 +123,27 @@ instance Monad m => CoproductCat (Kleisli m) where
   ldistribS = A.arr  ldistribS
   rdistribS = A.arr  rdistribS
   (|||)     = inNew2 (|||)
+
+
+-- | Category with constant morphisms
+class Category (~>) => ConstCat (~>) where
+  type ConstConstraint (~>) a :: Constraint
+  type ConstConstraint (~>) a = () ~ () -- or just (), if it works
+  const :: a -> (() ~> a)
+
+-- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
+class ProductCat (~>) => UnitCat (~>) where
+  type UnitConstraint (~>) a :: Constraint
+  type UnitConstraint (~>) a = () ~ () -- or just (), if it works
+  lunit :: a ~> (() :* a)
+  lunit = swapP . runit
+  runit :: a ~> (a :* ())
+  runit = swapP . lunit
+
+-- | Inject a constant on the left
+lconst :: (UnitCat (~>), ConstCat (~>)) => a -> (b ~> (a :* b))
+lconst a = first  (const a) . lunit
+
+-- | Inject a constant on the right
+rconst :: (UnitCat (~>), ConstCat (~>)) => b -> (a ~> (a :* b))
+rconst b = second (const b) . runit

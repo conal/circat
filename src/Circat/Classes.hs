@@ -19,12 +19,14 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
+import Prelude hiding (id,(.),const)
+
 import GHC.Prim (Constraint)
 
 import TypeUnary.Vec (Vec,Z,S)
 
 import Circat.Misc ((:*))
-import Circat.Category (ProductCat)
+import Circat.Category (ProductCat(..),UnitCat(..))
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
@@ -58,8 +60,20 @@ instance EqCat (->) where
   eq  = uncurry (==)
   neq = uncurry (/=)
 
-class ProductCat (~>) => VecCat (~>) where
+class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
   toVecZ :: () ~> Vec Z a
   unVecZ :: Vec Z a ~> ()
   toVecS :: (a :* Vec n a) ~> Vec (S n) a
   unVecS :: Vec (S n) a ~> (a :* Vec n a)
+
+class ProductCat (~>) => AddCat (~>) where
+  addC :: b ~ BoolT (~>) => ((b :* b) :* b) ~> (b :* b)
+
+instance AddCat (->) where
+  addC ((a,b),cin) = (axb /= cin, anb || cin && axb)
+   where
+     axb = a /= b
+     anb = a && b
+
+-- addB :: (Bool,Bool) -> Bool -> (Bool,Bool)
+
