@@ -159,7 +159,7 @@ unitize = namedC "Out" <~ namedC "In"
     Visualize circuit as dot graph
 --------------------------------------------------------------------}
 
--- I could use language-dot
+-- I could use the language-dot API, but it's easier not to.
 
 outType :: String
 outType = "svg"
@@ -191,11 +191,12 @@ data Dir = In | Out deriving Show
 type PortNum = Int
 type CompNum = Int
 
+tagged :: [a] -> [(Int,a)]
+tagged = zip [0 ..]
+
 recordDots :: [Comp'] -> [Statement]
 recordDots comps = prelude ++ nodes ++ edges
  where
-   tagged :: [a] -> [(Int,a)]
-   tagged = zip [0 ..]
    ncomps :: [(CompNum,Comp')] -- numbered comps
    ncomps = tagged comps
    prelude = ["rankdir=LR ; node [shape=Mrecord]"] -- maybe add fixedsize=true
@@ -229,10 +230,8 @@ recordDots comps = prelude ++ nodes ++ edges
 type SourceMap = Map Bit (CompNum,PortNum)
 
 sourceMap :: [(CompNum,Comp')] -> SourceMap
-sourceMap = foldMap sources
- where
-   sources :: (Int,Comp') -> SourceMap
-   sources (nc,(_,_,outs)) = M.fromList [(b,(nc,np)) | np <- [0 ..] | b <- outs]
+sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
+              M.fromList [(b,(nc,np)) | (np,b) <- tagged outs ]
 
 {--------------------------------------------------------------------
     Examples
@@ -269,6 +268,16 @@ True
 
 > bc _c3
 [Comp In () (Bit 0,Bit 1),Comp not (Bit 0) (Bit 2),Comp not (Bit 1) (Bit 3),Comp and (Bit 2,Bit 3) (Bit 4),Comp not (Bit 4) (Bit 5),Comp Out (Bit 5) ()]
+
+-- Same, pretty-printed:
+
+[ Comp In () (Bit 0,Bit 1)
+, Comp not (Bit 0) (Bit 2)
+, Comp not (Bit 1) (Bit 3)
+, Comp and (Bit 2,Bit 3) (Bit 4)
+, Comp not (Bit 4) (Bit 5)
+, Comp Out (Bit 5) ()
+]
 
 > putStr $ toG _c3
 digraph {
