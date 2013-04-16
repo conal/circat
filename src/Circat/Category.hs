@@ -17,7 +17,7 @@
 
 module Circat.Category
   ( module Control.Category
-  , CategoryProduct(..), CategoryCoproduct(..)
+  , ProductCat(..), CoproductCat(..)
   ) where
 
 import Prelude hiding (id,(.),fst,snd)
@@ -36,7 +36,7 @@ infixr 3 ***, &&&
 -- | Category with product. Minimal definition: 'fst', 'snd', and either
 -- (a) '(&&&)', (b) both '(***)' and 'dup', or (c) both '(&&&)' and '(***)'.
 -- TODO: Generalize '(:*)' to an associated type. Keep the types fairly pretty.
-class Category (~>) => CategoryProduct (~>) where
+class Category (~>) => ProductCat (~>) where
   fst     :: (a :* b) ~> a
   snd     :: (a :* b) ~> b
   dup     :: a ~> (a :* a)
@@ -66,7 +66,7 @@ infixr 2 +++, |||
 -- | Category with co-product. Minimal definition: 'lft', 'rht', and either
 -- (a) '(|||)', (b) both '(+++)' and 'jam', or (c) both '(|||)' and '(+++)'.
 -- TODO: Generalize '(:+)' to an associated type. Keep the types fairly pretty.
-class Category (~>) => CategoryCoproduct (~>) where
+class Category (~>) => CoproductCat (~>) where
   lft       :: a ~> (a :+ b)
   rht       :: b ~> (a :+ b)
   jam       :: (a :+ a) ~> a                  -- dual to dup. standard name?
@@ -88,15 +88,15 @@ class Category (~>) => CategoryCoproduct (~>) where
   lassocS   =  lft.lft ||| (lft.rht ||| rht)
   rassocS   =  (lft ||| rht.lft) ||| rht.rht
 
-  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs CategoryProduct (~>)
+  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat (~>)
 
-instance CategoryProduct (->) where
+instance ProductCat (->) where
   fst   = P.fst
   snd   = P.snd
   (***) = (A.***)
   (&&&) = (A.&&&)
 
-instance CategoryCoproduct (->) where
+instance CoproductCat (->) where
   lft              = Left
   rht              = Right
   (+++)            = (A.+++)
@@ -104,7 +104,7 @@ instance CategoryCoproduct (->) where
   ldistribS (a,uv) = ((a,) +++ (a,)) uv
   rdistribS (uv,b) = ((,b) +++ (,b)) uv
 
-instance Monad m => CategoryProduct (Kleisli m) where
+instance Monad m => ProductCat (Kleisli m) where
   fst   = A.arr  fst
   snd   = A.arr  snd
   dup   = A.arr  dup
@@ -113,7 +113,7 @@ instance Monad m => CategoryProduct (Kleisli m) where
 crossM :: Monad m => (a -> m c) -> (b -> m d) -> (a :* b -> m (c :* d))
 (f `crossM` g) (a,b) = liftM2 (,) (f a) (g b)
 
-instance Monad m => CategoryCoproduct (Kleisli m) where
+instance Monad m => CoproductCat (Kleisli m) where
   lft       = A.arr  lft
   rht       = A.arr  rht
   jam       = A.arr  jam

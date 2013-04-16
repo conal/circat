@@ -21,12 +21,14 @@ module Circat.Classes where
 
 import GHC.Prim (Constraint)
 
+import TypeUnary.Vec (Vec,Z,S)
+
 import Circat.Misc ((:*))
-import Circat.Category (CategoryProduct)
+import Circat.Category (ProductCat)
 
 -- | Category with boolean operations.
--- The 'CategoryProduct' superclass is just for convenient use.
-class CategoryProduct (~>) => BoolCat (~>) where
+-- The 'ProductCat' superclass is just for convenient use.
+class ProductCat (~>) => BoolCat (~>) where
   type BoolT (~>)
   notC :: BoolT (~>) ~> BoolT (~>)
   andC, orC :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
@@ -55,3 +57,9 @@ type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 instance EqCat (->) where
   eq  = uncurry (==)
   neq = uncurry (/=)
+
+class ProductCat (~>) => VecCat (~>) where
+  toVecZ :: () ~> Vec Z a
+  unVecZ :: Vec Z a ~> ()
+  toVecS :: (a :* Vec n a) ~> Vec (S n) a
+  unVecS :: Vec (S n) a ~> (a :* Vec n a)

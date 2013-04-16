@@ -142,7 +142,7 @@ primC = Kleisli . genComp
 namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
-instance BoolCat (:>) where
+instance CategoryBool (:>) where
   type BoolT (:>) = Bit
   notC = namedC "not"
   orC  = namedC "or"
@@ -327,3 +327,6 @@ digraph {
 -- Then view src/dot/c3.svg (and see outType above).
 
 -}
+
+-- Simple adders
+
