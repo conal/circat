@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
-{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE ExistentialQuantification, GADTs #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -24,11 +24,11 @@ module Circat.Circuit ((:>), toG, outG, bc) where
 import Prelude hiding (id,(.),fst,snd)
 import qualified Prelude as P
 
+import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
--- import Control.Monad (void)
 import Control.Arrow (Kleisli(..))
-import Data.Foldable (foldMap)
+import Data.Foldable (foldMap,toList)
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -38,11 +38,15 @@ import System.Exit (ExitCode(ExitSuccess))
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Sequence (Seq)
+import qualified Data.Sequence as Seq
 
 -- mtl
 import Control.Monad.State (MonadState(..),State,evalState)
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf (printf)
+
+import TypeUnary.Vec (Vec(..),Nat(..),IsNat(..))
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
@@ -79,12 +83,12 @@ newBit = do { p <- get ; put (succ p) ; return p }
 --------------------------------------------------------------------}
 
 sourceBits :: forall a. IsSource a => a -> [Bit]
-sourceBits s = toBits s []
+sourceBits s = toList (toBits s)
 
 -- The Source type family gives a representation for a type in terms of
 -- structures of pins. Maybe drop the Show constraint later (after testing).
 class Show a => IsSource a where
-  toBits    :: a -> Unop [Bit]  -- difference list
+  toBits    :: a -> Seq Bit
   genSource :: CircuitM a
 
 genComp :: forall a b. IsSource2 a b =>
@@ -96,18 +100,27 @@ genComp prim a = do b <- genSource
 type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
-  toBits () = id
+  toBits () = mempty
   genSource = pure ()
 
 instance IsSource Bit where
-  toBits p  = (p :)
+  toBits p  = Seq.singleton p
   genSource = newBit
 
 instance IsSource2 a b => IsSource (a :* b) where
-  toBits (sa,sb) = toBits sb . toBits sa
+  toBits (sa,sb) = toBits sb <> toBits sa
   genSource      = liftA2 (,) genSource genSource
 
 -- instance IsSource (a :+ b) where ... ???
+
+instance (IsNat n, IsSource a) => IsSource (Vec n a) where
+  toBits    = foldMap toBits
+  genSource = genSourceV nat
+
+genSourceV :: IsSource a => Nat n -> CircuitM (Vec n a)
+genSourceV Zero     = pure ZVec
+genSourceV (Succ n) = liftA2 (:<) genSource (genSourceV n)
+
 
 {--------------------------------------------------------------------
     Circuit category
