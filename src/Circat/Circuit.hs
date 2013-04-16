@@ -163,7 +163,7 @@ outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do writeFile (outFile "dot") (toG circ)
      void $ system $ 
-       printf "neato -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
+       printf "dot -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
  where
    outFile suff = "dot/"++name++"."++suff
 
@@ -174,10 +174,6 @@ toG cir = "digraph {\n" ++ concatMap wrap (recordDots comps) ++ "}\n"
  where
    comps = simpleComp <$> cComps cir
    wrap = ("  " ++) . (++ ";\n")
-
--- I use neato mainly because it supports the edge length attribute ("len"),
--- which I use for input & output ports. Alternatively, use records with one
--- side for inputs, one for outputs, and the primitive name in-between.
 
 type Statement = String
 
@@ -197,11 +193,12 @@ recordDots comps = prelude ++ nodes ++ edges
    tagged = zip [0 ..]
    ncomps :: [(CompNum,Comp')] -- numbered comps
    ncomps = tagged comps
-   prelude = ["ordering=out","splines=true"]
-   nodes = "node [fixedsize=true,shape=Mrecord]" : (node <$> ncomps)
+   prelude = ["rankdir=LR"]
+             -- ["ordering=out","splines=true"]
+   nodes = "node [shape=Mrecord]" : (node <$> ncomps) -- add fixedsize=true
     where
       node (nc,(prim,ins,outs)) =
-        printf "%s [label=\"{%s}|%s|{%s}\"]" 
+        printf "%s [label=\"{{%s}|%s|{%s}}\"]" 
           (compLab nc) (labs In ins) prim (labs Out outs)
        where
          labs dir bs = intercalate "|" (bracket . portLab dir . fst <$> tagged bs)
@@ -229,8 +226,7 @@ sourceMap = foldMap sources
 
 --    portLab dir (portNum,bit) = printf "<%s%d>%d" (show dir) portNum bit
 
-
--- use <$> instead of map
+{-
 
 compsDots :: [Comp'] -> [Statement]
 compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
@@ -268,6 +264,8 @@ compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
    inLab nc ni = compLab nc ++ "_i" ++ show ni
 
 -- ((Bit 0,Bit 2),[Comp not (Bit 0) (Bit 1),Comp not (Bit 1) (Bit 2)])
+
+-}
 
 {--------------------------------------------------------------------
     Examples
