@@ -175,7 +175,7 @@ outG name circ =
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
-       printf "dot -T%s %s -o %s" outType (outFile "dot") (outFile outType)
+       printf "dot -Gdpi=200 -T%s %s -o %s" outType (outFile "dot") (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
