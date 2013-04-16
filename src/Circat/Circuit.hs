@@ -159,11 +159,16 @@ unitize = namedC "Out" <~ namedC "In"
     Visualize circuit as dot graph
 --------------------------------------------------------------------}
 
+-- I could use language-dot
+
+outType :: String
+outType = "svg"
+
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do writeFile (outFile "dot") (toG circ)
      void $ system $ 
-       printf "dot -Tsvg %s -o %s" (outFile "dot") (outFile "svg")
+       printf "dot -T%s %s -o %s" outType (outFile "dot") (outFile outType)
  where
    outFile suff = "dot/"++name++"."++suff
 
@@ -284,6 +289,6 @@ digraph {
 
 > outG "c3" _c3
 
--- Then view src/dot/c3.svg
+-- Then view src/dot/c3.svg (and see outType above).
 
 -}
