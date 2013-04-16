@@ -194,7 +194,6 @@ recordDots comps = prelude ++ nodes ++ edges
    ncomps :: [(CompNum,Comp')] -- numbered comps
    ncomps = tagged comps
    prelude = ["rankdir=LR"]
-             -- ["ordering=out","splines=true"]
    nodes = "node [shape=Mrecord]" : (node <$> ncomps) -- add fixedsize=true
     where
       node (nc,(prim,ins,outs)) =
@@ -229,49 +228,6 @@ sourceMap = foldMap sources
  where
    sources :: (Int,Comp') -> SourceMap
    sources (nc,(_,_,outs)) = M.fromList [(b,(nc,np)) | np <- [0 ..] | b <- outs]
-
---    portLab dir (portNum,bit) = printf "<%s%d>%d" (show dir) portNum bit
-
-{-
-
-compsDots :: [Comp'] -> [Statement]
-compsDots comps = prelude ++ compNodes ++ portEdges ++ flowEdges
- where
-   tagged :: [a] -> [(Int,a)]
-   tagged = zip [0 ..]
-   ncomps :: [(Int,Comp')] -- numbered comps
-   ncomps = tagged comps
-   prelude = ["ordering=out","splines=true"]
-   compNodes = "node [fixedsize=true,shape=circle]" : map node ncomps
-    where
-      node (n,(prim,_,_)) =
-        printf "%s [label=%s]" (compLab n) (show prim)
-   portEdges = "node [shape=point]" 
-             : "edge [arrowsize=0,len=0.35,fontsize=8]"
-             : concatMap edges ncomps
-    where
-      edges (nc,(_,ins,outs)) = map inEdge  (tagged ins)
-                             ++ map outEdge (tagged outs)
-       where
-         inEdge  (ni,_) = edge (inLab nc ni) (compLab nc) "head" ni
-         outEdge (no,o) = edge (compLab nc)  (outLab o)   "tail" no
-         edge = printf "%s -> %s [%slabel=%d]"
-   flowEdges = "edge [arrowsize=0.75,len=1]" : concatMap edge ncomps
-    where
-      edge (nc,(_,srcs,_)) = map srcEdge (tagged srcs)
-       where
-         srcEdge (ni,src) =
-           printf "%s -> %s" (outLab src) (inLab nc ni)
-   compLab :: Int -> String
-   compLab = ('c':) . show
-   outLab :: Bit -> String
-   outLab (Bit n) = 'b' : show n
-   inLab :: Int -> Int -> String
-   inLab nc ni = compLab nc ++ "_i" ++ show ni
-
--- ((Bit 0,Bit 2),[Comp not (Bit 0) (Bit 1),Comp not (Bit 1) (Bit 2)])
-
--}
 
 {--------------------------------------------------------------------
     Examples
