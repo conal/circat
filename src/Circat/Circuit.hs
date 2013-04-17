@@ -111,7 +111,7 @@ instance IsSource Bit where
   genSource = newBit
 
 instance IsSource2 a b => IsSource (a :* b) where
-  toBits (sa,sb) = toBits sb <> toBits sa
+  toBits (sa,sb) = toBits sa <> toBits sb
   genSource      = liftA2 (,) genSource genSource
 
 -- instance IsSource (a :+ b) where ... ???
@@ -261,7 +261,10 @@ recordDots comps = nodes ++ edges
        where
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
-         labs dir bs = intercalate "|" (bracket . portLab dir . fst <$> tagged bs)
+         labs dir bs = intercalate "|" (portSticker . fst <$> tagged bs)
+          where
+            -- portSticker = bracket . portLab dir
+            portSticker p = bracket (portLab dir p) {- ++ show p -} -- show p for port # debugging
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
@@ -353,6 +356,9 @@ digraph {
 
 -- Vectors
 
+_addV1 :: AddVP N1
+_addV1 = adds
+
 _addV2 :: AddVP N2
 _addV2 = adds
 
@@ -366,6 +372,12 @@ _addV16 :: AddVP N16
 _addV16 = adds
 
 -- Trees
+
+_addT1 :: AddTP N0
+_addT1 = adds
+
+_addT2 :: AddTP N1
+_addT2 = adds
 
 _addT4 :: AddTP N2
 _addT4 = adds

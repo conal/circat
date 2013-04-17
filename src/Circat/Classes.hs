@@ -31,6 +31,7 @@ import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
 import Circat.Misc ((:*))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
+import Circat.Pair
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
@@ -85,22 +86,22 @@ instance Monad m => VecCat (Kleisli m) where
   toVecS = arr toVecS
   unVecS = arr unVecS
 
-class BoolCat (~>) => AddCat (~>) where
+class (PairCat (~>), BoolCat (~>)) => AddCat (~>) where
   -- | Half adder: addends in; sum and carry out. Default via logic.
   halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
   halfAdd = xor &&& and
-  -- | Full adder: carry and addends in; sum and carry out.
+  -- | Full adder: carry and addend pairs in; sum and carry out.
   -- Default via 'halfAdd'.
-  fullAdd :: b ~ BoolT (~>) => (b :* (b :* b)) ~> (b :* b)
-  fullAdd = second or . inLassocP (first halfAdd) . second halfAdd
+  fullAdd :: b ~ BoolT (~>) => (b :* Pair b) ~> (b :* b)
+  fullAdd = second or . inLassocP (first halfAdd) . second (halfAdd . unPair)
 
 {-
 
-second halfAdd :: C * A       -> C * (C * S)
-lassocP        :: C * (S * C) -> (C * S) * C
-first halfAdd  :: (C * S) * C -> (S * C) * C
-rassocP        :: (S * C) * C -> S * (C * C)
-second or      :: S * (C * C) -> S * C
+second (halfAdd.unPair) :: C * A       -> C * (C * S)
+lassocP                 :: C * (S * C) -> (C * S) * C
+first halfAdd           :: (C * S) * C -> (S * C) * C
+rassocP                 :: (S * C) * C -> S * (C * C)
+second or               :: S * (C * C) -> S * C
 
 -}
 
@@ -109,10 +110,9 @@ instance AddCat (->)  -- use defaults
 -- Structure addition with carry in & out
 
 type Adds (~>) f = 
-  (BoolT (~>) :* f (BoolT (~>) :* BoolT (~>))) ~> (f (BoolT (~>)) :* BoolT (~>))
+  (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
 
 class AddCat (~>) => AddsCat (~>) f where
-  -- adds :: (f (b :* b) :* b) ~> (b :* f b)
   adds :: Adds (~>) f
 
 instance (ConstCat (~>), AddCat (~>), VecCat (~>), IsNat n)
@@ -133,12 +133,12 @@ addVN (Succ n) = first toVecS . lassocP . second (addVN n)
 
 -- C carry, A addend pair, R result
 
-second unVecS    :: C :* As (S n)     ~>  C :* (A :* As n)
-lassocP          ::                   ~>  (C :* A) :* As n
-first fullAdd    ::                   ~>  (S :* C) :* As n
-rassocP          ::                   ~>  S :* (C :* As n)
-second (addVN n) ::                   ~>  S :* (Rs n :* C)
-lassocP          ::                   ~>  (S :* Rs n) :* C
-first toVecS     ::                   ~>  Rs (S n) :* C
+second unVecS    :: C :* As (S n) ~> C :* (A :* As n)
+lassocP          ::               ~> (C :* A) :* As n
+first fullAdd    ::               ~> (S :* C) :* As n
+rassocP          ::               ~> S :* (C :* As n)
+second (addVN n) ::               ~> S :* (Rs n :* C)
+lassocP          ::               ~> (S :* Rs n) :* C
+first toVecS     ::               ~> Rs (S n) :* C
 
 -}
