@@ -19,6 +19,7 @@ Library
                      , type-unary
   Exposed-Modules:     
                        Circat.Misc
+                       Circat.Show
                        Circat.Category
                        Circat.Classes
                        Circat.Pair

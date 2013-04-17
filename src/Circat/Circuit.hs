@@ -52,6 +52,8 @@ import TypeUnary.Vec hiding (get)
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
 import Circat.Classes
+import Circat.Pair
+import Circat.RTree
 
 {--------------------------------------------------------------------
     The circuit monad
@@ -122,6 +124,20 @@ genSourceV :: IsSource a => Nat n -> CircuitM (Vec n a)
 genSourceV Zero     = pure ZVec
 genSourceV (Succ n) = liftA2 (:<) genSource (genSourceV n)
 
+instance IsSource a => IsSource (Pair a) where
+  toBits    = foldMap toBits
+  genSource = toPair <$> genSource
+
+instance (IsNat n, IsSource a) => IsSource (T n a) where
+  toBits    = foldMap toBits
+  genSource = genSourceT nat
+
+genSourceT :: IsSource a => Nat n -> CircuitM (T n a)
+genSourceT Zero     = L <$> genSource
+genSourceT (Succ _) = B <$> genSource
+
+-- TODO: does the recounting of nat lead to quadratic work?
+-- Perhaps rewrite, using the Succ argument.
 
 {--------------------------------------------------------------------
     Circuit category
@@ -157,8 +173,8 @@ instance EqCat (:>) where
 
 instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
---   fullAdd = namedC "fullAdd"
---   halfAdd = namedC "halfAdd"
+  fullAdd = namedC "fullAdd"
+  halfAdd = namedC "halfAdd"
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
@@ -335,11 +351,24 @@ digraph {
 
 -}
 
-_add4 :: AddVP N4
-_add4 = adds
+-- Vectors
 
-_add8 :: AddVP N8
-_add8 = adds
+_addV4 :: AddVP N4
+_addV4 = adds
 
-_add16 :: AddVP N16
-_add16 = adds
+_addV8 :: AddVP N8
+_addV8 = adds
+
+_addV16 :: AddVP N16
+_addV16 = adds
+
+-- Trees
+
+_addT4 :: AddTP N2
+_addT4 = adds
+
+_addT8 :: AddTP N3
+_addT8 = adds
+
+_addT16 :: AddTP N4
+_addT16 = adds

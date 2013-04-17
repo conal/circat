@@ -54,3 +54,9 @@ infixl 1 <~
 (<~) :: Category cat =>
         (b `cat` b') -> (a' `cat` a) -> ((a `cat` b) -> (a' `cat` b'))
 (h <~ f) g = h . g . f
+
+-- | Compose list of unary transformations
+compose :: [Unop a] -> Unop a
+compose = foldr (.) id
+
+-- TODO: Maybe generalize the type of compose to Unop' (~>) a

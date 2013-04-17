@@ -33,10 +33,12 @@ import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
 import Data.Foldable
 import Data.Traversable (Traversable(..))
+import Control.Arrow (arr,Kleisli)
 
 import TypeUnary.Nat hiding ((:*:))
 
 import Circat.Misc (Unop,(<~))
+import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
@@ -49,6 +51,10 @@ data T :: * -> * -> * where
 
 deriving instance Eq a => Eq (T n a)
 
+instance Show a => Show (T n a) where
+  showsPrec p (L a)  = showsApp1 "L" p a
+  showsPrec p (B uv) = showsApp1 "B" p uv
+
 class PairCat (~>) => TreeCat (~>) where
   toL :: a ~> T Z a
   unL :: T Z a ~> a
@@ -60,6 +66,12 @@ instance TreeCat (->) where
   unL (L a) = a
   toB p     = (B p)
   unB (B p) = p
+
+instance Monad m => TreeCat (Kleisli m) where
+  toL = arr toL
+  unL = arr unL
+  toB = arr toB
+  unB = arr unB
 
 inL :: TreeCat (~>) => (a ~> b) -> (T Z a ~> T Z b)
 inL = toL <~ unL
@@ -151,27 +163,32 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
     Addition
 --------------------------------------------------------------------}
 
+instance (ConstCat (~>), AddCat (~>), TreeCat (~>), IsNat n)
+      => AddsCat (~>) (T n) where
+  adds = addTN nat
+
 type AddTP n = forall (~>). (ConstCat (~>), AddCat (~>), TreeCat (~>)) =>
                Adds (~>) (T n)
 
 addTN :: Nat n -> AddTP n
 addTN Zero     = second toL . fullAdd . first unL
-
 addTN (Succ n) =
-  second (toB.toPair) . rassocP . first (addTN n) . lassocP . second (addTN n) . rassocP . first (unPair.unB) 
+    second (toB.toPair.swapP) . rassocP . first (addTN n)
+  . inRassocP (second (addTN n)) . first (swapP.unPair.unB) 
 
+-- swapP because I want to consider the left as LSB.
 
 {- Derivation:
 
 -- C carry, A addend pair, R result
 
-first (unPair.unB)  :: As (S n) :* C       :> (As n :* As n) :* C
-rassocP             :: (As n :* As n) :* C :> As n :* (As n :* C)
-second (addTN n)    :: As n :* (As n :* C) :> As n :* (C :* Rs n)
-lassocP             :: As n :* (C :* Rs n) :> (As n :* C) :* Rs n
-first (addTN n)     :: (As n :* C) :* Rs n :> (C :* Rs n) :* Rs n
-rassocP             :: (C :* Rs n) :* Rs n :> C :* (Rs n :* Rs n)
-second (toB.toPair) :: C :* (Rs n :* Rs n) :> C :* Rs (S n)
+first (unPair.unB.swapP)  :: As (S n) :* C       :> (As n :* As n) :* C
+rassocP                   :: (As n :* As n) :* C :> As n :* (As n :* C)
+second (addTN n)          :: As n :* (As n :* C) :> As n :* (C :* Rs n)
+lassocP                   :: As n :* (C :* Rs n) :> (As n :* C) :* Rs n
+first (addTN n)           :: (As n :* C) :* Rs n :> (C :* Rs n) :* Rs n
+rassocP                   :: (C :* Rs n) :* Rs n :> C :* (Rs n :* Rs n)
+second (swapP.toB.toPair) :: C :* (Rs n :* Rs n) :> C :* Rs (S n)
 
 -}
 
