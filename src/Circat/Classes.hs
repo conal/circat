@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Rank2Types, MultiParamTypeClasses, FlexibleInstances #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -101,10 +101,20 @@ instance AddCat (->)  -- use defaults
 
 -- Structure addition with carry in & out
 
-type AddVP n = forall (~>) b.
-               (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
-               -- (ConstConstraint (~>) () (Vec n b)) =>
-               (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+type Adds (~>) f = 
+  (f (BoolT (~>) :* BoolT (~>)) :* BoolT (~>)) ~> (BoolT (~>) :* f (BoolT (~>)))
+
+class AddCat (~>) => AddsCat (~>) f where
+  -- adds :: (f (b :* b) :* b) ~> (b :* f b)
+  adds :: Adds (~>) f
+
+-- type AddVP n = forall (~>) b.
+--                (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
+--                -- (ConstConstraint (~>) () (Vec n b)) =>
+--                (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+
+type AddVP n = forall (~>). (ConstCat (~>), AddCat (~>), VecCat (~>)) =>
+               Adds (~>) (Vec n)
 
 addV :: IsNat n => AddVP n
 addV = addVN nat
@@ -114,6 +124,10 @@ addVN Zero     = rconst ZVec . snd
 addVN (Succ n) = second (toVecS . swapP) . rassocP . first (addVN n)
               . lassocP . second fullAdd . rassocP
               . first (swapP . unVecS)
+
+instance (ConstCat (~>), AddCat (~>), VecCat (~>), IsNat n)
+      => AddsCat (~>) (Vec n) where
+  adds = addV
 
 {- Derivation:
 
