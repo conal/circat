@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
+{-# LANGUAGE Rank2Types #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -19,12 +21,12 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const,not,and,or)
+import Prelude hiding (id,(.),const,not,and,or,fst,snd)
 import qualified Prelude as P
 
 import GHC.Prim (Constraint)
 
-import TypeUnary.Vec (Vec(..),Z,S)
+import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
 import Circat.Misc ((:*))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
@@ -96,3 +98,33 @@ first or       :: (C * C) * S -> C * S
 -}
 
 instance AddCat (->)  -- use defaults
+
+-- Structure addition with carry in & out
+
+type AddVP n = forall (~>) b.
+               (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
+               -- (ConstConstraint (~>) () (Vec n b)) =>
+               (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+
+addV :: IsNat n => AddVP n
+addV = addVN nat
+
+addVN :: Nat n -> AddVP n
+addVN Zero     = rconst ZVec . snd
+addVN (Succ n) = second (toVecS . swapP) . rassocP . first (addVN n)
+              . lassocP . second fullAdd . rassocP
+              . first (swapP . unVecS)
+
+{- Derivation:
+
+-- C carry, A addend pair, R result
+
+first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
+rassocP          :: (As n :* A) :* C  :>  As n :* AC
+second addB      :: As n :* AC        :>  As n :* CR
+lassocP          :: As n :* CRs       :>  AsC n :* R
+first (addVN' n)  :: AsC n :* R        :>  CRs n :* R
+rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
+second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
+
+-}

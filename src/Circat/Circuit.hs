@@ -7,7 +7,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -48,7 +48,6 @@ import Control.Monad.State (MonadState(..),State,evalState)
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf (printf)
 
--- import TypeUnary.Vec (Vec(..),Nat(..),IsNat(..))
 import TypeUnary.Vec hiding (get)
 
 import Circat.Misc ((:*),(<~),Unop)
@@ -278,38 +277,6 @@ sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
               M.fromList [(b,(nc,np)) | (np,b) <- tagged outs ]
 
 {--------------------------------------------------------------------
-    Addition
---------------------------------------------------------------------}
-
-type AddVP n = forall (~>) b.
-               (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
-               -- (ConstConstraint (~>) () (Vec n b)) =>
-               (Vec n (b :* b) :* b) ~> (b :* Vec n b)
-
-add :: IsNat n => AddVP n
-add = addV nat
-
-addV :: Nat n -> AddVP n
-addV Zero     = rconst ZVec . snd
-addV (Succ n) = second (toVecS . swapP) . rassocP . first (addV n)
-              . lassocP . second fullAdd . rassocP
-              . first (swapP . unVecS)
-
-{- Derivation:
-
--- C carry, A addend pair, R result
-
-first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
-rassocP          :: (As n :* A) :* C  :>  As n :* AC
-second addB      :: As n :* AC        :>  As n :* CR
-lassocP          :: As n :* CRs       :>  AsC n :* R
-first (addV' n)  :: AsC n :* R        :>  CRs n :* R
-rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
-second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
-
--}
-
-{--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
 
@@ -379,10 +346,10 @@ digraph {
 -}
 
 _add4 :: AddVP N4
-_add4 = add
+_add4 = addV
 
 _add8 :: AddVP N8
-_add8 = add
+_add8 = addV
 
 _add16 :: AddVP N16
-_add16 = add
+_add16 = addV
