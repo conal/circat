@@ -37,7 +37,7 @@ import Control.Arrow (arr,Kleisli)
 
 import TypeUnary.Nat hiding ((:*:))
 
-import Circat.Misc (Unop,(<~))
+import Circat.Misc (Unop,(<~),(:*))
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -60,6 +60,12 @@ class PairCat (~>) => TreeCat (~>) where
   unL :: T Z a ~> a
   toB :: IsNat n => Pair (T n a) ~> T (S n) a
   unB :: IsNat n => T (S n) a ~> Pair (T n a)
+
+toB' :: (TreeCat (~>), IsNat n) => (T n a :* T n a) ~> T (S n) a
+toB' = toB . toPair
+
+unB' :: (TreeCat (~>), IsNat n) => T (S n) a ~> (T n a :* T n a)
+unB' = unPair . unB
 
 instance TreeCat (->) where
   toL a     = L a
@@ -173,8 +179,8 @@ type AddTP n = forall (~>). (ConstCat (~>), AddCat (~>), TreeCat (~>)) =>
 addTN :: Nat n -> AddTP n
 addTN Zero     = first toL . fullAdd . second unL
 addTN (Succ n) =
-    first (toB.toPair) . lassocP . second (addTN n)
-  . inLassocP (first (addTN n)) . second (unPair.unB) 
+    first toB' . lassocP . second (addTN n)
+  . inLassocP (first (addTN n)) . second unB'
 
 -- swapP because I want to consider the left as LSB.
 
@@ -182,13 +188,13 @@ addTN (Succ n) =
 
 -- C carry, A addend pair, R result
 
-second (unPair.unB) :: C :* As (S n)  ~>  C :* (As n :* As n)
-lassocP             ::                ~>  (C :* As n) :* As n
-first (addTN n)     ::                ~>  (Rs n :* C) :* As n
-rassocP             ::                ~>  Rs n :* (C :* As n)
-second (addTN n)    ::                ~>  Rs n :* (Rs n :* C)
-lassocP             ::                ~>  (Rs n :* Rs n) :* C
-first (toB.toPair)  ::                ~>  Rs (S n) :* C
+second unB'      :: C :* As (S n) ~> C :* (As n :* As n)
+lassocP          ::               ~> (C :* As n) :* As n
+first (addTN n)  ::               ~> (Rs n :* C) :* As n
+rassocP          ::               ~> Rs n :* (C :* As n)
+second (addTN n) ::               ~> Rs n :* (Rs n :* C)
+lassocP          ::               ~> (Rs n :* Rs n) :* C
+first toB'       ::               ~> Rs (S n) :* C
 
 -}
 
