@@ -23,6 +23,7 @@ module Circat.Classes where
 
 import Prelude hiding (id,(.),const,not,and,or,fst,snd)
 import qualified Prelude as P
+import Control.Arrow (arr,Kleisli)
 
 import GHC.Prim (Constraint)
 
@@ -78,6 +79,12 @@ instance VecCat (->) where
   toVecS (a,as)    = a :< as
   unVecS (a :< as) = (a,as)
 
+instance Monad m => VecCat (Kleisli m) where
+  toVecZ = arr toVecZ
+  unVecZ = arr unVecZ
+  toVecS = arr toVecS
+  unVecS = arr unVecS
+
 class BoolCat (~>) => AddCat (~>) where
   -- | Half adder: addends in; carry and sum out. Default via logic.
   halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
@@ -129,7 +136,7 @@ first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
 rassocP          :: (As n :* A) :* C  :>  As n :* AC
 second addB      :: As n :* AC        :>  As n :* CR
 lassocP          :: As n :* CRs       :>  AsC n :* R
-first (addVN' n)  :: AsC n :* R        :>  CRs n :* R
+first (addVN' n) :: AsC n :* R        :>  CRs n :* R
 rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
 second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
 

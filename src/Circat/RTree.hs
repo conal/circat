@@ -31,15 +31,15 @@ import Prelude hiding (id,(.))
 import Data.Functor ((<$),(<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
-import Control.Category (Category(..))
 import Data.Foldable
 import Data.Traversable (Traversable(..))
 
 import TypeUnary.Nat hiding ((:*:))
 
-import FunctorCombo.Pair
-
 import Circat.Misc (Unop,(<~))
+import Circat.Category
+import Circat.Classes
+import Circat.Pair -- (Pair(..),PairCat(..))
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -49,36 +49,36 @@ data T :: * -> * -> * where
 
 deriving instance Eq a => Eq (T n a)
 
-class Category (~>) => TCat (~>) where
+class PairCat (~>) => TreeCat (~>) where
   toL :: a ~> T Z a
   unL :: T Z a ~> a
   toB :: IsNat n => Pair (T n a) ~> T (S n) a
   unB :: IsNat n => T (S n) a ~> Pair (T n a)
 
-instance TCat (->) where
+instance TreeCat (->) where
   toL a     = L a
   unL (L a) = a
   toB p     = (B p)
   unB (B p) = p
 
-inL :: TCat (~>) => (a ~> b) -> (T Z a ~> T Z b)
+inL :: TreeCat (~>) => (a ~> b) -> (T Z a ~> T Z b)
 inL = toL <~ unL
 
-inB :: (TCat (~>), IsNat m, IsNat n) =>
+inB :: (TreeCat (~>), IsNat m, IsNat n) =>
        (Pair (T m a) ~> Pair (T n b))
     -> (T (S m) a ~> T (S n) b)
 inB = toB <~ unB
 
-inL2 :: TCat (~>) => (a -> b ~> c) -> (T Z a -> T Z b ~> T Z c)
+inL2 :: TreeCat (~>) => (a -> b ~> c) -> (T Z a -> T Z b ~> T Z c)
 inL2 = inL <~ unL
 
-inB2 :: (TCat (~>), IsNat m, IsNat n, IsNat o) =>
+inB2 :: (TreeCat (~>), IsNat m, IsNat n, IsNat o) =>
         (Pair (T m a) -> Pair (T n b) ~> Pair (T o c))
      -> (T (S m) a -> T (S n) b ~> T (S o) c)
 inB2 = inB <~ unB
 
 -- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
--- etc. What would become of TCat and VecCat?
+-- etc. What would become of TreeCat and VecCat?
 
 instance IsNat n => Functor (T n) where
   fmap = fmap' nat
@@ -147,6 +147,38 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
 -}
 
+{--------------------------------------------------------------------
+    Addition
+--------------------------------------------------------------------}
+
+type AddTP n = forall (~>). (ConstCat (~>), AddCat (~>), TreeCat (~>)) =>
+               Adds (~>) (T n)
+
+addTN :: Nat n -> AddTP n
+addTN Zero     = second toL . fullAdd . first unL
+
+addTN (Succ n) =
+  second (toB.toPair) . rassocP . first (addTN n) . lassocP . second (addTN n) . rassocP . first (unPair.unB) 
+
+
+{- Derivation:
+
+-- C carry, A addend pair, R result
+
+first (unPair.unB)  :: As (S n) :* C       :> (As n :* As n) :* C
+rassocP             :: (As n :* As n) :* C :> As n :* (As n :* C)
+second (addTN n)    :: As n :* (As n :* C) :> As n :* (C :* Rs n)
+lassocP             :: As n :* (C :* Rs n) :> (As n :* C) :* Rs n
+first (addTN n)     :: (As n :* C) :* Rs n :> (C :* Rs n) :* Rs n
+rassocP             :: (C :* Rs n) :* Rs n :> C :* (Rs n :* Rs n)
+second (toB.toPair) :: C :* (Rs n :* Rs n) :> C :* Rs (S n)
+
+-}
+
+{--------------------------------------------------------------------
+    Miscellany. May remove later, or might prove useful.
+--------------------------------------------------------------------}
+
 tree :: (a -> b)
      -> (forall m. (IsNat m, S m ~ n) => Pair (T m a) -> b)
      -> (T n a -> b)
@@ -182,7 +214,7 @@ retree _ b (B u) = (B . b) u
 
 -- | Reverse a tree. Transform away later
 reverseT :: Unop (T n a)
-reverseT = retree id (swapP . fmap reverseT)
+reverseT = retree id (inPair swapP . fmap reverseT)
 
 -- Or
 -- reverseT = retree id (fmap reverseT . swapP)
@@ -196,5 +228,5 @@ fromList' Zero     _   = error "fromList': length mismatch"
 fromList' (Succ n) as  = B (fromList' n <$> halves as)
 
 halves :: [a] -> Pair [a]
-halves as = toP (splitAt (length as `div` 2) as)
+halves as = toPair (splitAt (length as `div` 2) as)
 

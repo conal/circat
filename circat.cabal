@@ -16,10 +16,11 @@ Library
   hs-Source-Dirs:      src
   Include-Dirs:        src
   Build-Depends:       base<5, ghc-prim, containers, process, directory, newtype, mtl
-                     , type-unary, functor-combo
+                     , type-unary
   Exposed-Modules:     
                        Circat.Misc
                        Circat.Category
                        Circat.Classes
+                       Circat.Pair
                        Circat.RTree
                        Circat.Circuit

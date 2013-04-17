@@ -29,7 +29,6 @@ import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
 import Control.Arrow (Kleisli(..))
-import qualified Control.Arrow as A
 import Data.Foldable (foldMap,toList)
 
 import qualified System.Info as SI
@@ -160,15 +159,6 @@ instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
-
-instance VecCat (:>) where
-  toVecZ = A.arr toVecZ
-  unVecZ = A.arr unVecZ
-  toVecS = A.arr toVecS
-  unVecS = A.arr unVecS
-
--- TODO: Maybe generalize this VecConstraint instance to Kleisli m and move to
--- Classes.hs
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
