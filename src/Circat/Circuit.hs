@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification, GADTs #-}
+{-# LANGUAGE Rank2Types #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -28,6 +29,7 @@ import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
 import Control.Arrow (Kleisli(..))
+import qualified Control.Arrow as A
 import Data.Foldable (foldMap,toList)
 
 import qualified System.Info as SI
@@ -46,7 +48,8 @@ import Control.Monad.State (MonadState(..),State,evalState)
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf (printf)
 
-import TypeUnary.Vec (Vec(..),Nat(..),IsNat(..))
+-- import TypeUnary.Vec (Vec(..),Nat(..),IsNat(..))
+import TypeUnary.Vec hiding (get)
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
@@ -155,7 +158,18 @@ instance EqCat (:>) where
   neq = namedC "neq"
 
 instance AddCat (:>) where
-  fullAdd  = namedC "add"
+  -- TODO: Try with and without these non-defaults
+--   fullAdd = namedC "fullAdd"
+--   halfAdd = namedC "halfAdd"
+
+instance VecCat (:>) where
+  toVecZ = A.arr toVecZ
+  unVecZ = A.arr unVecZ
+  toVecS = A.arr toVecS
+  unVecS = A.arr unVecS
+
+-- TODO: Maybe generalize this VecConstraint instance to Kleisli m and move to
+-- Classes.hs
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
@@ -192,13 +206,15 @@ outG name circ =
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
-       printf "dot -Gdpi=200 -T%s %s -o %s" outType (outFile "dot") (outFile outType)
+       printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
-   outType = "png"
+   (outType,res) = ("eps","")
+                   -- ("svg","")
+                   -- ("png","-Gdpi=200")
    open | SI.os == "darwin" = "open"
         | otherwise         = error "unknown open for OS"
 
@@ -262,6 +278,38 @@ type SourceMap = Map Bit (CompNum,PortNum)
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
               M.fromList [(b,(nc,np)) | (np,b) <- tagged outs ]
+
+{--------------------------------------------------------------------
+    Addition
+--------------------------------------------------------------------}
+
+type AddVP n = forall (~>) b.
+               (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
+               -- (ConstConstraint (~>) () (Vec n b)) =>
+               (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+
+add :: IsNat n => AddVP n
+add = addV nat
+
+addV :: Nat n -> AddVP n
+addV Zero     = rconst ZVec . snd
+addV (Succ n) = second (toVecS . swapP) . rassocP . first (addV n)
+              . lassocP . second fullAdd . rassocP
+              . first (swapP . unVecS)
+
+{- Derivation:
+
+-- C carry, A addend pair, R result
+
+first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
+rassocP          :: (As n :* A) :* C  :>  As n :* AC
+second addB      :: As n :* AC        :>  As n :* CR
+lassocP          :: As n :* CRs       :>  AsC n :* R
+first (addV' n)  :: AsC n :* R        :>  CRs n :* R
+rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
+second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
+
+-}
 
 {--------------------------------------------------------------------
     Examples
@@ -332,43 +380,11 @@ digraph {
 
 -}
 
--- Simple adders
+_add4 :: AddVP N4
+_add4 = add
 
--- add :: IsNat n => Vec n (b :* b) :* b ~> b :* Vec n b
--- add = addV nat
+_add8 :: AddVP N8
+_add8 = add
 
--- In: addends and carry; out: carry and sum
-addB :: BCat (~>) b =>
-        ((b :* b) :* b) ~> (b :* b)
-addB = undefined
-
-add :: (IsNat n, BoolCat (~>), ConstCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
-       (Vec n (b :* b) :* b) ~> (b :* Vec n b)
-add = addV nat
-
-addV :: (BoolCat (~>), ConstCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
-        Nat n -> (Vec n (b :* b) :* b) ~> (b :* Vec n b)
-addV Zero     = rconst ZVec . snd
-addV (Succ n) = second (toVecS . swapP) . rassocP . first (addV n)
-              . lassocP . second addB . rassocP
-              . first (swapP . unVecS)
-
-{- Derivation:
-
--- C carry, A addend pair, R result
-
-first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
-rassocP          :: (As n :* A) :* C  :>  As n :* AC
-second addB      :: As n :* AC        :>  As n :* CR
-lassocP          :: As n :* CRs       :>  AsC n :* R
-first (addV' n)  :: AsC n :* R        :>  CRs n :* R
-rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
-second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
-
--}
-
--- addB :: (Bool,Bool) -> Bool -> (Bool,Bool)
--- addB (a,b) cin = (axb /= cin, anb || cin && axb)
---  where
---    axb = a /= b
---    anb = a && b
+_add16 :: AddVP N16
+_add16 = add

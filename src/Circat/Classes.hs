@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -24,10 +24,10 @@ import qualified Prelude as P
 
 import GHC.Prim (Constraint)
 
-import TypeUnary.Vec (Vec,Z,S)
+import TypeUnary.Vec (Vec(..),Z,S)
 
 import Circat.Misc ((:*))
-import Circat.Category (Category(..),ProductCat(..),inRassocP,UnitCat(..))
+import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
@@ -70,51 +70,20 @@ class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
   toVecS :: (a :* Vec n a) ~> Vec (S n) a
   unVecS :: Vec (S n) a ~> (a :* Vec n a)
 
-class ProductCat (~>) => AddCat (~>) where
+instance VecCat (->) where
+  toVecZ ()        = ZVec
+  unVecZ ZVec      = ()
+  toVecS (a,as)    = a :< as
+  unVecS (a :< as) = (a,as)
+
+class BoolCat (~>) => AddCat (~>) where
+  -- | Half adder: addends in; carry and sum out. Default via logic.
+  halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
+  halfAdd = xor &&& and
+  -- | Full adder: addends and carry in; carry and sum out.
+  -- Default via 'halfAdd'.
   fullAdd :: b ~ BoolT (~>) => ((b :* b) :* b) ~> (b :* b)
-
-instance AddCat (->) where
-  fullAdd ((a,b),cin) = (axb /= cin, anb || cin && axb)
-   where
-     axb = a /= b
-     anb = a && b
-
--- TODO: Experiment with interfaces simpler than AddCat, including none at all,
--- defining fullAdd via BoolCat etc. Better yet, give a default definition.
-
--- fullAdd' :: (ProductCat (~>), b ~ BoolT (~>), (~>) ~ (->)) =>
---             ((b :* b) :* b) ~> (b :* b)
-
--- fullAdd' ((a,b),cin) = (axb /= cin, anb || cin && axb)
---  where
---    axb = a /= b
---    anb = a && b
-
--- fullAdd' ((a,b),cin) = (neq (axb,cin), or (anb,and(cin,axb)))
---  where
---    axb = xor (a,b)
---    anb = and (a,b)
-
--- fullAdd' (ab,cin) = (neq (axb,cin), or (anb, and(cin,axb)))
---  where
---    axb = xor ab
---    anb = and ab
-
--- fullAdd' (ab,cin) = (neq (axb,cin), or (anb, and(cin,axb)))
---  where
---    (axb,anb) = (xor &&& and) ab
-
--- | Half adder: addends in; carry and sum out.
-halfAdd :: BCat (~>) b => (b :* b) ~> (b :* b)
-halfAdd = xor &&& and
-
--- halfAdd :: Bool :* Bool -> Bool :* Bool
-
-
--- fullAdd' (ab,cin) = (s2, or (c1,c2))
---  where
---    (s1,c1) = halfAdd ab
---    (s2,c2) = halfAdd (s1,cin)
+  fullAdd = first or . inRassocP (second halfAdd) . first halfAdd
 
 {-
 
@@ -126,7 +95,4 @@ first or       :: (C * C) * S -> C * S
 
 -}
 
--- fullAdd' = first or . lassocP . second halfAdd . rassocP . first halfAdd
-
-fullAdd' :: BCat (~>) b => ((b :* b) :* b) ~> (b :* b)
-fullAdd' = first or . inRassocP (second halfAdd) . first halfAdd
+instance AddCat (->)  -- use defaults
