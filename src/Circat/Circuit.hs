@@ -173,7 +173,7 @@ instance EqCat (:>) where
 
 instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
-  fullAdd = namedC "fullAdd"
+--   fullAdd = namedC "fullAdd"
   halfAdd = namedC "halfAdd"
 
 instance IsSource2 a b => Show (a :> b) where
@@ -311,7 +311,7 @@ c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
 c4 = swapP  -- no components
 
 c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
-c5 = and &&& or
+c5 = xor &&& and   -- half-adder
 
 outSimples :: IO ()
 outSimples = do

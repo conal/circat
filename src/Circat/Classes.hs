@@ -142,3 +142,21 @@ lassocP          ::               ~> (S :* Rs n) :* C
 first toVecS     ::               ~> Rs (S n) :* C
 
 -}
+
+class CTraversable t where
+  type CTraversableConstraint t (~>) :: Constraint
+  type CTraversableConstraint t (~>) = () ~ () -- or just (), if it works
+  traverseC :: CTraversableConstraint t (~>) => (a ~> b) -> (t a ~> t b)
+
+instance CTraversable Pair where
+  type CTraversableConstraint Pair (~>) = PairCat (~>)
+  traverseC f = inPair (f *** f)
+
+instance IsNat n => CTraversable (Vec n) where
+  type CTraversableConstraint (Vec n) (~>) = VecCat (~>)
+  traverseC = traverseV nat
+
+traverseV :: Nat n -> (a ~> b) -> (Vec n a ~> Vec n b)
+traverseV = undefined
+-- traverseV Zero _ = const ZVec
+

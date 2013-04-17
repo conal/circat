@@ -188,13 +188,13 @@ addTN (Succ n) =
 
 -- C carry, A addend pair, R result
 
-second unB'      :: C :* As (S n) ~> C :* (As n :* As n)
-lassocP          ::               ~> (C :* As n) :* As n
-first (addTN n)  ::               ~> (Rs n :* C) :* As n
-rassocP          ::               ~> Rs n :* (C :* As n)
-second (addTN n) ::               ~> Rs n :* (Rs n :* C)
-lassocP          ::               ~> (Rs n :* Rs n) :* C
-first toB'       ::               ~> Rs (S n) :* C
+second unB'      :: C * As (S n) ~> C * (As n * As n)
+lassocP          ::              ~> (C * As n) * As n
+first (addTN n)  ::              ~> (Rs n * C) * As n
+rassocP          ::              ~> Rs n * (C * As n)
+second (addTN n) ::              ~> Rs n * (Rs n * C)
+lassocP          ::              ~> (Rs n * Rs n) * C
+first toB'       ::              ~> Rs (S n) * C
 
 -}
 
