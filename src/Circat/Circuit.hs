@@ -20,7 +20,7 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit ((:>), toG, outG, bc) where
+module Circat.Circuit ((:>), toG, outG, bc, outAll) where
 
 import Prelude hiding (id,(.),fst,snd,not,and,or)
 import qualified Prelude as P
@@ -295,30 +295,39 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-_c0 :: BCat (~>) b => b ~> b
-_c0 = id
+c0 :: BCat (~>) b => b ~> b
+c0 = id
 
-_c1 :: BCat (~>) b => b ~> b
-_c1 = not . not
+c1 :: BCat (~>) b => b ~> b
+c1 = not . not
 
-_c2 :: BCat (~>) b => (b :* b) ~> b
-_c2 = not . and
+c2 :: BCat (~>) b => (b :* b) ~> b
+c2 = not . and
 
-_c3 :: BCat (~>) b => (b :* b) ~> b
-_c3 = not . and . (not *** not)
+c3 :: BCat (~>) b => (b :* b) ~> b
+c3 = not . and . (not *** not)
 
-_c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
-_c4 = swapP  -- no components
+c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
+c4 = swapP  -- no components
 
-_c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
-_c5 = and &&& or
+c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
+c5 = and &&& or
+
+outSimples :: IO ()
+outSimples = do
+  outG "c0" c0
+  outG "c1" c1
+  outG "c2" c2
+  outG "c3" c3
+  outG "c4" c4
+  outG "c5" c5
 
 {- For instance,
 
-> _c3 (True,False)
+> c3 (True,False)
 True
 
-> bc _c3
+> bc c3
 [Comp In () (Bit 0,Bit 1),Comp not (Bit 0) (Bit 2),Comp not (Bit 1) (Bit 3),Comp and (Bit 2,Bit 3) (Bit 4),Comp not (Bit 4) (Bit 5),Comp Out (Bit 5) ()]
 
 -- Same, pretty-printed:
@@ -331,7 +340,7 @@ True
 , Comp Out (Bit 5) ()
 ]
 
-> putStr $ toG _c3
+> putStr $ toG c3
 digraph {
   rankdir=LR ; node [shape=Mrecord];
   c0 [label="{In|{<Out0>|<Out1>}}"];
@@ -348,42 +357,59 @@ digraph {
   c4:Out0 -> c5:In0;
 }
 
-> outG "c3" _c3
-
--- Then view src/dot/c3.svg (and see outType above).
+> outG "c3" c3
 
 -}
 
 -- Vectors
 
-_addV1 :: AddVP N1
-_addV1 = adds
+addV1 :: AddVP N1
+addV1 = adds
 
-_addV2 :: AddVP N2
-_addV2 = adds
+addV2 :: AddVP N2
+addV2 = adds
 
-_addV4 :: AddVP N4
-_addV4 = adds
+addV4 :: AddVP N4
+addV4 = adds
 
-_addV8 :: AddVP N8
-_addV8 = adds
+addV8 :: AddVP N8
+addV8 = adds
 
-_addV16 :: AddVP N16
-_addV16 = adds
+addV16 :: AddVP N16
+addV16 = adds
 
--- Trees
+outVecs :: IO ()
+outVecs = do
+  outG "addV1"  addV1
+  outG "addV2"  addV2
+  outG "addV4"  addV4
+  outG "addV8"  addV8
+  outG "addV16" addV16
 
-_addT1 :: AddTP N0
-_addT1 = adds
+-- Trees (identical results)
 
-_addT2 :: AddTP N1
-_addT2 = adds
+addT1 :: AddTP N0
+addT1 = adds
 
-_addT4 :: AddTP N2
-_addT4 = adds
+addT2 :: AddTP N1
+addT2 = adds
 
-_addT8 :: AddTP N3
-_addT8 = adds
+addT4 :: AddTP N2
+addT4 = adds
 
-_addT16 :: AddTP N4
-_addT16 = adds
+addT8 :: AddTP N3
+addT8 = adds
+
+addT16 :: AddTP N4
+addT16 = adds
+
+outTrees :: IO ()
+outTrees = do
+  outG "addT1"  addT1
+  outG "addT2"  addT2
+  outG "addT4"  addT4
+  outG "addT8"  addT8
+  outG "addT16" addT16
+
+outAll :: IO ()
+outAll = do outSimples ; outVecs ; outTrees
