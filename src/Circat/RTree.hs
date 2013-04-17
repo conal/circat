@@ -8,7 +8,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -32,11 +32,8 @@ import Data.Functor ((<$),(<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
 import Control.Category (Category(..))
-import Control.Arrow (Arrow(..))
+import Data.Foldable
 import Data.Traversable (Traversable(..))
-
-import qualified Prelude       as B
-import qualified Data.Foldable as B
 
 import TypeUnary.Nat hiding ((:*:))
 
@@ -104,9 +101,9 @@ units :: Nat n -> T n ()
 units Zero     = L ()
 units (Succ n) = B (pure (units n))
 
-instance B.Foldable (T n) where
+instance Foldable (T n) where
   foldMap f (L  a) = f a
-  foldMap f (B uv) = (B.foldMap . B.foldMap) f uv
+  foldMap f (B uv) = (foldMap . foldMap) f uv
 
 instance IsNat n => Traversable (T n) where
   traverse f (L a ) = L <$> f a
@@ -114,11 +111,11 @@ instance IsNat n => Traversable (T n) where
 
 instance IsNat n => Monad (T n) where
   return = pure
-  m >>= f = joinT (B.fmap f m)
+  m >>= f = joinT (fmap f m)
 
 joinT :: T n (T n a) -> T n a
 joinT (L t)  = t
-joinT (B uv) = B . B.fmap joinT . join . B.fmap sequenceA . (B.fmap . B.fmap) unB $ uv
+joinT (B uv) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ uv
 
 {-
 
@@ -162,7 +159,7 @@ foldT :: forall a b n. (a -> b) -> (Pair b -> b) -> (T n a -> b)
 foldT l b = foldT'
  where
    foldT' :: forall m. T m a -> b
-   foldT' = tree l (b . B.fmap foldT')
+   foldT' = tree l (b . fmap foldT')
 
 -- foldT l b = tree l (b . fmap (foldT l b))
 
