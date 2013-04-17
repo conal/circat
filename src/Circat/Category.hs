@@ -1,4 +1,6 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, TupleSections #-}
+{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -20,26 +22,27 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP
   , CoproductCat(..)
   , ConstCat(..), UnitCat(..), lconst, rconst
+  , State(..)
   ) where
 
 import Prelude hiding (id,(.),fst,snd,const)
 import qualified Prelude as P
 
-import GHC.Prim (Constraint)
-
 import Control.Category
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..))
 import Control.Monad (liftM2)
+import GHC.Prim (Constraint)
+
+import Control.Newtype
 
 import Circat.Misc ((:*),(:+),(<~),inNew2)
 
-
 infixr 3 ***, &&&
 
--- | Category with product. Minimal definition: 'fst', 'snd', and either
--- (a) '(&&&)', (b) both '(***)' and 'dup', or (c) both '(&&&)' and '(***)'.
--- TODO: Generalize '(:*)' to an associated type. Keep the types fairly pretty.
+-- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
+-- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
+-- associated type. Keep the types fairly pretty.
 class Category (~>) => ProductCat (~>) where
   fst     :: (a :* b) ~> a
   snd     :: (a :* b) ~> b
@@ -172,3 +175,69 @@ instance UnitCat (->) where
 instance Monad m => UnitCat (Kleisli m) where
   lunit = A.arr lunit
   runit = A.arr runit
+
+newtype State (~>) s a b = State ((s :* a) ~> (s :* b))
+
+instance Newtype (State (~>) s a b) ((s :* a) ~> (s :* b)) where
+  pack f = State f
+  unpack (State f) = f
+
+instance ProductCat (~>) => Category (State (~>) s) where
+  id  = pack id
+  (.) = inNew2 (.)
+
+-- TODO: Maybe swap result order
+
+instance ProductCat (~>) => ProductCat (State (~>) s) where
+  fst = pack (second fst)
+  snd = pack (second snd)
+  dup = pack (second dup)
+
+--   (***) = inNew2 $ \ f g ->
+--     ...
+
+-- f :: s * a ~> s * c
+-- g :: s * b ~> s * d
+
+-- want :: s * (a * b) ~> s * (c * d)
+
+-- s * (a * b)
+-- (s * a) * b
+-- (s * c) * b
+-- (c * s) * b
+-- c * (s * b)
+-- c * (s * d)
+-- (c * s) * d
+-- (s * c) * d
+
+-- s * (a * b)
+-- (s * a) * b
+-- (c * s) * b
+-- c * (s * b)
+-- c * (d * s)
+-- (c * d) * s
+
+
+-- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
+-- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
+-- associated type. Keep the types fairly pretty.
+
+-- class Category (~>) => ProductCat (~>) where
+--   fst     :: (a :* b) ~> a
+--   snd     :: (a :* b) ~> b
+--   dup     :: a ~> (a :* a)
+--   dup     =  id &&& id
+--   swapP   :: (a :* b) ~> (b :* a)
+--   swapP   =  snd &&& fst
+--   (***)   :: (a ~> c) -> (b ~> d) -> ((a :* b) ~> (c :* d))
+--   f *** g =  f . fst &&& g . snd
+--   (&&&)   :: (a ~> c) -> (a ~> d) -> (a ~> (c :* d))
+--   f &&& g =  (f *** g) . dup
+--   first   :: (a ~> a') -> ((a :* b) ~> (a' :* b))
+--   first   =  (*** id)
+--   second  :: (b ~> b') -> ((a :* b) ~> (a :* b'))
+--   second  =  (id ***)
+--   lassocP :: (a :* (b :* c)) ~> ((a :* b) :* c)
+--   lassocP =  second fst &&& (snd . snd)
+--   rassocP :: ((a :* b) :* c) ~> (a :* (b :* c))
+--   rassocP =  (fst . fst) &&& first  snd
