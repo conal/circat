@@ -86,21 +86,21 @@ instance Monad m => VecCat (Kleisli m) where
   unVecS = arr unVecS
 
 class BoolCat (~>) => AddCat (~>) where
-  -- | Half adder: addends in; carry and sum out. Default via logic.
+  -- | Half adder: addends in; sum and carry out. Default via logic.
   halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
   halfAdd = xor &&& and
-  -- | Full adder: addends and carry in; carry and sum out.
+  -- | Full adder: carry and addends in; sum and carry out.
   -- Default via 'halfAdd'.
-  fullAdd :: b ~ BoolT (~>) => ((b :* b) :* b) ~> (b :* b)
-  fullAdd = first or . inRassocP (second halfAdd) . first halfAdd
+  fullAdd :: b ~ BoolT (~>) => (b :* (b :* b)) ~> (b :* b)
+  fullAdd = second or . inLassocP (first halfAdd) . second halfAdd
 
 {-
 
-first halfAdd  :: A * C       -> (C * S) * C
-rassocP        :: (C * S) * C -> C * (S * C)
-second halfAdd :: C * (S * C) -> C * (C * S)
-lassocP        :: C * (C * S) -> (C * C) * S
-first or       :: (C * C) * S -> C * S
+second halfAdd :: C * A       -> C * (C * S)
+lassocP        :: C * (S * C) -> (C * S) * C
+first halfAdd  :: (C * S) * C -> (S * C) * C
+rassocP        :: (S * C) * C -> S * (C * C)
+second or      :: S * (C * C) -> S * C
 
 -}
 
@@ -109,7 +109,7 @@ instance AddCat (->)  -- use defaults
 -- Structure addition with carry in & out
 
 type Adds (~>) f = 
-  (f (BoolT (~>) :* BoolT (~>)) :* BoolT (~>)) ~> (BoolT (~>) :* f (BoolT (~>)))
+  (BoolT (~>) :* f (BoolT (~>) :* BoolT (~>))) ~> (f (BoolT (~>)) :* BoolT (~>))
 
 class AddCat (~>) => AddsCat (~>) f where
   -- adds :: (f (b :* b) :* b) ~> (b :* f b)
@@ -123,21 +123,22 @@ type AddVP n = forall (~>). (ConstCat (~>), AddCat (~>), VecCat (~>)) =>
                Adds (~>) (Vec n)
 
 addVN :: Nat n -> AddVP n
-addVN Zero     = rconst ZVec . snd
-addVN (Succ n) = second (toVecS . swapP) . rassocP . first (addVN n)
-              . lassocP . second fullAdd . rassocP
-              . first (swapP . unVecS)
+addVN Zero     = lconst ZVec . fst
+
+addVN (Succ n) = first toVecS . lassocP . second (addVN n)
+               . rassocP . first fullAdd . lassocP
+               . second unVecS
 
 {- Derivation:
 
 -- C carry, A addend pair, R result
 
-first unVecS'    :: As (S n) :* C     :>  (As n :* A) :* C
-rassocP          :: (As n :* A) :* C  :>  As n :* AC
-second addB      :: As n :* AC        :>  As n :* CR
-lassocP          :: As n :* CRs       :>  AsC n :* R
-first (addVN' n) :: AsC n :* R        :>  CRs n :* R
-rassocP          :: CRs n :* R        :>  C :* (Rs n :* R)
-second toVecS'   :: C :* (Rs n :* R)  :>  C :* Rs (S n)
+second unVecS    :: C :* As (S n)     ~>  C :* (A :* As n)
+lassocP          ::                   ~>  (C :* A) :* As n
+first fullAdd    ::                   ~>  (S :* C) :* As n
+rassocP          ::                   ~>  S :* (C :* As n)
+second (addVN n) ::                   ~>  S :* (Rs n :* C)
+lassocP          ::                   ~>  (S :* Rs n) :* C
+first toVecS     ::                   ~>  Rs (S n) :* C
 
 -}

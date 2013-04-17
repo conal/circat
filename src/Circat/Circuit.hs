@@ -353,6 +353,9 @@ digraph {
 
 -- Vectors
 
+_addV2 :: AddVP N2
+_addV2 = adds
+
 _addV4 :: AddVP N4
 _addV4 = adds
 

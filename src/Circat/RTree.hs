@@ -171,10 +171,10 @@ type AddTP n = forall (~>). (ConstCat (~>), AddCat (~>), TreeCat (~>)) =>
                Adds (~>) (T n)
 
 addTN :: Nat n -> AddTP n
-addTN Zero     = second toL . fullAdd . first unL
+addTN Zero     = first toL . fullAdd . second unL
 addTN (Succ n) =
-    second (toB.toPair.swapP) . rassocP . first (addTN n)
-  . inRassocP (second (addTN n)) . first (swapP.unPair.unB) 
+    first (toB.toPair) . lassocP . second (addTN n)
+  . inLassocP (first (addTN n)) . second (unPair.unB) 
 
 -- swapP because I want to consider the left as LSB.
 
@@ -182,13 +182,13 @@ addTN (Succ n) =
 
 -- C carry, A addend pair, R result
 
-first (unPair.unB.swapP)  :: As (S n) :* C       :> (As n :* As n) :* C
-rassocP                   :: (As n :* As n) :* C :> As n :* (As n :* C)
-second (addTN n)          :: As n :* (As n :* C) :> As n :* (C :* Rs n)
-lassocP                   :: As n :* (C :* Rs n) :> (As n :* C) :* Rs n
-first (addTN n)           :: (As n :* C) :* Rs n :> (C :* Rs n) :* Rs n
-rassocP                   :: (C :* Rs n) :* Rs n :> C :* (Rs n :* Rs n)
-second (swapP.toB.toPair) :: C :* (Rs n :* Rs n) :> C :* Rs (S n)
+second (unPair.unB) :: C :* As (S n)  ~>  C :* (As n :* As n)
+lassocP             ::                ~>  (C :* As n) :* As n
+first (addTN n)     ::                ~>  (Rs n :* C) :* As n
+rassocP             ::                ~>  Rs n :* (C :* As n)
+second (addTN n)    ::                ~>  Rs n :* (Rs n :* C)
+lassocP             ::                ~>  (Rs n :* Rs n) :* C
+first (toB.toPair)  ::                ~>  Rs (S n) :* C
 
 -}
 
