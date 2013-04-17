@@ -15,9 +15,11 @@ build-type:          Simple
 Library
   hs-Source-Dirs:      src
   Include-Dirs:        src
-  Build-Depends:       base<5, ghc-prim, containers, newtype, mtl
+  Build-Depends:       base<5, ghc-prim, containers, process, directory, newtype, mtl
+                     , type-unary, functor-combo
   Exposed-Modules:     
                        Circat.Misc
                        Circat.Category
                        Circat.Classes
+                       Circat.RTree
                        Circat.Circuit
