@@ -193,6 +193,7 @@ unitize = namedC "Out" <~ namedC "In"
 --------------------------------------------------------------------}
 
 -- I could use the language-dot API, but it's easier not to.
+-- TODO: Revisit this choice if the string manipulation gets complicated.
 
 systemSuccess :: String -> IO ()
 systemSuccess cmd = 
@@ -204,7 +205,7 @@ systemSuccess cmd =
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (toG circ)
+     writeFile (outFile "dot") (toG name circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      systemSuccess $
@@ -212,7 +213,7 @@ outG name circ =
  where
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
-   (outType,res) = ("eps","")
+   (outType,res) = ("pdf","")
                    -- ("svg","")
                    -- ("png","-Gdpi=200")
    open | SI.os == "darwin" = "open"
@@ -220,9 +221,11 @@ outG name circ =
 
 type DGraph = String
 
-toG :: IsSource2 a b => (a :> b) -> DGraph
-toG cir = "digraph {\n" ++ concatMap wrap (recordDots comps) ++ "}\n"
+toG :: IsSource2 a b => String -> (a :> b) -> DGraph
+toG name cir = printf "digraph \"%s\" {\n%s}\n"
+                 name (concatMap wrap (prelude ++ recordDots comps))
  where
+   prelude = ["rankdir=LR","node [shape=Mrecord]"] -- maybe add fixedsize=true
    comps = simpleComp <$> runC cir
    wrap  = ("  " ++) . (++ ";\n")
 
@@ -241,11 +244,10 @@ tagged :: [a] -> [(Int,a)]
 tagged = zip [0 ..]
 
 recordDots :: [Comp'] -> [Statement]
-recordDots comps = prelude ++ nodes ++ edges
+recordDots comps = nodes ++ edges
  where
    ncomps :: [(CompNum,Comp')] -- numbered comps
    ncomps = tagged comps
-   prelude = ["rankdir=LR ; node [shape=Mrecord]"] -- maybe add fixedsize=true
    nodes = node <$> ncomps
     where
       node (nc,(prim,ins,outs)) =
@@ -267,10 +269,6 @@ recordDots comps = prelude ++ nodes ++ edges
    port :: Dir -> (CompNum,PortNum) -> String
    port dir (nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
-
--- Note: the rankdir=LR and the outer braces in node lead to a left-to-right
--- rendering by dot. I expected a top-to-bottom rendering to work as well, but
--- it looks terrible.
 
 -- Map each bit to its source component and output port numbers
 type SourceMap = Map Bit (CompNum,PortNum)
