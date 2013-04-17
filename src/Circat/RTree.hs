@@ -80,6 +80,8 @@ inB2 :: (TCat (~>), IsNat m, IsNat n, IsNat o) =>
      -> (T (S m) a -> T (S n) b ~> T (S o) c)
 inB2 = inB <~ unB
 
+-- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
+-- etc. What would become of TCat and VecCat?
 
 instance IsNat n => Functor (T n) where
   fmap = fmap' nat
