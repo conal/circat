@@ -21,7 +21,7 @@
 
 module Circat.Circuit ((:>), toG, outG, bc) where
 
-import Prelude hiding (id,(.),fst,snd)
+import Prelude hiding (id,(.),fst,snd,not,and,or)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
@@ -144,9 +144,10 @@ namedC = primC . Prim
 
 instance BoolCat (:>) where
   type BoolT (:>) = Bit
-  notC = namedC "not"
-  orC  = namedC "or"
-  andC = namedC "and"
+  not = namedC "not"
+  and = namedC "and"
+  or  = namedC "or"
+  xor = namedC "xor"
 
 instance EqCat (:>) where
   type EqConstraint (:>) a = IsSource a
@@ -154,7 +155,7 @@ instance EqCat (:>) where
   neq = namedC "neq"
 
 instance AddCat (:>) where
-  addC  = namedC "add"
+  fullAdd  = namedC "add"
 
 instance IsSource2 a b => Show (a :> b) where
   show = show . runC
@@ -276,19 +277,19 @@ _c0 :: BCat (~>) b => b ~> b
 _c0 = id
 
 _c1 :: BCat (~>) b => b ~> b
-_c1 = notC . notC
+_c1 = not . not
 
 _c2 :: BCat (~>) b => (b :* b) ~> b
-_c2 = notC . andC
+_c2 = not . and
 
 _c3 :: BCat (~>) b => (b :* b) ~> b
-_c3 = notC . andC . (notC *** notC)
+_c3 = not . and . (not *** not)
 
 _c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
 _c4 = swapP  -- no components
 
 _c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
-_c5 = andC &&& orC
+_c5 = and &&& or
 
 {- For instance,
 
@@ -341,17 +342,16 @@ addB :: BCat (~>) b =>
         ((b :* b) :* b) ~> (b :* b)
 addB = undefined
 
+add :: (IsNat n, BoolCat (~>), ConstCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
+       (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+add = addV nat
+
 addV :: (BoolCat (~>), ConstCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
         Nat n -> (Vec n (b :* b) :* b) ~> (b :* Vec n b)
-
 addV Zero     = rconst ZVec . snd
-
-addV (Succ n) = 
-    second toVecS' . rassocP . first (addV n) . lassocP
-  . second addB    . rassocP . first unVecS'
- where
-   toVecS' = toVecS . swapP
-   unVecS' = swapP . unVecS
+addV (Succ n) = second (toVecS . swapP) . rassocP . first (addV n)
+              . lassocP . second addB . rassocP
+              . first (swapP . unVecS)
 
 {- Derivation:
 

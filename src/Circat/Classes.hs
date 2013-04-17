@@ -19,21 +19,22 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const)
+import Prelude hiding (id,(.),const,not,and,or)
+import qualified Prelude as P
 
 import GHC.Prim (Constraint)
 
 import TypeUnary.Vec (Vec,Z,S)
 
 import Circat.Misc ((:*))
-import Circat.Category (ProductCat(..),UnitCat(..))
+import Circat.Category (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
 class ProductCat (~>) => BoolCat (~>) where
   type BoolT (~>)
-  notC :: BoolT (~>) ~> BoolT (~>)
-  andC, orC :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
+  not :: BoolT (~>) ~> BoolT (~>)
+  and, or, xor :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
 
 -- | Convenient notational alternative
 type BCat (~>) b = (BoolCat (~>), b ~ BoolT (~>))
@@ -42,14 +43,16 @@ type BCat (~>) b = (BoolCat (~>), b ~ BoolT (~>))
 
 instance BoolCat (->) where
   type BoolT (->) = Bool
-  notC = not
-  andC = uncurry (&&)
-  orC  = uncurry (||)
+  not = P.not
+  and = uncurry (&&)
+  or  = uncurry (||)
+  xor = uncurry (/=)
 
 class BoolCat (~>) => EqCat (~>) where
   type EqConstraint (~>) a :: Constraint
   type EqConstraint (~>) a = () ~ () -- or just (), if it works
   eq, neq :: (Eq a, EqConstraint (~>) a) => (a :* a) ~> BoolT (~>)
+  neq = not . eq
 
 -- TODO: Revisit the type constraints for EqCat.
 
@@ -57,6 +60,7 @@ class BoolCat (~>) => EqCat (~>) where
 type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 
 instance EqCat (->) where
+  type EqConstraint (->) a = ()         -- why needed??
   eq  = uncurry (==)
   neq = uncurry (/=)
 
@@ -67,13 +71,62 @@ class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
   unVecS :: Vec (S n) a ~> (a :* Vec n a)
 
 class ProductCat (~>) => AddCat (~>) where
-  addC :: b ~ BoolT (~>) => ((b :* b) :* b) ~> (b :* b)
+  fullAdd :: b ~ BoolT (~>) => ((b :* b) :* b) ~> (b :* b)
 
 instance AddCat (->) where
-  addC ((a,b),cin) = (axb /= cin, anb || cin && axb)
+  fullAdd ((a,b),cin) = (axb /= cin, anb || cin && axb)
    where
      axb = a /= b
      anb = a && b
 
--- addB :: (Bool,Bool) -> Bool -> (Bool,Bool)
+-- TODO: Experiment with interfaces simpler than AddCat, including none at all,
+-- defining fullAdd via BoolCat etc. Better yet, give a default definition.
 
+-- fullAdd' :: (ProductCat (~>), b ~ BoolT (~>), (~>) ~ (->)) =>
+--             ((b :* b) :* b) ~> (b :* b)
+
+-- fullAdd' ((a,b),cin) = (axb /= cin, anb || cin && axb)
+--  where
+--    axb = a /= b
+--    anb = a && b
+
+-- fullAdd' ((a,b),cin) = (neq (axb,cin), or (anb,and(cin,axb)))
+--  where
+--    axb = xor (a,b)
+--    anb = and (a,b)
+
+-- fullAdd' (ab,cin) = (neq (axb,cin), or (anb, and(cin,axb)))
+--  where
+--    axb = xor ab
+--    anb = and ab
+
+-- fullAdd' (ab,cin) = (neq (axb,cin), or (anb, and(cin,axb)))
+--  where
+--    (axb,anb) = (xor &&& and) ab
+
+-- | Half adder: addends in; carry and sum out.
+halfAdd :: BCat (~>) b => (b :* b) ~> (b :* b)
+halfAdd = xor &&& and
+
+-- halfAdd :: Bool :* Bool -> Bool :* Bool
+
+
+-- fullAdd' (ab,cin) = (s2, or (c1,c2))
+--  where
+--    (s1,c1) = halfAdd ab
+--    (s2,c2) = halfAdd (s1,cin)
+
+{-
+
+first halfAdd  :: A * C       -> (C * S) * C
+rassocP        :: (C * S) * C -> C * (S * C)
+second halfAdd :: C * (S * C) -> C * (C * S)
+lassocP        :: C * (C * S) -> (C * C) * S
+first or       :: (C * C) * S -> C * S
+
+-}
+
+-- fullAdd' = first or . lassocP . second halfAdd . rassocP . first halfAdd
+
+fullAdd' :: BCat (~>) b => ((b :* b) :* b) ~> (b :* b)
+fullAdd' = first or . inRassocP (second halfAdd) . first halfAdd

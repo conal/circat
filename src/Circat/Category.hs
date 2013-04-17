@@ -17,7 +17,8 @@
 
 module Circat.Category
   ( module Control.Category
-  , ProductCat(..), CoproductCat(..)
+  , ProductCat(..), inLassocP, inRassocP
+  , CoproductCat(..)
   , ConstCat(..), UnitCat(..), lconst, rconst
   ) where
 
@@ -31,7 +32,7 @@ import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..))
 import Control.Monad (liftM2)
 
-import Circat.Misc ((:*),(:+),inNew2)
+import Circat.Misc ((:*),(:+),(<~),inNew2)
 
 
 infixr 3 ***, &&&
@@ -63,6 +64,16 @@ class Category (~>) => ProductCat (~>) where
 --   ldistribP =  transPair . first  dup -- second fst &&& second snd
 --   rdistribP :: (u :* v, b) ~> ((u,b) :* (v,b))
 --   rdistribP =  transPair . second dup -- first  fst &&& first  snd
+
+inRassocP :: ProductCat (~>) =>
+             ((a :* (b :* c)) ~> (a' :* (b' :* c')))
+          -> (((a :* b) :* c) ~> ((a' :* b') :* c'))
+inRassocP = lassocP <~ rassocP
+
+inLassocP :: ProductCat (~>) =>
+             (((a :* b) :* c) ~> ((a' :* b') :* c'))
+          -> ((a :* (b :* c)) ~> (a' :* (b' :* c')))
+inLassocP = rassocP <~ lassocP
 
 infixr 2 +++, |||
 
@@ -131,6 +142,12 @@ class Category (~>) => ConstCat (~>) where
   type ConstConstraint (~>) a = () ~ () -- or just (), if it works
   const :: a -> (() ~> a)
 
+instance ConstCat (->) where
+  const = P.const
+
+instance Monad m => ConstCat (Kleisli m) where
+  const a = A.arr (const a)
+
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
 class ProductCat (~>) => UnitCat (~>) where
   type UnitConstraint (~>) a :: Constraint
@@ -147,3 +164,11 @@ lconst a = first  (const a) . lunit
 -- | Inject a constant on the right
 rconst :: (UnitCat (~>), ConstCat (~>)) => b -> (a ~> (a :* b))
 rconst b = second (const b) . runit
+
+instance UnitCat (->) where
+  lunit = ((),)
+  runit = (,())
+
+instance Monad m => UnitCat (Kleisli m) where
+  lunit = A.arr lunit
+  runit = A.arr runit
