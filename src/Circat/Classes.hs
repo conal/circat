@@ -108,26 +108,18 @@ class AddCat (~>) => AddsCat (~>) f where
   -- adds :: (f (b :* b) :* b) ~> (b :* f b)
   adds :: Adds (~>) f
 
--- type AddVP n = forall (~>) b.
---                (ConstCat (~>), AddCat (~>), VecCat (~>), b ~ BoolT (~>)) =>
---                -- (ConstConstraint (~>) () (Vec n b)) =>
---                (Vec n (b :* b) :* b) ~> (b :* Vec n b)
+instance (ConstCat (~>), AddCat (~>), VecCat (~>), IsNat n)
+      => AddsCat (~>) (Vec n) where
+  adds = addVN nat
 
 type AddVP n = forall (~>). (ConstCat (~>), AddCat (~>), VecCat (~>)) =>
                Adds (~>) (Vec n)
-
-addV :: IsNat n => AddVP n
-addV = addVN nat
 
 addVN :: Nat n -> AddVP n
 addVN Zero     = rconst ZVec . snd
 addVN (Succ n) = second (toVecS . swapP) . rassocP . first (addVN n)
               . lassocP . second fullAdd . rassocP
               . first (swapP . unVecS)
-
-instance (ConstCat (~>), AddCat (~>), VecCat (~>), IsNat n)
-      => AddsCat (~>) (Vec n) where
-  adds = addV
 
 {- Derivation:
 

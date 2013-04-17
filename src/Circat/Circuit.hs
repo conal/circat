@@ -346,10 +346,10 @@ digraph {
 -}
 
 _add4 :: AddVP N4
-_add4 = addV
+_add4 = adds
 
 _add8 :: AddVP N8
-_add8 = addV
+_add8 = adds
 
 _add16 :: AddVP N16
-_add16 = addV
+_add16 = adds
