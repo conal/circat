@@ -52,6 +52,7 @@ import TypeUnary.Vec hiding (get)
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
+import Circat.State (StateCat(..),FState)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
@@ -72,9 +73,6 @@ deriving instance Show Comp
 
 -- The circuit monad:
 type CircuitM = WriterT [Comp] (State BitSupply)
-
--- TODO: Is WriterT [a] efficient, or do we get frequent (++)? I could use a
--- difference list instead, i.e., Unop [Comp] instead of [Comp].
 
 newtype Bit = Bit Int deriving (Eq,Ord,Show,Enum)
 type BitSupply = Bit  -- Next free pin
@@ -425,7 +423,7 @@ type (:->) = FState (:>) Bit
 
 type AddS f = f (Pair Bit) :-> f Bit
 
-type AddVS n = AddS (Vec n)
+type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
 
 addVS4 :: AddVS N4

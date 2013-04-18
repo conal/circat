@@ -31,6 +31,7 @@ import Data.Data (Data)
 
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (ProductCat(..))
+import Circat.State (FState(..),pureState)
 
 infixl 1 :#
 -- | Uniform pairs

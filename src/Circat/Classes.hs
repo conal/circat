@@ -33,6 +33,7 @@ import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
+import Circat.State (StateCat(..),pureState,FState)
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.

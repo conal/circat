@@ -42,6 +42,7 @@ import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
+import Circat.State (pureState,FState)
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 

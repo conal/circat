@@ -68,11 +68,10 @@ restate = inState id
 
 -- restate = state . runState
 
-
 -- | Simple stateful category
 newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
 
--- We can operate on any StateCat as if it were a FState, leading to a simple
+-- We can operate on any StateCat as if it were FState, leading to a simple
 -- implementation of all classes for which FState is an instance.
 
 asFState :: (StateCat p (~>), StateCat q (+>)) =>
@@ -131,7 +130,7 @@ instance UnitCat (~>) => UnitCat (FState (~>) s) where
 --------------------------------------------------------------------}
 
 -- | 'StateTrie' inner representation
-type StateTrieX (~>) s a b = a ~> (s :->: (b,s))
+type StateTrieX (~>) s a b = a ~> (s :->: (b :* s))
 
 -- | Memoizing state category
 newtype StateTrie (~>) s a b =
@@ -140,9 +139,6 @@ newtype StateTrie (~>) s a b =
 -- instance StateCat StateTrie (~>) where
 --   state = ... working here ...
 
-
--- toFState :: StateCat st (~>) => FState (~>) s a b -> st (~>) s a b
--- unFState :: StateCat st (~>) => st (~>) s a b ~> FState (~>) s a b
 
 
 -- class UnitCat (~>) => StateCat st (~>) where
