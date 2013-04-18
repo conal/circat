@@ -39,8 +39,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Sequence (Seq)
-import qualified Data.Sequence as Seq
+import Data.Sequence (Seq,singleton)
 
 -- mtl
 import Control.Monad.State (State,evalState)
@@ -72,7 +71,7 @@ data Comp = forall a b. IsSource2 a b => Comp (Prim a b) a b
 deriving instance Show Comp
 
 -- The circuit monad:
-type CircuitM = WriterT [Comp] (State BitSupply)
+type CircuitM = WriterT (Seq Comp) (State BitSupply)
 
 newtype Bit = Bit Int deriving (Eq,Ord,Show,Enum)
 type BitSupply = Bit  -- Next free pin
@@ -96,7 +95,7 @@ class Show a => IsSource a where
 genComp :: forall a b. IsSource2 a b =>
            Prim a b -> a -> CircuitM b
 genComp prim a = do b <- genSource
-                    tell [Comp prim a b]
+                    tell (singleton (Comp prim a b))
                     return b
 
 type IsSource2 a b = (IsSource a, IsSource b)
@@ -106,7 +105,7 @@ instance IsSource () where
   genSource = pure ()
 
 instance IsSource Bit where
-  toBits p  = Seq.singleton p
+  toBits p  = singleton p
   genSource = newBit
 
 instance IsSource2 a b => IsSource (a :* b) where
@@ -186,7 +185,7 @@ runC :: IsSource2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU (Kleisli f) = snd (evalWS (f ()) (Bit 0))
+runU (Kleisli f) = toList (snd (evalWS (f ()) (Bit 0)))
 
 -- Wrap a circuit with fake input and output
 unitize :: IsSource2 a b => (a :> b) -> (() :> ())
