@@ -197,13 +197,13 @@ instance Monad m => UnitCat (Kleisli m) where
 class ProductCat (~>) => ClosedCat (~>) where
   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
   type ClosedKon (~>) k = Yes k
-  type Exp (~>) :: * -> * -> *
-  apply   :: (ClosedKon (~>) a, (+>)~Exp (~>)) => ((a +> b) :* a) ~> b
-  curry   :: (ClosedKon (~>) b, (+>)~Exp (~>)) => ((a :* b) ~> c) -> a ~> (b +> c)
-  uncurry :: (ClosedKon (~>) b, (+>)~Exp (~>)) => a ~> (b +> c) -> (a :* b) ~> c
+  type Exp (~>) u v  -- represents u ~> v
+  apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
 
 instance ClosedCat (->) where
-  type Exp (->) = (->)
+  type Exp (->) u v = u -> v
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
@@ -222,7 +222,7 @@ mfun u p = liftM ($ p) u
 
 instance Monad m => ClosedCat (Kleisli m) where
   type ClosedKon (Kleisli m) k = HasTrie k
-  type Exp (Kleisli m) = KTrie m
+  type Exp (Kleisli m) u v = KTrie m u v
   apply   = Kleisli (uncurry (untrie . unKTrie))
   curry   = inNew $ \ f -> return . KTrie . trie . curry f
   uncurry = inNew $ \ h -> join . uncurry (mfun . liftM (untrie.unKTrie) . h)
