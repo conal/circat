@@ -180,34 +180,12 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
     Addition via State
 --------------------------------------------------------------------}
 
+-- | Full adder with 'StateCat' interface
+fullAddS :: (AddCat ar, b ~ BoolT ar, StateCat st ar) => st ar b (Pair b) b
+fullAddS = state fullAdd
 
--- fullAdd :: (AddCat (~>), b ~ BoolT (~>)) => (b :* Pair b) ~> (b :* b)
-
--- Full adder with state interface.
-fullAddS :: (AddCat ar, b ~ BoolT ar) => FState ar b (Pair b) b
-fullAddS = FState fullAdd
-
-fullAddS' :: (AddCat ar, b ~ BoolT ar, StateCat st ar) => st ar b (Pair b) b
-fullAddS' = state fullAdd
-
-
--- type Adds (~>) f = 
---   (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
-
--- class AddCat (~>) => AddsCat (~>) f where
---   adds :: Adds (~>) f
-
-addS :: (AddsCat (~>) f, b ~ BoolT (~>), (~~>) ~ FState (~>) b) =>
+-- | Structure adder with 'StateCat' interface
+addS :: (AddCat (~>), b ~ BoolT (~>), StateCat st (~>), (~~>) ~ st (~>) b) =>
+        (CTraversable f, CTraversableKon f (~~>)) =>
         f (Pair b) ~~> f b
-addS = FState adds
-
--- Now I want to make addS primitive and define adds via addS.
-
-adds' :: AddsCat (~>) f => Adds (~>) f
-adds' = runFState addS
-
-class AddCat (~>) => AddSCat (~>) f where
-  addS' :: (b ~ BoolT (~>), (~~>) ~ FState (~>) b) =>
-           f (Pair b) ~~> f b
-
--- Oh, yeah. structure add with state is traverse.
+addS = traverseC fullAddS
