@@ -3,8 +3,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -40,14 +40,12 @@ import qualified Prelude as P
 import Control.Category
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
-import Control.Monad (liftM2)
+import Control.Monad (liftM,liftM2,join)
 import GHC.Prim (Constraint)
-
-import Control.Newtype (Newtype(..))
 
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
-import Circat.Misc ((:*),(:+),(<~),inNew2)
+import Circat.Misc ((:*),(:+),(<~),inNew,inNew2)
 
 infixr 3 ***, &&&
 
@@ -217,34 +215,50 @@ instance ClosedCat (->) where
 -- Klesli trie
 newtype KTrie m a b = KTrie { unKTrie :: a :->: m b }
 
--- instance Monad m => ClosedCat (Kleisli m) where
---   type ClosedKon (Kleisli m) k = HasTrie k
---   type Exp (Kleisli m) = KTrie m
---   -- apply = Kleisli (first (uncurry untrie) . unKTrie)
---   apply = Kleisli (uncurry (untrie . unKTrie))
+-- TODO: Would MemoTrie work as well?
 
--- apply :: ((a +> b) :* a) ~> b
--- apply :: Kleisli m (KTrie m a b :* a) b
+mfun :: Monad m => m (p -> q) -> (p -> m q)
+mfun u p = liftM ($ p) u
 
-{- Derivation:
+instance Monad m => ClosedCat (Kleisli m) where
+  type ClosedKon (Kleisli m) k = HasTrie k
+  type Exp (Kleisli m) = KTrie m
+  apply = Kleisli (uncurry (untrie . unKTrie))
+  curry = inNew $ \ f -> return . KTrie . trie . curry f
+  uncurry = inNew $ \ h -> join . uncurry (mfun . liftM (untrie.unKTrie) . h)
 
+{- Derivations:
+
+apply :: ((a +> b) :* a) ~> b
+      :: Kleisli m (KTrie m a b :* a) b
+ 
 untrie :: (a :->: m b) -> a -> m b
 untrie . unKTrie :: KTrie m a b -> a -> m b
 uncurry (untrie . unKTrie) :: KTrie m a b :* a -> m b
 Kleisli (uncurry (untrie . unKTrie)) :: Kleisli (KTrie m a b :* a) b
 
-----
+curry :: ((a :* b) ~> c) -> a ~> (b +> c)
+      :: Kleisli m (a :* b) c -> Kleisli m a (KTrie m b c)
+ 
+Kleisli f :: Kleisli m (a :* b) c
+f :: a :* b -> m c
+curry f :: a -> b -> m c
+trie . curry f :: a -> b :->: m c
+KTrie . trie . curry f :: a -> KTrie m b c
+return . KTrie . trie . curry f :: a -> m (KTrie m b c)
+Kleisli (return . KTrie . trie . curry f) :: Kleisli m a (KTrie m b c)
 
-untrie :: (a :->: m b) -> a -> m b
-uncurry untrie :: (a :->: m b) :* a -> m b
-first (uncurry untrie) . unKTrie :: KTrie m a b :* a -> m b
-Kleisli (first (uncurry untrie) . unKTrie) :: Kleisli m (KTrie m a b :* a) b
 
-----
-
-untrie :: (a :->: m b) -> a -> m b
-uncurry untrie :: (a :->: m b) :* a -> m b
-first (uncurry untrie) . unKTrie :: KTrie m a b :* a -> m b
-Kleisli (first (uncurry untrie) . unKTrie) :: Kleisli m (KTrie m a b :* a) b
+uncurry :: a ~> (b +> c) -> ((a :* b) ~> c)
+        :: Kleisli m a (KTrie m b c) -> Kleisli m (a :* b) c
+ 
+Kleisli h :: Kleisli m a (KTrie m b c)
+h :: a -> m (KTrie m b c)
+liftM unKTrie . h :: a -> m (b :->: m c)
+liftM (untrie.unKTrie) . h :: a -> m (b -> m c)
+mfun . liftM (untrie.unKTrie) . h :: a -> b -> m (m c)
+uncurry (mfun . liftM (untrie.unKTrie) . h) :: a :* b -> m (m c)
+join . uncurry (mfun . liftM (untrie.unKTrie) . h) :: a :* b -> m c
+Kleisli (join . uncurry (mfun . liftM (untrie.unKTrie) . h)) :: Kleisli m (a :* b) c
 
 -}
