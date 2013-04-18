@@ -211,7 +211,7 @@ systemSuccess cmd =
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (toG name circ)
+     writeFile (outFile "dot") (toG circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      systemSuccess $
@@ -227,9 +227,9 @@ outG name circ =
 
 type DGraph = String
 
-toG :: IsSource2 a b => String -> (a :> b) -> DGraph
-toG name cir = printf "digraph \"%s\" {\n%s}\n"
-                 name (concatMap wrap (prelude ++ recordDots comps))
+toG :: IsSource2 a b => (a :> b) -> DGraph
+toG cir = printf "digraph {\n%s}\n"
+            (concatMap wrap (prelude ++ recordDots comps))
  where
    prelude = ["rankdir=LR","node [shape=Mrecord]"] -- maybe add fixedsize=true
    comps = simpleComp <$> runC cir
@@ -426,6 +426,7 @@ type (:->) = FState (:>) Bit
 type AddS f = f (Pair Bit) :-> f Bit
 
 type AddVS n = AddS (Vec n)
+type AddTS n = AddS (Tree n)
 
 addVS4 :: AddVS N4
 addVS4 = addS
@@ -433,5 +434,10 @@ addVS4 = addS
 addVS8 :: AddVS N8
 addVS8 = addS
 
+addVS16 :: AddVS N16
+addVS16 = addS
+
 -- outSG "addVS4" addVS4
 
+addTS16 :: AddTS N4
+addTS16 = addS

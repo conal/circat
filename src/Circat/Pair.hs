@@ -30,7 +30,7 @@ import Data.Typeable (Typeable)
 import Data.Data (Data)
 
 import Circat.Misc ((:*),(<~))
-import Circat.Category (ProductCat(..))
+import Circat.Category -- (ProductCat(..))
 
 infixl 1 :#
 -- | Uniform pairs
@@ -79,6 +79,10 @@ instance PairCat (->) where
 instance Monad m => PairCat (Kleisli m) where
   toPair = arr toPair
   unPair = arr unPair
+
+instance (UnitCat (~>), PairCat (~>)) => PairCat (FState (~>) s) where
+  toPair = pureState toPair
+  unPair = pureState unPair
 
 inPair :: PairCat (~>) =>
           ((a :* a) ~> (b :* b)) -> (Pair a ~> Pair b)

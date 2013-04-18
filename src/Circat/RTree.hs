@@ -79,6 +79,12 @@ instance Monad m => TreeCat (Kleisli m) where
   toB = arr toB
   unB = arr unB
 
+instance (UnitCat (~>), TreeCat (~>)) => TreeCat (FState (~>) s) where
+  toL = pureState toL
+  unL = pureState unL
+  toB = pureState toB
+  unB = pureState unB
+
 inL :: TreeCat (~>) => (a ~> b) -> (Tree Z a ~> Tree Z b)
 inL = toL <~ unL
 

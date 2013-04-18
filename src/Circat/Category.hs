@@ -185,13 +185,13 @@ instance Monad m => UnitCat (Kleisli m) where
 --------------------------------------------------------------------}
 
 -- | State interface.
-class StateCat st (~>) where
+class UnitCat (~>) => StateCat st (~>) where
   get      :: st (~>) s a s                          -- ^ Get state
   put      :: st (~>) s s ()                         -- ^ Set state
   state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
   runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
 
-pureState :: (ProductCat (~>), StateCat st (~>)) => (a ~> b) -> st (~>) s a b
+pureState :: StateCat st (~>) => (a ~> b) -> st (~>) s a b
 pureState f = state (swapP . second f)
 
 -- | Simple stateful category
