@@ -141,28 +141,28 @@ instance Monad m => CoproductCat (Kleisli m) where
 
 -- | Category with constant morphisms
 class Category (~>) => ConstCat (~>) where
-  type ConstConstraint (~>) a :: Constraint
-  type ConstConstraint (~>) a = () ~ () -- or just (), if it works
-  const :: ConstConstraint (~>) a => b -> (a ~> b)
+  type ConstKon (~>) a :: Constraint
+  type ConstKon (~>) a = () ~ () -- or just (), if it works
+  const :: ConstKon (~>) a => b -> (a ~> b)
 
 instance ConstCat (->) where
-  type ConstConstraint (->) a = ()  -- why necessary?
+  type ConstKon (->) a = ()  -- why necessary?
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
-  type ConstConstraint (Kleisli m) a = ()  -- why necessary?
+  type ConstKon (Kleisli m) a = ()  -- why necessary?
   const a = A.arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
 class ProductCat (~>) => UnitCat (~>) where
-  type UnitConstraint (~>) a :: Constraint
-  type UnitConstraint (~>) a = () ~ () -- or just (), if it works
+  type UnitKon (~>) a :: Constraint
+  type UnitKon (~>) a = () ~ () -- or just (), if it works
   lunit :: a ~> (() :* a)
   lunit = swapP . runit
   runit :: a ~> (a :* ())
   runit = swapP . lunit
 
-type ConstUCat (~>) = (ConstCat (~>), ConstConstraint (~>) ())
+type ConstUCat (~>) = (ConstCat (~>), ConstKon (~>) ())
 
 -- | Inject a constant on the left
 lconst :: (UnitCat (~>), ConstUCat (~>)) => a -> (b ~> (a :* b))
@@ -180,7 +180,18 @@ instance Monad m => UnitCat (Kleisli m) where
   lunit = A.arr lunit
   runit = A.arr runit
 
-newtype FState (~>) s a b = FState ((s :* a) ~> (b :* s))
+newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
+
+class StateCat st where
+  type StateKon st :: Constraint
+  type StateKon st = () ~ () -- or just (), if it works
+  get :: StateKon st => st s a s   -- ^ Get state
+  put :: StateKon st => st s s ()  -- ^ Set state
+
+instance StateCat (FState ar) where
+  type StateKon (FState ar) = UnitCat ar
+  get = FState (dup   . fst)
+  put = FState (lunit . snd)
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f

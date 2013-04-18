@@ -167,7 +167,7 @@ instance BoolCat (:>) where
   xor = namedC "xor"
 
 instance EqCat (:>) where
-  type EqConstraint (:>) a = IsSource a
+  type EqKon (:>) a = IsSource a
   eq  = namedC "eq"
   neq = namedC "neq"
 

@@ -54,9 +54,9 @@ instance BoolCat (->) where
   xor = uncurry (/=)
 
 class BoolCat (~>) => EqCat (~>) where
-  type EqConstraint (~>) a :: Constraint
-  type EqConstraint (~>) a = () ~ () -- or just (), if it works
-  eq, neq :: (Eq a, EqConstraint (~>) a) => (a :* a) ~> BoolT (~>)
+  type EqKon (~>) a :: Constraint
+  type EqKon (~>) a = () ~ () -- or just (), if it works
+  eq, neq :: (Eq a, EqKon (~>) a) => (a :* a) ~> BoolT (~>)
   neq = not . eq
 
 -- TODO: Revisit the type constraints for EqCat.
@@ -65,7 +65,7 @@ class BoolCat (~>) => EqCat (~>) where
 type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 
 instance EqCat (->) where
-  type EqConstraint (->) a = ()         -- why needed??
+  type EqKon (->) a = ()         -- why needed??
   eq  = uncurry (==)
   neq = uncurry (/=)
 
@@ -128,7 +128,7 @@ instance (ConstUCat (~>), AddCat (~>), VecCat (~>), IsNat n)
       => AddsCat (~>) (Vec n) where
   adds = addVN nat
 
--- Illegal irreducible constraint ConstConstraint (~>) ()
+-- Illegal irreducible constraint ConstKon (~>) ()
 -- in superclass/instance head context (Use -XUndecidableInstances to permit this)
 
 type AddVP n = forall (~>).
@@ -157,19 +157,52 @@ first toVecS     ::               ~> Rs (S n) :* C
 -}
 
 class CTraversable t where
-  type CTraversableConstraint t (~>) :: Constraint
-  type CTraversableConstraint t (~>) = () ~ () -- or just (), if it works
-  traverseC :: CTraversableConstraint t (~>) => (a ~> b) -> (t a ~> t b)
+  type CTraversableKon t (~>) :: Constraint
+  type CTraversableKon t (~>) = () ~ () -- or just (), if it works
+  traverseC :: CTraversableKon t (~>) => (a ~> b) -> (t a ~> t b)
 
 instance CTraversable Pair where
-  type CTraversableConstraint Pair (~>) = PairCat (~>)
+  type CTraversableKon Pair (~>) = PairCat (~>)
   traverseC f = inPair (f *** f)
 
 instance CTraversable (Vec Z) where
-  type CTraversableConstraint (Vec Z) (~>) = VecCat (~>)
+  type CTraversableKon (Vec Z) (~>) = VecCat (~>)
   traverseC _ = reVecZ
 
 instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
-  type CTraversableConstraint (Vec (S n)) (~>) =
-    (VecCat (~>), CTraversableConstraint (Vec n) (~>))
+  type CTraversableKon (Vec (S n)) (~>) =
+    (VecCat (~>), CTraversableKon (Vec n) (~>))
   traverseC f = inVecS (f *** traverseC f)
+
+-- TODO: Move Vec support to a new Vec module, alongside the RTree module.
+
+{--------------------------------------------------------------------
+    Addition via State
+--------------------------------------------------------------------}
+
+
+-- fullAdd :: (AddCat (~>), b ~ BoolT (~>)) => (b :* Pair b) ~> (b :* b)
+
+-- Full adder with state interface.
+fullAddS :: (AddCat ar, b ~ BoolT ar) => FState ar b (Pair b) b
+fullAddS = FState fullAdd
+
+-- type Adds (~>) f = 
+--   (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
+
+-- class AddCat (~>) => AddsCat (~>) f where
+--   adds :: Adds (~>) f
+
+addS :: (AddsCat (~>) f, b ~ BoolT (~>), (~~>) ~ FState (~>) b) =>
+        f (Pair b) ~~> f b
+addS = FState adds
+
+-- Now I want to make addS primitive and define adds via addS.
+
+adds' :: AddsCat (~>) f => Adds (~>) f
+adds' = runFState addS
+
+class AddCat (~>) => AddSCat (~>) f where
+  addS' :: (b ~ BoolT (~>), (~~>) ~ FState (~>) b) =>
+           f (Pair b) ~~> f b
+

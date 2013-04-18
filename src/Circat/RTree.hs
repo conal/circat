@@ -166,12 +166,12 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -}
 
 instance CTraversable (Tree Z) where
-  type CTraversableConstraint (Tree Z) (~>) = TreeCat (~>)
+  type CTraversableKon (Tree Z) (~>) = TreeCat (~>)
   traverseC = inL
 
 instance (IsNat n, CTraversable (Tree n)) => CTraversable (Tree (S n)) where
-  type CTraversableConstraint (Tree (S n)) (~>) =
-    (TreeCat (~>), CTraversableConstraint (Tree n) (~>))
+  type CTraversableKon (Tree (S n)) (~>) =
+    (TreeCat (~>), CTraversableKon (Tree n) (~>))
   traverseC = inB . traverseC . traverseC
 
 {--------------------------------------------------------------------
