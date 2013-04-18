@@ -128,11 +128,11 @@ instance IsSource a => IsSource (Pair a) where
   toBits    = foldMap toBits
   genSource = toPair <$> genSource
 
-instance (IsNat n, IsSource a) => IsSource (T n a) where
+instance (IsNat n, IsSource a) => IsSource (Tree n a) where
   toBits    = foldMap toBits
   genSource = genSourceT nat
 
-genSourceT :: IsSource a => Nat n -> CircuitM (T n a)
+genSourceT :: IsSource a => Nat n -> CircuitM (Tree n a)
 genSourceT Zero     = L <$> genSource
 genSourceT (Succ _) = B <$> genSource
 
