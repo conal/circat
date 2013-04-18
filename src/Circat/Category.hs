@@ -3,8 +3,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -30,9 +30,11 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
+  , ClosedCat(..)
+  , Yes
   ) where
 
-import Prelude hiding (id,(.),fst,snd,const)
+import Prelude hiding (id,(.),fst,snd,const,curry,uncurry)
 import qualified Prelude as P
 
 import Control.Category
@@ -41,9 +43,17 @@ import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM2)
 import GHC.Prim (Constraint)
 
+import Control.Newtype (Newtype(..))
+
+import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
+
 import Circat.Misc ((:*),(:+),(<~),inNew2)
 
 infixr 3 ***, &&&
+
+-- | Hack to get around broken constraint defaults like () or ()~()
+class Yes a
+instance Yes a
 
 -- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
@@ -147,21 +157,20 @@ instance Monad m => CoproductCat (Kleisli m) where
 -- | Category with constant morphisms
 class Category (~>) => ConstCat (~>) where
   type ConstKon (~>) a :: Constraint
-  type ConstKon (~>) a = () ~ () -- or just (), if it works
+  type ConstKon (~>) a = Yes a
   const :: ConstKon (~>) a => b -> (a ~> b)
 
 instance ConstCat (->) where
-  type ConstKon (->) a = ()  -- why necessary?
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
-  type ConstKon (Kleisli m) a = ()  -- why necessary?
+  type ConstKon (Kleisli m) a = Yes a  -- why necessary?
   const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
 class ProductCat (~>) => UnitCat (~>) where
   type UnitKon (~>) a :: Constraint
-  type UnitKon (~>) a = () ~ () -- or just (), if it works
+  type UnitKon (~>) a = Yes a
   lunit :: a ~> (() :* a)
   lunit = swapP . runit
   runit :: a ~> (a :* ())
@@ -184,3 +193,58 @@ instance UnitCat (->) where
 instance Monad m => UnitCat (Kleisli m) where
   lunit = arr lunit
   runit = arr runit
+
+-- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
+
+class ProductCat (~>) => ClosedCat (~>) where
+  type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
+  type ClosedKon (~>) k = Yes k
+  type Exp (~>) :: * -> * -> *
+  apply   :: (ClosedKon (~>) a, (+>)~Exp (~>)) => ((a +> b) :* a) ~> b
+  curry   :: (ClosedKon (~>) b, (+>)~Exp (~>)) => ((a :* b) ~> c) -> a ~> (b +> c)
+  uncurry :: (ClosedKon (~>) b, (+>)~Exp (~>)) => a ~> (b +> c) -> (a :* b) ~> c
+
+instance ClosedCat (->) where
+  type Exp (->) = (->)
+  apply (f,a) = f a
+  curry       = P.curry
+  uncurry     = P.uncurry
+
+-- For Kleisli, use tries. Might be too sweeping, in which case, comment out
+-- this instance as a suggestion for specific monads or for newtype wrappers
+-- around some Klieslis.
+
+-- Klesli trie
+newtype KTrie m a b = KTrie { unKTrie :: a :->: m b }
+
+-- instance Monad m => ClosedCat (Kleisli m) where
+--   type ClosedKon (Kleisli m) k = HasTrie k
+--   type Exp (Kleisli m) = KTrie m
+--   -- apply = Kleisli (first (uncurry untrie) . unKTrie)
+--   apply = Kleisli (uncurry (untrie . unKTrie))
+
+-- apply :: ((a +> b) :* a) ~> b
+-- apply :: Kleisli m (KTrie m a b :* a) b
+
+{- Derivation:
+
+untrie :: (a :->: m b) -> a -> m b
+untrie . unKTrie :: KTrie m a b -> a -> m b
+uncurry (untrie . unKTrie) :: KTrie m a b :* a -> m b
+Kleisli (uncurry (untrie . unKTrie)) :: Kleisli (KTrie m a b :* a) b
+
+----
+
+untrie :: (a :->: m b) -> a -> m b
+uncurry untrie :: (a :->: m b) :* a -> m b
+first (uncurry untrie) . unKTrie :: KTrie m a b :* a -> m b
+Kleisli (first (uncurry untrie) . unKTrie) :: Kleisli m (KTrie m a b :* a) b
+
+----
+
+untrie :: (a :->: m b) -> a -> m b
+uncurry untrie :: (a :->: m b) :* a -> m b
+first (uncurry untrie) . unKTrie :: KTrie m a b :* a -> m b
+Kleisli (first (uncurry untrie) . unKTrie) :: Kleisli m (KTrie m a b :* a) b
+
+-}

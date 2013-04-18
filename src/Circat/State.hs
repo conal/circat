@@ -87,7 +87,7 @@ asFState2 = asFState <~ restate
 -- Generic definition
 
 instance UnitCat (~>) => StateCat FState (~>) where
-  state    = state
+  state    = FState
   runState = runFState
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where

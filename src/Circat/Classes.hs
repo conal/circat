@@ -50,13 +50,13 @@ type BCat (~>) b = (BoolCat (~>), b ~ BoolT (~>))
 instance BoolCat (->) where
   type BoolT (->) = Bool
   not = P.not
-  and = uncurry (&&)
-  or  = uncurry (||)
-  xor = uncurry (/=)
+  and = P.uncurry (&&)
+  or  = P.uncurry (||)
+  xor = P.uncurry (/=)
 
 class BoolCat (~>) => EqCat (~>) where
   type EqKon (~>) a :: Constraint
-  type EqKon (~>) a = () ~ () -- or just (), if it works
+  type EqKon (~>) a = Yes a
   eq, neq :: (Eq a, EqKon (~>) a) => (a :* a) ~> BoolT (~>)
   neq = not . eq
 
@@ -66,9 +66,9 @@ class BoolCat (~>) => EqCat (~>) where
 type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 
 instance EqCat (->) where
-  type EqKon (->) a = ()         -- why needed??
-  eq  = uncurry (==)
-  neq = uncurry (/=)
+  type EqKon (->) a = Yes a
+  eq  = P.uncurry (==)
+  neq = P.uncurry (/=)
 
 class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
   toVecZ :: () ~> Vec Z a
