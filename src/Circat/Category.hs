@@ -186,17 +186,19 @@ instance Monad m => UnitCat (Kleisli m) where
 
 -- | State interface.
 class StateCat st (~>) where
-  get   :: st (~>) s a s                          -- ^ Get state
-  put   :: st (~>) s s ()                         -- ^ Set state
-  state :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Stateful computation
+  get      :: st (~>) s a s                          -- ^ Get state
+  put      :: st (~>) s s ()                         -- ^ Set state
+  state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
+  runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
 
 -- | Simple stateful category
 newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
 
 instance UnitCat (~>) => StateCat FState (~>) where
-  get   = FState (dup   . fst)
-  put   = FState (lunit . snd)
-  state = FState
+  get      = FState (dup   . fst)
+  put      = FState (lunit . snd)
+  state    = FState
+  runState = runFState
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
