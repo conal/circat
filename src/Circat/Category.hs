@@ -212,7 +212,7 @@ instance ClosedCat (->) where
 -- this instance as a suggestion for specific monads or for newtype wrappers
 -- around some Klieslis.
 
--- Klesli trie
+-- | Klesli trie
 newtype KTrie m a b = KTrie { unKTrie :: a :->: m b }
 
 -- TODO: Would MemoTrie work as well?
@@ -223,8 +223,8 @@ mfun u p = liftM ($ p) u
 instance Monad m => ClosedCat (Kleisli m) where
   type ClosedKon (Kleisli m) k = HasTrie k
   type Exp (Kleisli m) = KTrie m
-  apply = Kleisli (uncurry (untrie . unKTrie))
-  curry = inNew $ \ f -> return . KTrie . trie . curry f
+  apply   = Kleisli (uncurry (untrie . unKTrie))
+  curry   = inNew $ \ f -> return . KTrie . trie . curry f
   uncurry = inNew $ \ h -> join . uncurry (mfun . liftM (untrie.unKTrie) . h)
 
 {- Derivations:
@@ -247,7 +247,6 @@ trie . curry f :: a -> b :->: m c
 KTrie . trie . curry f :: a -> KTrie m b c
 return . KTrie . trie . curry f :: a -> m (KTrie m b c)
 Kleisli (return . KTrie . trie . curry f) :: Kleisli m a (KTrie m b c)
-
 
 uncurry :: a ~> (b +> c) -> ((a :* b) ~> c)
         :: Kleisli m a (KTrie m b c) -> Kleisli m (a :* b) c

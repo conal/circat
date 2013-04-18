@@ -22,7 +22,7 @@
 
 module Circat.Circuit ((:>), toG, outG, bc, outAll) where
 
-import Prelude hiding (id,(.),fst,snd,not,and,or)
+import Prelude hiding (id,(.),fst,snd,not,and,or,curry,uncurry)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
@@ -425,6 +425,12 @@ type AddS f = f (Pair Bit) :-> f Bit
 type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
 
+addVS1 :: AddVS N1
+addVS1 = addS
+
+addVS2 :: AddVS N2
+addVS2 = addS
+
 addVS4 :: AddVS N4
 addVS4 = addS
 
@@ -435,6 +441,9 @@ addVS16 :: AddVS N16
 addVS16 = addS
 
 -- outSG "addVS4" addVS4
+--   or
+-- outG "addVS4" (runState addVS4)
 
 addTS16 :: AddTS N4
 addTS16 = addS
+
