@@ -203,19 +203,29 @@ instance UnitCat (~>) => StateCat FState (~>) where
   state    = FState
   runState = runFState
 
+inState :: (StateCat p (~>), StateCat q (+>)) =>
+           (((s :* a) ~> (b :* s)) -> ((t :* c) +> (d :* t)))
+        -> (p (~>) s a b           -> q (+>) t c d)
+inState = state <~ runState
+
+inState2 :: (StateCat p (~>), StateCat q (+>), StateCat r (#>)) =>
+            (((s :* a) ~> (b :* s)) -> ((t :* c) +> (d :* t)) -> ((u :* e) #> (f :* u)))
+         -> (p (~>) s a b           -> q (+>) t c d           -> r (#>) u e f)
+inState2 = inState <~ runState
+
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
   unpack (FState f) = f
 
-instance ProductCat (~>) => Category (FState (~>) s) where
+instance UnitCat (~>) => Category (FState (~>) s) where
   id  = pack swapP
-  (.) = inNew2 $ \ g f -> g . swapP . f
+  (.) = inState2 $ \ g f -> g . swapP . f
 
 instance UnitCat (~>) => ProductCat (FState (~>) s) where
   fst   = pureS fst
   snd   = pureS snd
   dup   = pureS dup
-  (***) = inNew2 $ \ f g -> lassocP . second g . inLassocP (first f)
+  (***) = inState2 $ \ f g -> lassocP . second g . inLassocP (first f)
 
 -- f    :: s * a       ~> s * c
 -- g    :: s * b       ~> s * d
