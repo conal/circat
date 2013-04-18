@@ -30,7 +30,7 @@ import qualified Prelude as P
 
 import Control.Category
 import qualified Control.Arrow as A
-import Control.Arrow (Kleisli(..))
+import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM2)
 import GHC.Prim (Constraint)
 
@@ -122,20 +122,20 @@ instance CoproductCat (->) where
   rdistribS (uv,b) = ((,b) +++ (,b)) uv
 
 instance Monad m => ProductCat (Kleisli m) where
-  fst   = A.arr  fst
-  snd   = A.arr  snd
-  dup   = A.arr  dup
+  fst   = arr  fst
+  snd   = arr  snd
+  dup   = arr  dup
   (***) = inNew2 crossM
 
 crossM :: Monad m => (a -> m c) -> (b -> m d) -> (a :* b -> m (c :* d))
 (f `crossM` g) (a,b) = liftM2 (,) (f a) (g b)
 
 instance Monad m => CoproductCat (Kleisli m) where
-  lft       = A.arr  lft
-  rht       = A.arr  rht
-  jam       = A.arr  jam
-  ldistribS = A.arr  ldistribS
-  rdistribS = A.arr  rdistribS
+  lft       = arr  lft
+  rht       = arr  rht
+  jam       = arr  jam
+  ldistribS = arr  ldistribS
+  rdistribS = arr  rdistribS
   (|||)     = inNew2 (|||)
 
 
@@ -151,7 +151,7 @@ instance ConstCat (->) where
 
 instance Monad m => ConstCat (Kleisli m) where
   type ConstKon (Kleisli m) a = ()  -- why necessary?
-  const a = A.arr (const a)
+  const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
 class ProductCat (~>) => UnitCat (~>) where
@@ -177,11 +177,14 @@ instance UnitCat (->) where
   runit = (,())
 
 instance Monad m => UnitCat (Kleisli m) where
-  lunit = A.arr lunit
-  runit = A.arr runit
+  lunit = arr lunit
+  runit = arr runit
 
-newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
+{--------------------------------------------------------------------
+    State
+--------------------------------------------------------------------}
 
+-- | State interface.
 class StateCat st where
   type StateKon st :: Constraint
   type StateKon st = () ~ () -- or just (), if it works
@@ -192,6 +195,9 @@ instance StateCat (FState ar) where
   type StateKon (FState ar) = UnitCat ar
   get = FState (dup   . fst)
   put = FState (lunit . snd)
+
+-- | Simple stateful category
+newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
@@ -210,9 +216,8 @@ instance ProductCat (~>) => ProductCat (FState (~>) s) where
   dup   = pureS dup
   (***) = inNew2 $ \ f g -> lassocP . second g . inLassocP (first f)
 
--- f :: s * a ~> s * c
--- g :: s * b ~> s * d
-
+-- f    :: s * a       ~> s * c
+-- g    :: s * b       ~> s * d
 -- want :: s * (a * b) ~> s * (c * d)
 
 {- Derivation:
