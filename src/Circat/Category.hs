@@ -191,6 +191,9 @@ class StateCat st (~>) where
   state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
   runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
 
+pureS :: (ProductCat (~>), StateCat st (~>)) => (a ~> b) -> st (~>) s a b
+pureS f = state (swapP . second f)
+
 -- | Simple stateful category
 newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
 
@@ -208,10 +211,7 @@ instance ProductCat (~>) => Category (FState (~>) s) where
   id  = pack swapP
   (.) = inNew2 $ \ g f -> g . swapP . f
 
-pureS :: ProductCat (~>) => (a ~> b) -> FState (~>) s a b
-pureS f = pack (swapP . second f)
-
-instance ProductCat (~>) => ProductCat (FState (~>) s) where
+instance UnitCat (~>) => ProductCat (FState (~>) s) where
   fst   = pureS fst
   snd   = pureS snd
   dup   = pureS dup
@@ -230,3 +230,9 @@ second g ::             ~> c * (d * s)
 lassocP  ::             ~> (c * d) * s
 
 -}
+
+-- instance VecCat (~>) => VecCat (FState (~>) s) where
+--   fst   = pureS fst
+--   snd   = pureS snd
+--   dup   = pureS dup
+--   (***) = inNew2 $ \ f g -> lassocP . second g . inLassocP (first f)
