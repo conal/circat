@@ -3,8 +3,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -28,6 +28,8 @@ import Control.Category
 
 import Control.Newtype
 
+import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
+
 import Circat.Misc ((:*),(<~))
 import Circat.Category
 
@@ -37,24 +39,17 @@ import Circat.Category
 
 -- TODO: Move to another module
 
--- | State interface.
+-- | State interface. Minimal definition: 'state' and 'runState'
 class UnitCat (~>) => StateCat st (~>) where
-  get      :: st (~>) s a s                          -- ^ Get state
-  put      :: st (~>) s s ()                         -- ^ Set state
   state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
   runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
+  get      :: st (~>) s a s                          -- ^ Get state
+  get      = state (dup   . fst)
+  put      :: st (~>) s s ()                         -- ^ Set state
+  put      = state (lunit . snd)
 
 pureState :: StateCat st (~>) => (a ~> b) -> st (~>) s a b
 pureState f = state (swapP . second f)
-
--- | Simple stateful category
-newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
-
-instance UnitCat (~>) => StateCat FState (~>) where
-  get      = FState (dup   . fst)
-  put      = FState (lunit . snd)
-  state    = FState
-  runState = runFState
 
 inState :: (StateCat p (~>), StateCat q (+>)) =>
            (((s :* a) ~> (b :* s)) -> ((t :* c) +> (d :* t)))
@@ -65,6 +60,36 @@ inState2 :: (StateCat p (~>), StateCat q (+>), StateCat r (#>)) =>
             (((s :* a) ~> (b :* s)) -> ((t :* c) +> (d :* t)) -> ((u :* e) #> (f :* u)))
          -> (p (~>) s a b           -> q (+>) t c d           -> r (#>) u e f)
 inState2 = inState <~ runState
+
+-- | Change state categories
+restate :: (StateCat st (~>), StateCat st' (~>)) =>
+           st (~>) s a b -> st' (~>) s a b
+restate = inState id
+
+-- restate = state . runState
+
+
+-- | Simple stateful category
+newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
+
+-- We can operate on any StateCat as if it were a FState, leading to a simple
+-- implementation of all classes for which FState is an instance.
+
+asFState :: (StateCat p (~>), StateCat q (+>)) =>
+            (FState (~>) s a b -> FState (+>) t c d)
+         -> (p (~>) s a b -> q (+>) t c d)
+asFState = restate <~ restate
+
+asFState2  :: (StateCat p (~>), StateCat q (+>), StateCat r (#>)) =>
+              (FState (~>) s a b -> FState (+>) t c d -> FState (#>) u e f)
+           -> (p (~>) s a b -> q (+>) t c d -> r (#>) u e f)
+asFState2 = asFState <~ restate
+
+-- Generic definition
+
+instance UnitCat (~>) => StateCat FState (~>) where
+  state    = state
+  runState = runFState
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
@@ -101,9 +126,34 @@ instance UnitCat (~>) => UnitCat (FState (~>) s) where
   runit = pureState runit
 
 
--- -- | 'StateTrie' inner representation
--- type StateTrieX (~>) s a b = a ~> (s :->: (a,s))
+{--------------------------------------------------------------------
+    Memoization
+--------------------------------------------------------------------}
 
--- -- | Memoizing state category
--- newtype StateTrie (~>) s a b = StateTrie { unStateTrie :: (s :* a) ~> (b :* s) }
+-- | 'StateTrie' inner representation
+type StateTrieX (~>) s a b = a ~> (s :->: (b,s))
 
+-- | Memoizing state category
+newtype StateTrie (~>) s a b =
+  StateTrie { unStateTrie :: StateTrieX (~>) s a b }
+
+-- instance StateCat StateTrie (~>) where
+--   state = ... working here ...
+
+
+-- toFState :: StateCat st (~>) => FState (~>) s a b -> st (~>) s a b
+-- unFState :: StateCat st (~>) => st (~>) s a b ~> FState (~>) s a b
+
+
+-- class UnitCat (~>) => StateCat st (~>) where
+--   state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
+--   runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
+
+-- instance UnitCat (~>) => StateCat FState (~>) where
+--   state    = state
+--   runState = runFState
+
+-- TODO: Reconsider my unconventional choice of argument/result order in
+-- 'FState'. Now that I have the 'StateCat' interface and the traverse
+-- formulation of addition, does the 'FState' representation have much impact?
+-- Would I want to keep the unconventional order in the 'state' method?

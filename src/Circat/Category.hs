@@ -17,6 +17,14 @@
 -- Categories with product and co-product
 ----------------------------------------------------------------------
 
+
+-- TODO: Reconsider naming scheme for classes. Maybe "ProductCat" -->
+-- "CatProduct" or even "CategoryProduct". Compare with Ross's choices. On the
+-- other hand, I like "ProductCat" and "ProductKon".
+
+-- TODO: Consider "Kon" --> "Con". Or explain "Kon" as "constraint kind".
+
+
 module Circat.Category
   ( module Control.Category
   , ProductCat(..), inLassocP, inRassocP
