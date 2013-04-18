@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, TupleSections #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, TupleSections, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -21,7 +21,7 @@ module Circat.Category
   ( module Control.Category
   , ProductCat(..), inLassocP, inRassocP
   , CoproductCat(..)
-  , ConstCat(..), UnitCat(..), lconst, rconst
+  , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
   , FState(..)
   ) where
 
@@ -143,12 +143,14 @@ instance Monad m => CoproductCat (Kleisli m) where
 class Category (~>) => ConstCat (~>) where
   type ConstConstraint (~>) a :: Constraint
   type ConstConstraint (~>) a = () ~ () -- or just (), if it works
-  const :: a -> (() ~> a)
+  const :: ConstConstraint (~>) a => b -> (a ~> b)
 
 instance ConstCat (->) where
+  type ConstConstraint (->) a = ()  -- why necessary?
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
+  type ConstConstraint (Kleisli m) a = ()  -- why necessary?
   const a = A.arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
@@ -160,12 +162,14 @@ class ProductCat (~>) => UnitCat (~>) where
   runit :: a ~> (a :* ())
   runit = swapP . lunit
 
+type ConstUCat (~>) = (ConstCat (~>), ConstConstraint (~>) ())
+
 -- | Inject a constant on the left
-lconst :: (UnitCat (~>), ConstCat (~>)) => a -> (b ~> (a :* b))
+lconst :: (UnitCat (~>), ConstUCat (~>)) => a -> (b ~> (a :* b))
 lconst a = first  (const a) . lunit
 
 -- | Inject a constant on the right
-rconst :: (UnitCat (~>), ConstCat (~>)) => b -> (a ~> (a :* b))
+rconst :: (UnitCat (~>), ConstUCat (~>)) => b -> (a ~> (a :* b))
 rconst b = second (const b) . runit
 
 instance UnitCat (->) where

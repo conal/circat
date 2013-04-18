@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
 {-# LANGUAGE Rank2Types, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -29,7 +30,7 @@ import GHC.Prim (Constraint)
 
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
-import Circat.Misc ((:*))
+import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
 
@@ -74,6 +75,14 @@ class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
   toVecS :: (a :* Vec n a) ~> Vec (S n) a
   unVecS :: Vec (S n) a ~> (a :* Vec n a)
 
+reVecZ :: VecCat (~>) => Vec Z a ~> Vec Z b
+reVecZ = toVecZ . unVecZ
+
+inVecS :: VecCat (~>) =>
+          ((a :* Vec m a) ~> (b :* Vec n b))
+       -> (Vec  (S m)  a ~> Vec  (S n)   b)
+inVecS = toVecS <~ unVecS
+
 instance VecCat (->) where
   toVecZ ()        = ZVec
   unVecZ ZVec      = ()
@@ -115,12 +124,16 @@ type Adds (~>) f =
 class AddCat (~>) => AddsCat (~>) f where
   adds :: Adds (~>) f
 
-instance (ConstCat (~>), AddCat (~>), VecCat (~>), IsNat n)
+instance (ConstUCat (~>), AddCat (~>), VecCat (~>), IsNat n)
       => AddsCat (~>) (Vec n) where
   adds = addVN nat
 
-type AddVP n = forall (~>). (ConstCat (~>), AddCat (~>), VecCat (~>)) =>
-               Adds (~>) (Vec n)
+-- Illegal irreducible constraint ConstConstraint (~>) ()
+-- in superclass/instance head context (Use -XUndecidableInstances to permit this)
+
+type AddVP n = forall (~>).
+  (ConstUCat (~>), AddCat (~>), VecCat (~>)) =>
+  Adds (~>) (Vec n)
 
 addVN :: Nat n -> AddVP n
 addVN Zero     = lconst ZVec . fst
@@ -152,11 +165,11 @@ instance CTraversable Pair where
   type CTraversableConstraint Pair (~>) = PairCat (~>)
   traverseC f = inPair (f *** f)
 
-instance IsNat n => CTraversable (Vec n) where
-  type CTraversableConstraint (Vec n) (~>) = VecCat (~>)
-  traverseC = traverseV nat
+instance CTraversable (Vec Z) where
+  type CTraversableConstraint (Vec Z) (~>) = VecCat (~>)
+  traverseC _ = reVecZ
 
-traverseV :: Nat n -> (a ~> b) -> (Vec n a ~> Vec n b)
-traverseV = undefined
--- traverseV Zero _ = const ZVec
-
+instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
+  type CTraversableConstraint (Vec (S n)) (~>) =
+    (VecCat (~>), CTraversableConstraint (Vec n) (~>))
+  traverseC f = inVecS (f *** traverseC f)

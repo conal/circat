@@ -1,6 +1,6 @@
 {-# LANGUAGE GADTs, KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables, Rank2Types #-}
-{-# LANGUAGE TypeFamilies, TypeOperators #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -164,6 +164,15 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -- . (fmap . fmap) unB
 
 -}
+
+instance CTraversable (T Z) where
+  type CTraversableConstraint (T Z) (~>) = TreeCat (~>)
+  traverseC = inL
+
+instance (IsNat n, CTraversable (T n)) => CTraversable (T (S n)) where
+  type CTraversableConstraint (T (S n)) (~>) =
+    (TreeCat (~>), CTraversableConstraint (T n) (~>))
+  traverseC = inB . traverseC . traverseC
 
 {--------------------------------------------------------------------
     Addition
