@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification, GADTs #-}
 {-# LANGUAGE Rank2Types #-}
@@ -7,7 +7,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -414,3 +414,24 @@ outTrees = do
 
 outAll :: IO ()
 outAll = do outSimples ; outVecs ; outTrees
+
+-- Stateful addition via FState
+
+outSG :: (IsSource s, IsSource2 a b, StateCat st (:>)) =>
+         String -> st (:>) s a b -> IO ()
+outSG name = outG name . runState
+
+type (:->) = FState (:>) Bit
+
+type AddS f = f (Pair Bit) :-> f Bit
+
+type AddVS n = AddS (Vec n)
+
+addVS4 :: AddVS N4
+addVS4 = addS
+
+addVS8 :: AddVS N8
+addVS8 = addS
+
+-- outSG "addVS4" addVS4
+

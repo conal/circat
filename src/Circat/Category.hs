@@ -22,7 +22,7 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
-  , StateCat(..), FState(..)
+  , StateCat(..), pureState, FState(..)
   ) where
 
 import Prelude hiding (id,(.),fst,snd,const)
@@ -191,8 +191,8 @@ class StateCat st (~>) where
   state    :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Make a stateful computation
   runState :: st (~>) s a b -> (s :* a) ~> (b :* s)  -- ^ Run a stateful computation
 
-pureS :: (ProductCat (~>), StateCat st (~>)) => (a ~> b) -> st (~>) s a b
-pureS f = state (swapP . second f)
+pureState :: (ProductCat (~>), StateCat st (~>)) => (a ~> b) -> st (~>) s a b
+pureState f = state (swapP . second f)
 
 -- | Simple stateful category
 newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
@@ -217,14 +217,16 @@ instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
   unpack (FState f) = f
 
+-- Generic definitions for StateCat. 
+
 instance UnitCat (~>) => Category (FState (~>) s) where
   id  = pack swapP
   (.) = inState2 $ \ g f -> g . swapP . f
 
 instance UnitCat (~>) => ProductCat (FState (~>) s) where
-  fst   = pureS fst
-  snd   = pureS snd
-  dup   = pureS dup
+  fst   = pureState fst
+  snd   = pureState snd
+  dup   = pureState dup
   (***) = inState2 $ \ f g -> lassocP . second g . inLassocP (first f)
 
 -- f    :: s * a       ~> s * c
@@ -241,8 +243,6 @@ lassocP  ::             ~> (c * d) * s
 
 -}
 
--- instance VecCat (~>) => VecCat (FState (~>) s) where
---   fst   = pureS fst
---   snd   = pureS snd
---   dup   = pureS dup
---   (***) = inNew2 $ \ f g -> lassocP . second g . inLassocP (first f)
+instance UnitCat (~>) => UnitCat (FState (~>) s) where
+  lunit = pureState lunit
+  runit = pureState runit

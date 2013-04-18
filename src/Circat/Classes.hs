@@ -95,6 +95,12 @@ instance Monad m => VecCat (Kleisli m) where
   toVecS = arr toVecS
   unVecS = arr unVecS
 
+instance VecCat (~>) => VecCat (FState (~>) s) where
+  toVecZ = pureState toVecZ
+  unVecZ = pureState unVecZ
+  toVecS = pureState toVecS
+  unVecS = pureState unVecS
+
 class (PairCat (~>), BoolCat (~>)) => AddCat (~>) where
   -- | Half adder: addends in; sum and carry out. Default via logic.
   halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
@@ -177,7 +183,7 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
 -- TODO: Move Vec support to a new Vec module, alongside the RTree module.
 
 {--------------------------------------------------------------------
-    Addition via State
+    Addition via state and traversal
 --------------------------------------------------------------------}
 
 -- | Full adder with 'StateCat' interface
