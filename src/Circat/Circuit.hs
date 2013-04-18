@@ -43,7 +43,8 @@ import Data.Sequence (Seq)
 import qualified Data.Sequence as Seq
 
 -- mtl
-import Control.Monad.State (MonadState(..),State,evalState)
+import Control.Monad.State (State,evalState)
+import qualified Control.Monad.State as M
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf (printf)
 
@@ -79,7 +80,7 @@ newtype Bit = Bit Int deriving (Eq,Ord,Show,Enum)
 type BitSupply = Bit  -- Next free pin
 
 newBit :: CircuitM Bit
-newBit = do { p <- get ; put (succ p) ; return p }
+newBit = do { p <- M.get ; M.put (succ p) ; return p }
 
 {--------------------------------------------------------------------
     Bits

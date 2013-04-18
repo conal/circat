@@ -187,6 +187,10 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
 fullAddS :: (AddCat ar, b ~ BoolT ar) => FState ar b (Pair b) b
 fullAddS = FState fullAdd
 
+fullAddS' :: (AddCat ar, b ~ BoolT ar, StateCat st ar) => st ar b (Pair b) b
+fullAddS' = state fullAdd
+
+
 -- type Adds (~>) f = 
 --   (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
 
@@ -206,3 +210,4 @@ class AddCat (~>) => AddSCat (~>) f where
   addS' :: (b ~ BoolT (~>), (~~>) ~ FState (~>) b) =>
            f (Pair b) ~~> f b
 
+-- Oh, yeah. structure add with state is traverse.

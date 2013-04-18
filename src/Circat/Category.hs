@@ -22,7 +22,7 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
-  , FState(..)
+  , StateCat(..), FState(..)
   ) where
 
 import Prelude hiding (id,(.),fst,snd,const)
@@ -185,19 +185,18 @@ instance Monad m => UnitCat (Kleisli m) where
 --------------------------------------------------------------------}
 
 -- | State interface.
-class StateCat st where
-  type StateKon st :: Constraint
-  type StateKon st = () ~ () -- or just (), if it works
-  get :: StateKon st => st s a s   -- ^ Get state
-  put :: StateKon st => st s s ()  -- ^ Set state
-
-instance StateCat (FState ar) where
-  type StateKon (FState ar) = UnitCat ar
-  get = FState (dup   . fst)
-  put = FState (lunit . snd)
+class StateCat st (~>) where
+  get   :: st (~>) s a s                          -- ^ Get state
+  put   :: st (~>) s s ()                         -- ^ Set state
+  state :: (s :* a) ~> (b :* s) -> st (~>) s a b  -- ^ Stateful computation
 
 -- | Simple stateful category
 newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
+
+instance UnitCat (~>) => StateCat FState (~>) where
+  get   = FState (dup   . fst)
+  put   = FState (lunit . snd)
+  state = FState
 
 instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
   pack f = FState f
