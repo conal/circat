@@ -293,6 +293,9 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
+-- More succinct (and less consistent) name
+type BCat (~>) b = BoolCatWith (~>) b
+
 c0 :: BCat (~>) b => b ~> b
 c0 = id
 
