@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
-{-# LANGUAGE Rank2Types, MultiParamTypeClasses, FlexibleInstances #-}
+{-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
@@ -33,7 +34,7 @@ import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
-import Circat.State (StateCat(..),pureState,FState)
+import Circat.State -- (StateCat(..),pureState,FState)
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
@@ -97,6 +98,12 @@ instance Monad m => VecCat (Kleisli m) where
   unVecS = arr unVecS
 
 instance VecCat (~>) => VecCat (FState (~>) s) where
+  toVecZ = pureState toVecZ
+  unVecZ = pureState unVecZ
+  toVecS = pureState toVecS
+  unVecS = pureState unVecS
+
+instance (ClosedCatWith (~>) s, VecCat (~>)) => VecCat (StateExp (~>) s) where
   toVecZ = pureState toVecZ
   unVecZ = pureState unVecZ
   toVecS = pureState toVecS
@@ -168,6 +175,8 @@ class CTraversable t where
   type CTraversableKon t (~>) = () ~ () -- or just (), if it works
   traverseC :: CTraversableKon t (~>) => (a ~> b) -> (t a ~> t b)
 
+type CTraversableWith t (~>) = (CTraversable t, CTraversableKon t (~>))
+
 instance CTraversable Pair where
   type CTraversableKon Pair (~>) = PairCat (~>)
   traverseC f = inPair (f *** f)
@@ -187,12 +196,21 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
     Addition via state and traversal
 --------------------------------------------------------------------}
 
+type AddState (~~>) b =
+  ( StateCat (~~>), StateKon (~~>)
+  , b ~ StateT (~~>), b ~ BoolT (StateBase (~~>))
+  , AddCat (StateBase(~~>)))
+
+-- Simpler but exposes (~>):
+-- 
+--   type AddState (~~>) (~>) b =
+--     (StateCatWith (~~>) (~>) b, AddCat (~>), b ~ BoolT (~>))
+
 -- | Full adder with 'StateCat' interface
-fullAddS :: (AddCat ar, b ~ BoolT ar, StateCat st ar) => st ar b (Pair b) b
+fullAddS :: AddState (~~>) b => Pair b ~~> b
 fullAddS = state fullAdd
 
 -- | Structure adder with 'StateCat' interface
-addS :: (AddCat (~>), b ~ BoolT (~>), StateCat st (~>), (~~>) ~ st (~>) b) =>
-        (CTraversable f, CTraversableKon f (~~>)) =>
+addS :: (AddState (~~>) b, CTraversableWith f (~~>)) =>
         f (Pair b) ~~> f b
 addS = traverseC fullAddS

@@ -42,7 +42,7 @@ import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
-import Circat.State (pureState,FState)
+import Circat.State (pureState,FState,StateExp)
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -81,6 +81,13 @@ instance Monad m => TreeCat (Kleisli m) where
   unB = arr unB
 
 instance (UnitCat (~>), TreeCat (~>)) => TreeCat (FState (~>) s) where
+  toL = pureState toL
+  unL = pureState unL
+  toB = pureState toB
+  unB = pureState unB
+
+instance (ClosedCatWith (~>) s, UnitCat (~>), TreeCat (~>))
+      => TreeCat (StateExp (~>) s) where
   toL = pureState toL
   unL = pureState unL
   toB = pureState toB

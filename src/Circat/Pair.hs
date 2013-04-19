@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
-{-# LANGUAGE TypeOperators, TypeFamilies #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE UndecidableInstances #-} -- see below
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -31,7 +33,7 @@ import Data.Data (Data)
 
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (ProductCat(..))
-import Circat.State (pureState,FState)
+import Circat.State (pureState,FState,StateExp)
 
 infixl 1 :#
 -- | Uniform pairs
@@ -84,6 +86,14 @@ instance Monad m => PairCat (Kleisli m) where
 instance (UnitCat (~>), PairCat (~>)) => PairCat (FState (~>) s) where
   toPair = pureState toPair
   unPair = pureState unPair
+
+instance (ClosedCatWith (~>) s, UnitCat (~>), PairCat (~>))
+      => PairCat (StateExp (~>) s) where
+  toPair = pureState toPair
+  unPair = pureState unPair
+
+--     Illegal irreducible constraint ClosedKon (~>) s
+--     in superclass/instance head context (Use -XUndecidableInstances to permit this)
 
 inPair :: PairCat (~>) =>
           ((a :* a) ~> (b :* b)) -> (Pair a ~> Pair b)

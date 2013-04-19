@@ -30,7 +30,7 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
-  , ClosedCat(..)
+  , ClosedCat(..), ClosedCatWith
   , Yes
   ) where
 
@@ -217,6 +217,8 @@ class ProductCat (~>) => ClosedCat (~>) where
   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+
+type ClosedCatWith (~>) k = (ClosedCat (~>), ClosedKon (~>) k)
 
 instance ClosedCat (->) where
   type Exp (->) u v = u -> v

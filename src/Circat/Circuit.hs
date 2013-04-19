@@ -51,7 +51,7 @@ import TypeUnary.Vec hiding (get)
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
-import Circat.State (StateCat(..),FState)
+import Circat.State (StateCat(..),StateCatWith,FState,StateExp)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
@@ -414,11 +414,13 @@ outAll = do outSimples ; outVecs ; outTrees
 
 -- Stateful addition via FState
 
-outSG :: (IsSource s, IsSource2 a b, StateCat st (:>)) =>
-         String -> st (:>) s a b -> IO ()
+outSG :: (IsSource s, IsSource2 a b, StateCatWith (~~>) (:>) s) =>
+         String -> (a ~~> b) -> IO ()
 outSG name = outG name . runState
 
 type (:->) = FState (:>) Bit
+
+type (:+>) = StateExp (:>) Bit
 
 type AddS f = f (Pair Bit) :-> f Bit
 
