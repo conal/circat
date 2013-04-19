@@ -71,25 +71,25 @@ data Comp = forall a b. IsSource2 a b => Comp (Prim a b) a b
 deriving instance Show Comp
 
 -- The circuit monad:
-type CircuitM = WriterT (Seq Comp) (State BitSupply)
+type CircuitM = WriterT (Seq Comp) (State PinSupply)
 
-newtype Bit = Bit Int deriving (Eq,Ord,Show,Enum)
-type BitSupply = Bit  -- Next free pin
+newtype Pin = Pin Int deriving (Eq,Ord,Show,Enum)
+type PinSupply = Pin  -- Next free pin
 
-newBit :: CircuitM Bit
-newBit = do { p <- M.get ; M.put (succ p) ; return p }
+newPin :: CircuitM Pin
+newPin = do { p <- M.get ; M.put (succ p) ; return p }
 
 {--------------------------------------------------------------------
-    Bits
+    Pins
 --------------------------------------------------------------------}
 
-sourceBits :: forall a. IsSource a => a -> [Bit]
-sourceBits s = toList (toBits s)
+sourcePins :: forall a. IsSource a => a -> [Pin]
+sourcePins s = toList (toPins s)
 
 -- The Source type family gives a representation for a type in terms of
 -- structures of pins. Maybe drop the Show constraint later (after testing).
 class Show a => IsSource a where
-  toBits    :: a -> Seq Bit
+  toPins    :: a -> Seq Pin
   genSource :: CircuitM a
 
 genComp :: forall a b. IsSource2 a b =>
@@ -101,21 +101,21 @@ genComp prim a = do b <- genSource
 type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
-  toBits () = mempty
+  toPins () = mempty
   genSource = pure ()
 
-instance IsSource Bit where
-  toBits p  = singleton p
-  genSource = newBit
+instance IsSource Pin where
+  toPins p  = singleton p
+  genSource = newPin
 
 instance IsSource2 a b => IsSource (a :* b) where
-  toBits (sa,sb) = toBits sa <> toBits sb
+  toPins (sa,sb) = toPins sa <> toPins sb
   genSource      = liftA2 (,) genSource genSource
 
 -- instance IsSource (a :+ b) where ... ???
 
 instance (IsNat n, IsSource a) => IsSource (Vec n a) where
-  toBits    = foldMap toBits
+  toPins    = foldMap toPins
   genSource = genSourceV nat
 
 genSourceV :: IsSource a => Nat n -> CircuitM (Vec n a)
@@ -123,11 +123,11 @@ genSourceV Zero     = pure ZVec
 genSourceV (Succ n) = liftA2 (:<) genSource (genSourceV n)
 
 instance IsSource a => IsSource (Pair a) where
-  toBits    = foldMap toBits
+  toPins    = foldMap toPins
   genSource = toPair <$> genSource
 
 instance (IsNat n, IsSource a) => IsSource (Tree n a) where
-  toBits    = foldMap toBits
+  toPins    = foldMap toPins
   genSource = genSourceT nat
 
 genSourceT :: IsSource a => Nat n -> CircuitM (Tree n a)
@@ -158,7 +158,7 @@ namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
 instance BoolCat (:>) where
-  type BoolT (:>) = Bit
+  type BoolT (:>) = Pin
   not = namedC "not"
   and = namedC "and"
   or  = namedC "or"
@@ -185,7 +185,7 @@ runC :: IsSource2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU (Kleisli f) = toList (snd (evalWS (f ()) (Bit 0)))
+runU (Kleisli f) = toList (snd (evalWS (f ()) (Pin 0)))
 
 -- Wrap a circuit with fake input and output
 unitize :: IsSource2 a b => (a :> b) -> (() :> ())
@@ -234,10 +234,10 @@ toG cir = printf "digraph {\n%s}\n"
 
 type Statement = String
 
-type Comp' = (String,[Bit],[Bit])
+type Comp' = (String,[Pin],[Pin])
 
 simpleComp :: Comp -> Comp'
-simpleComp (Comp prim a b) = (show prim, sourceBits a, sourceBits b)
+simpleComp (Comp prim a b) = (show prim, sourcePins a, sourcePins b)
 
 data Dir = In | Out deriving Show
 type PortNum = Int
@@ -276,8 +276,8 @@ recordDots comps = nodes ++ edges
    port dir (nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
 
--- Map each bit to its source component and output port numbers
-type SourceMap = Map Bit (CompNum,PortNum)
+-- Map each pin to its source component and output port numbers
+type SourceMap = Map Pin (CompNum,PortNum)
 
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
@@ -326,16 +326,16 @@ outSimples = do
 True
 
 > bc c3
-[Comp In () (Bit 0,Bit 1),Comp not (Bit 0) (Bit 2),Comp not (Bit 1) (Bit 3),Comp and (Bit 2,Bit 3) (Bit 4),Comp not (Bit 4) (Bit 5),Comp Out (Bit 5) ()]
+[Comp In () (Pin 0,Pin 1),Comp not (Pin 0) (Pin 2),Comp not (Pin 1) (Pin 3),Comp and (Pin 2,Pin 3) (Pin 4),Comp not (Pin 4) (Pin 5),Comp Out (Pin 5) ()]
 
 -- Same, pretty-printed:
 
-[ Comp In () (Bit 0,Bit 1)
-, Comp not (Bit 0) (Bit 2)
-, Comp not (Bit 1) (Bit 3)
-, Comp and (Bit 2,Bit 3) (Bit 4)
-, Comp not (Bit 4) (Bit 5)
-, Comp Out (Bit 5) ()
+[ Comp In () (Pin 0,Pin 1)
+, Comp not (Pin 0) (Pin 2)
+, Comp not (Pin 1) (Pin 3)
+, Comp and (Pin 2,Pin 3) (Pin 4)
+, Comp not (Pin 4) (Pin 5)
+, Comp Out (Pin 5) ()
 ]
 
 > putStr $ toG c3
@@ -418,11 +418,11 @@ outSG :: (IsSource s, IsSource2 a b, StateCatWith (~~>) (:>) s) =>
          String -> (a ~~> b) -> IO ()
 outSG name = outG name . runState
 
-type (:->) = StateFun (:>) Bit
+type (:->) = StateFun (:>) Pin
 
-type (:+>) = StateExp (:>) Bit
+type (:+>) = StateExp (:>) Pin
 
-type AddS f = f (Pair Bit) :-> f Bit
+type AddS f = f (Pair Pin) :-> f Pin
 
 type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
