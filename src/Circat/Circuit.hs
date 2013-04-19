@@ -161,7 +161,15 @@ primC = Kleisli . genComp
 namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
+type RC a = RepT (:>) a
+
 type instance RepT (:>) Bool = Pin
+
+-- Everything else distributes:
+type instance RepT (:>) ()         = ()
+type instance RepT (:>) ( a :* b ) = RC a :* RC b
+type instance RepT (:>) (Vec n a ) = Vec  n (RC a)
+type instance RepT (:>) (Tree n a) = Tree n (RC a)
 
 instance BoolCat (:>) where
   not = namedC "not"

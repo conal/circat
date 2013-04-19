@@ -31,7 +31,7 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
-  , ClosedCat(..), ClosedCatWith
+  , ClosedCat(..), ExpT, ClosedCatWith
   , Yes
   ) where
 
@@ -223,25 +223,23 @@ instance Monad m => UnitCat (Kleisli m) where
 
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
 
+type ExpT (~>) u v = RepT (~>) (u -> v)
+
+-- TODO: Or maybe RepT (~>) (u ~> v).
+
 class ProductCat (~>) => ClosedCat (~>) where
   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
   type ClosedKon (~>) k = Yes k
-  type Exp (~>) u v  -- represents u ~> v
-  apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
-  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
-  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+  apply   :: ClosedKon (~>) a => (ExpT (~>) a b :* a) ~> b
+  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> ExpT (~>) b c)
+  uncurry :: ClosedKon (~>) b => (a ~> ExpT (~>) b c) -> (a :* b) ~> c
 
 type ClosedCatWith (~>) k = (ClosedCat (~>), ClosedKon (~>) k)
 
 instance ClosedCat (->) where
-  type Exp (->) u v = u -> v
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
-
--- For Kleisli, use tries. Might be too sweeping, in which case, comment out
--- this instance as a suggestion for specific monads or for newtype wrappers
--- around some Klieslis.
 
 -- TODO: Would MemoTrie work as well?
 
@@ -251,9 +249,14 @@ distribMF u p = liftM ($ p) u
 -- TODO: Is there a standard name for distribMF?
 -- It's a distribution/transposition.
 
+-- For Kleisli, use tries. Might be too sweeping, in which case, comment out
+-- this instance as a suggestion for specific monads or for newtype wrappers
+-- around some Klieslis.
+
+type instance RepT (Kleisli m) (u -> v) = u :->: v
+
 instance Monad m => ClosedCat (Kleisli m) where
   type ClosedKon (Kleisli m) k = (HasTrie k, Traversable (Trie k))
-  type Exp (Kleisli m) u v = u :->: v
   apply   = Kleisli (return . uncurry untrie)
   curry   = inNew $ \ f -> sequence . trie . curry f
   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)

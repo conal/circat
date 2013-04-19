@@ -4,8 +4,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -29,8 +29,6 @@ import Control.Category
 import GHC.Prim (Constraint)
 
 import Control.Newtype
-
-import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
 import Circat.Misc ((:*),(<~))
 import Circat.Category
@@ -165,22 +163,26 @@ restateF = inState id
 -- | State via exponentials. For (->), isomorphic to 'StateFun'. Can lead to
 -- memoization for other categories.
 newtype StateExp (~>) s a b =
-  StateExp { unStateExp :: a ~> Exp (~>) s (b :* s) }
+  StateExp { unStateExp :: a ~> ExpT (~>) s (b :* s) }
 
 type ClosedCatU (~>) s = (ClosedCatWith (~>) s, UnitCat (~>))
 
 instance ClosedCatU (~>) s => StateCat (StateExp (~>) s) where
-  type StateKon (StateExp (~>) s) = ClosedKon (~>) s
+  type StateKon  (StateExp (~>) s) = ClosedKon (~>) s
   type StateBase (StateExp (~>) s) = (~>)
   type StateT    (StateExp (~>) s) = s
   state    f  = StateExp (curry (f . swapP))
   runState st = uncurry (unStateExp st) . swapP
 
+-- TODO: Do I want to use RepT for StateT? I guess I could define a dummy State
+-- type to represent the intention, and then define StateT (~>) = RepT (~>)
+-- State. Unclear, so postpone change.
+
 {- Derivations
 
 f                            :: (s :* a) ~> (b :* s)
 f . swapP                    :: (a :* s) ~> (b :* s)
-curry (f . swapP)            :: a ~> (Exp (~>) s (b :* s))
+curry (f . swapP)            :: a ~> (ExpT (~>) s (b :* s))
 StateExp (curry (f . swapP)) :: StateExp (~>) s a b
 
 Then invert for runState.
