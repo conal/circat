@@ -1,10 +1,10 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, TupleSections, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -34,13 +34,14 @@ module Circat.Category
   , Yes
   ) where
 
-import Prelude hiding (id,(.),fst,snd,const,curry,uncurry)
+import Prelude hiding (id,(.),fst,snd,const,curry,uncurry,sequence)
 import qualified Prelude as P
 
 import Control.Category
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM,liftM2,join)
+import Data.Traversable (Traversable,sequence)
 import GHC.Prim (Constraint)
 
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
@@ -212,52 +213,54 @@ instance ClosedCat (->) where
 -- this instance as a suggestion for specific monads or for newtype wrappers
 -- around some Klieslis.
 
--- | Klesli trie
-newtype KTrie m a b = KTrie { unKTrie :: a :->: m b }
-
 -- TODO: Would MemoTrie work as well?
 
-mfun :: Monad m => m (p -> q) -> (p -> m q)
-mfun u p = liftM ($ p) u
+distribMF :: Monad m => m (p -> q) -> (p -> m q)
+distribMF u p = liftM ($ p) u
+
+-- TODO: Is there a standard name for distribMF?
+-- It's a distribution/transposition.
 
 instance Monad m => ClosedCat (Kleisli m) where
-  type ClosedKon (Kleisli m) k = HasTrie k
-  type Exp (Kleisli m) u v = KTrie m u v
-  apply   = Kleisli (uncurry (untrie . unKTrie))
-  curry   = inNew $ \ f -> return . KTrie . trie . curry f
-  uncurry = inNew $ \ h -> join . uncurry (mfun . liftM (untrie.unKTrie) . h)
+  type ClosedKon (Kleisli m) k = (HasTrie k, Traversable (Trie k))
+  type Exp (Kleisli m) u v = u :->: v
+  apply   = Kleisli (return . uncurry untrie)
+  curry   = inNew $ \ f -> sequence . trie . curry f
+  uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
 
-{- Derivations:
+{- 
+
+Derivations:
 
 apply :: ((a +> b) :* a) ~> b
-      :: Kleisli m (KTrie m a b :* a) b
- 
-untrie :: (a :->: m b) -> a -> m b
-untrie . unKTrie :: KTrie m a b -> a -> m b
-uncurry (untrie . unKTrie) :: KTrie m a b :* a -> m b
-Kleisli (uncurry (untrie . unKTrie)) :: Kleisli (KTrie m a b :* a) b
+      :: Kleisli m ((a :->: b) :* a) b
+      =~ (a :->: b) :* a -> m b
+
+return . uncurry untrie :: (a :->: b) :* a -> m b
+Kleisli (return . uncurry untrie) :: Kleisli m ((a :->: b) :* a) b
 
 curry :: ((a :* b) ~> c) -> a ~> (b +> c)
-      :: Kleisli m (a :* b) c -> Kleisli m a (KTrie m b c)
- 
-Kleisli f :: Kleisli m (a :* b) c
+      :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
+      =~ (a :* b -> m c) -> (a -> m (b :->: c))
+
 f :: a :* b -> m c
 curry f :: a -> b -> m c
-trie . curry f :: a -> b :->: m c
-KTrie . trie . curry f :: a -> KTrie m b c
-return . KTrie . trie . curry f :: a -> m (KTrie m b c)
-Kleisli (return . KTrie . trie . curry f) :: Kleisli m a (KTrie m b c)
+trie . curry f :: a -> (b :->: m c)
+sequenceA . trie . curry f :: a -> m (b :->: c)
+
+inNew (\ f -> sequenceA . trie . curry f)
+  :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
 
 uncurry :: a ~> (b +> c) -> ((a :* b) ~> c)
-        :: Kleisli m a (KTrie m b c) -> Kleisli m (a :* b) c
- 
-Kleisli h :: Kleisli m a (KTrie m b c)
-h :: a -> m (KTrie m b c)
-liftM unKTrie . h :: a -> m (b :->: m c)
-liftM (untrie.unKTrie) . h :: a -> m (b -> m c)
-mfun . liftM (untrie.unKTrie) . h :: a -> b -> m (m c)
-uncurry (mfun . liftM (untrie.unKTrie) . h) :: a :* b -> m (m c)
-join . uncurry (mfun . liftM (untrie.unKTrie) . h) :: a :* b -> m c
-Kleisli (join . uncurry (mfun . liftM (untrie.unKTrie) . h)) :: Kleisli m (a :* b) c
+        :: Kleisli m a (b :->: c) -> Kleisli m (a :* b) c
+        =~ (a -> m (b :->: c)) -> (a :* b -> m c)
+
+h :: a -> m (b :->: c)
+liftM untrie . h :: a -> m (b -> c)
+distribMF . liftM untrie . h :: a -> b -> m c
+uncurry (distribMF . liftM untrie . h) :: a :* b -> m c
+
+inNew (\ h -> uncurry (distribMF . liftM untrie . h))
+ :: Kleisli m a (b :->: c) -> Kleisli m (a :* b) c
 
 -}
