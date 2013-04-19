@@ -34,7 +34,7 @@ import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
-import Circat.State -- (StateCat(..),pureState,FState)
+import Circat.State -- (StateCat(..),pureState,StateFun)
 
 -- | Category with boolean operations.
 -- The 'ProductCat' superclass is just for convenient use.
@@ -97,7 +97,7 @@ instance Monad m => VecCat (Kleisli m) where
   toVecS = arr toVecS
   unVecS = arr unVecS
 
-instance VecCat (~>) => VecCat (FState (~>) s) where
+instance VecCat (~>) => VecCat (StateFun (~>) s) where
   toVecZ = pureState toVecZ
   unVecZ = pureState unVecZ
   toVecS = pureState toVecS

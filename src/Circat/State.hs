@@ -19,8 +19,8 @@
 ----------------------------------------------------------------------
 
 module Circat.State
-  {- ( StateCat(..), pureState, FState(..)
-  ) -} where
+  ( StateCat(..), StateCatWith, pureState, StateFun(..), StateExp(..)
+  ) where
 
 import Prelude hiding (id,(.),fst,snd,const,curry,uncurry)
 import qualified Prelude as P
@@ -96,17 +96,17 @@ restate = inState id
 -- restate = state . runState
 
 -- | Simple stateful category
-newtype FState (~>) s a b = FState { runFState :: (s :* a) ~> (b :* s) }
+newtype StateFun (~>) s a b = StateFun { runStateFun :: (s :* a) ~> (b :* s) }
 
-instance Newtype (FState (~>) s a b) ((s :* a) ~> (b :* s)) where
-  pack f = FState f
-  unpack (FState f) = f
+instance Newtype (StateFun (~>) s a b) ((s :* a) ~> (b :* s)) where
+  pack f = StateFun f
+  unpack (StateFun f) = f
 
-instance UnitCat (~>) => Category (FState (~>) s) where
+instance UnitCat (~>) => Category (StateFun (~>) s) where
   id  = pack swapP
   (.) = inState2 $ \ g f -> g . swapP . f
 
-instance UnitCat (~>) => ProductCat (FState (~>) s) where
+instance UnitCat (~>) => ProductCat (StateFun (~>) s) where
   fst   = pureState fst
   snd   = pureState snd
   dup   = pureState dup
@@ -126,35 +126,35 @@ lassocP  ::             ~> (c * d) * s
 
 -}
 
-instance UnitCat (~>) => UnitCat (FState (~>) s) where
+instance UnitCat (~>) => UnitCat (StateFun (~>) s) where
   lunit = pureState lunit
   runit = pureState runit
 
-instance UnitCat (~>) => StateCat (FState (~>) s) where
-  type StateKon  (FState (~>) s) = ()
-  type StateBase (FState (~>) s) = (~>)
-  type StateT    (FState (~>) s) = s
-  state    = FState
-  runState = runFState
+instance UnitCat (~>) => StateCat (StateFun (~>) s) where
+  type StateKon  (StateFun (~>) s) = ()
+  type StateBase (StateFun (~>) s) = (~>)
+  type StateT    (StateFun (~>) s) = s
+  state    = StateFun
+  runState = runStateFun
 
--- We can operate on any StateCat as if it were FState, leading to a simple
--- implementation of all classes for which FState is an instance.
+-- We can operate on any StateCat as if it were StateFun, leading to a simple
+-- implementation of all classes for which StateFun is an instance.
 
-asFState  :: (StateCatWith (~~>) (~>) s, StateCatWith (++>) (+>) t) =>
-             (FState (~>) s a b -> FState (+>) t c d)
+asStateFun  :: (StateCatWith (~~>) (~>) s, StateCatWith (++>) (+>) t) =>
+             (StateFun (~>) s a b -> StateFun (+>) t c d)
           -> (a ~~> b           -> c ++> d)
-asFState  = restate <~ restate
+asStateFun  = restate <~ restate
 
-asFState2 :: (StateCatWith (~~>) (~>) s, StateCatWith (++>) (+>) t
+asStateFun2 :: (StateCatWith (~~>) (~>) s, StateCatWith (++>) (+>) t
              ,StateCatWith (##>) (#>) u) =>
-             (FState (~>) s a b -> FState (+>) t c d -> FState (#>) u e f)
+             (StateFun (~>) s a b -> StateFun (+>) t c d -> StateFun (#>) u e f)
           -> (a ~~> b           -> c ++> d           -> e ##> f)
-asFState2 = asFState <~ restate
+asStateFun2 = asStateFun <~ restate
 
 
--- | Specialize 'restate' to convert from FState
+-- | Specialize 'restate' to convert from StateFun
 restateF :: (StateCatWith (~~>) (~>) s) =>
-            FState (~>) s a b -> a ~~> b
+            StateFun (~>) s a b -> a ~~> b
 restateF = inState id
 
 
@@ -162,7 +162,7 @@ restateF = inState id
     Memoization
 --------------------------------------------------------------------}
 
--- | State via exponentials. For (->), isomorphic to 'FState'. Can lead to
+-- | State via exponentials. For (->), isomorphic to 'StateFun'. Can lead to
 -- memoization for other categories.
 newtype StateExp (~>) s a b =
   StateExp { unStateExp :: a ~> Exp (~>) s (b :* s) }
@@ -187,11 +187,11 @@ Then invert for runState.
 
 -}
 
--- For the other class instances, use pureState and defer to FState:
+-- For the other class instances, use pureState and defer to StateFun:
 
 instance ClosedCatU (~>) s => Category (StateExp (~>) s) where
   id  = restateF id
-  (.) = asFState2 (.)
+  (.) = asStateFun2 (.)
 
 --     Illegal irreducible constraint ClosedKon (~>) s in superclass/instance
 --     head context (Use -XUndecidableInstances to permit this)
@@ -200,7 +200,7 @@ instance ClosedCatU (~>) s => ProductCat (StateExp (~>) s) where
   fst   = pureState fst  -- or restateF fst
   snd   = pureState snd
   dup   = pureState dup
-  (***) = asFState2 (***)
+  (***) = asStateFun2 (***)
 
 instance ClosedCatU (~>) s => UnitCat (StateExp (~>) s) where
   lunit = pureState lunit

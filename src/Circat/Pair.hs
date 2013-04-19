@@ -33,7 +33,7 @@ import Data.Data (Data)
 
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (ProductCat(..))
-import Circat.State (pureState,FState,StateExp)
+import Circat.State (pureState,StateFun,StateExp)
 
 infixl 1 :#
 -- | Uniform pairs
@@ -83,7 +83,7 @@ instance Monad m => PairCat (Kleisli m) where
   toPair = arr toPair
   unPair = arr unPair
 
-instance (UnitCat (~>), PairCat (~>)) => PairCat (FState (~>) s) where
+instance (UnitCat (~>), PairCat (~>)) => PairCat (StateFun (~>) s) where
   toPair = pureState toPair
   unPair = pureState unPair
 
