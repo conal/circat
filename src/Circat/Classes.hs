@@ -37,14 +37,13 @@ import Circat.Pair
 import Circat.State -- (StateCat(..),pureState,StateFun)
 
 -- | Category with boolean operations.
--- The 'ProductCat' superclass is just for convenient use.
 class ProductCat (~>) => BoolCat (~>) where
   type BoolT (~>)
   not :: BoolT (~>) ~> BoolT (~>)
   and, or, xor :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
 
 -- | Convenient notational alternative
-type BCat (~>) b = (BoolCat (~>), b ~ BoolT (~>))
+type BoolCatWith (~>) b = (BoolCat (~>), b ~ BoolT (~>))
 
 -- The Category superclass is just for convenience.
 
