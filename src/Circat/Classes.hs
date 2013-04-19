@@ -36,9 +36,11 @@ import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
 import Circat.State -- (StateCat(..),pureState,StateFun)
 
+-- | Convenient name for 'Bool' representations
+type BoolT (~>) = RepT (~>) Bool
+
 -- | Category with boolean operations.
 class ProductCat (~>) => BoolCat (~>) where
-  type BoolT (~>)
   not :: b ~ BoolT (~>) => b ~> b
   and, or, xor :: b ~ BoolT (~>) => (b :* b) ~> b
 
@@ -48,7 +50,6 @@ type BoolCatWith (~>) b = (BoolCat (~>), b ~ BoolT (~>))
 -- The Category superclass is just for convenience.
 
 instance BoolCat (->) where
-  type BoolT (->) = Bool
   not = P.not
   and = P.uncurry (&&)
   or  = P.uncurry (||)

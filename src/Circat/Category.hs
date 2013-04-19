@@ -3,8 +3,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -27,6 +27,7 @@
 
 module Circat.Category
   ( module Control.Category
+  , RepT
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
@@ -40,7 +41,7 @@ import qualified Prelude as P
 import Control.Category
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
-import Control.Monad (liftM,liftM2,join)
+import Control.Monad (liftM,liftM2)
 import Data.Traversable (Traversable,sequence)
 import GHC.Prim (Constraint)
 
@@ -50,9 +51,16 @@ import Circat.Misc ((:*),(:+),(<~),inNew,inNew2)
 
 infixr 3 ***, &&&
 
--- | Hack to get around broken constraint defaults like () or ()~()
+-- | Hack to get around broken constraint defaults like () or ()~().
+-- Doesn't seem to do the trick.
 class Yes a
 instance Yes a
+
+-- | Representations of type in a category
+type family RepT ((~>) :: * -> * -> *) (a :: *) :: *
+
+-- The function/Hask category uses straightforward representations.
+type instance RepT (->) a = a
 
 -- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
@@ -76,6 +84,11 @@ class Category (~>) => ProductCat (~>) where
   lassocP =  second fst &&& (snd . snd)
   rassocP :: ((a :* b) :* c) ~> (a :* (b :* c))
   rassocP =  (fst . fst) &&& first  snd
+
+-- TODO: Use RepT (~>) (a :* b) in place of a :* b above and elsewhere. Ditto
+-- for CoproductCat. Find a pleasant notation. Maybe use RepT2 (~>) (:*)
+-- instead. Could be an associated *data* type if it helps (for injectivity or
+-- whatever).
 
 --   ldistribP :: (a, u :* v) ~> ((a,u) :* (a,v))
 --   ldistribP =  transPair . first  dup -- second fst &&& second snd

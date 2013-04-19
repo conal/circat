@@ -146,6 +146,10 @@ infixl 1 :>
 -- | Circuit category
 type (:>) = Kleisli CircuitM
 
+newtype a ::> b = Circ (Kleisli CircuitM (RepT (::>) a) (RepT (::>) b))
+
+-- TODO: Seems a bit fishy to use (::>) on the RHS here.
+
 -- TODO: Will the product & coproduct instances really work here, or do I need a
 -- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
 -- from using the categorical instead of monadic form? Perhaps amenability to
@@ -157,8 +161,9 @@ primC = Kleisli . genComp
 namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
+type instance RepT (:>) Bool = Pin
+
 instance BoolCat (:>) where
-  type BoolT (:>) = Pin
   not = namedC "not"
   and = namedC "and"
   or  = namedC "or"

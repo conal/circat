@@ -24,11 +24,7 @@ import Prelude hiding (id,(.))
 import Control.Category (Category(..))
 import Control.Newtype
 
-
-{--------------------------------------------------------------------
-    Misc
---------------------------------------------------------------------}
-
+-- | Unary transformation
 type Unop a = a -> a
 
 -- Sum & product type synonyms
