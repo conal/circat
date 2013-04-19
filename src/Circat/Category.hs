@@ -27,7 +27,7 @@
 
 module Circat.Category
   ( module Control.Category
-  , ProductCat(..), inLassocP, inRassocP
+  , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
   , ClosedCat(..)
@@ -82,15 +82,30 @@ class Category (~>) => ProductCat (~>) where
 --   rdistribP :: (u :* v, b) ~> ((u,b) :* (v,b))
 --   rdistribP =  transPair . second dup -- first  fst &&& first  snd
 
+-- | Operate on left-associated form
+inLassocP :: ProductCat (~>) =>
+             (((a :* b) :* c) ~> ((a' :* b') :* c'))
+          -> ((a :* (b :* c)) ~> (a' :* (b' :* c')))
+inLassocP = rassocP <~ lassocP
+
+-- | Operate on right-associated form
 inRassocP :: ProductCat (~>) =>
              ((a :* (b :* c)) ~> (a' :* (b' :* c')))
           -> (((a :* b) :* c) ~> ((a' :* b') :* c'))
 inRassocP = lassocP <~ rassocP
 
-inLassocP :: ProductCat (~>) =>
-             (((a :* b) :* c) ~> ((a' :* b') :* c'))
-          -> ((a :* (b :* c)) ~> (a' :* (b' :* c')))
-inLassocP = rassocP <~ lassocP
+-- | Left-associate and operate on left
+inLassocPF :: ProductCat (~>) =>
+              ((a :* b) ~> (a' :* b'))
+           -> ((a :* (b :* c)) ~> (a' :* (b' :* c)))
+inLassocPF = inLassocP . first
+
+-- | Right-associate and operate on right
+inRassocPS :: ProductCat (~>) =>
+              ((b :* c) ~> (b' :* c'))
+           -> (((a :* b) :* c) ~> ((a :* b') :* c'))
+inRassocPS = inRassocP . second
+
 
 infixr 2 +++, |||
 
