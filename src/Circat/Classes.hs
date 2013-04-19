@@ -39,8 +39,8 @@ import Circat.State -- (StateCat(..),pureState,StateFun)
 -- | Category with boolean operations.
 class ProductCat (~>) => BoolCat (~>) where
   type BoolT (~>)
-  not :: BoolT (~>) ~> BoolT (~>)
-  and, or, xor :: (BoolT (~>) :* BoolT (~>)) ~> BoolT (~>)
+  not :: b ~ BoolT (~>) => b ~> b
+  and, or, xor :: b ~ BoolT (~>) => (b :* b) ~> b
 
 -- | Convenient notational alternative
 type BoolCatWith (~>) b = (BoolCat (~>), b ~ BoolT (~>))
