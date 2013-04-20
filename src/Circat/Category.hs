@@ -30,7 +30,7 @@ module Circat.Category
   , RepT
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
-  , ConstCat(..), ConstUCat, UnitCat(..), lconst, rconst
+  , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
   , ClosedCat(..), ExpT, ClosedCatWith
   , Yes
   ) where
@@ -183,15 +183,18 @@ instance Monad m => CoproductCat (Kleisli m) where
 
 -- | Category with constant morphisms
 class Category (~>) => ConstCat (~>) where
-  type ConstKon (~>) a :: Constraint
-  type ConstKon (~>) a = Yes a
-  const :: ConstKon (~>) a => b -> (a ~> b)
+  type ConstKon (~>) a b :: Constraint
+  type ConstKon (~>) a b = ()           -- fix
+  const :: ConstKon (~>) a b => b -> (a ~> b)
+
+type ConstCatWith (~>) a b = (ConstCat (~>), ConstKon (~>) a b)
 
 instance ConstCat (->) where
+  type ConstKon (->) a b = ()           -- fix
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
-  type ConstKon (Kleisli m) a = Yes a  -- why necessary?
+  type ConstKon (Kleisli m) a b = ()  -- why necessary?
   const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
@@ -203,14 +206,14 @@ class ProductCat (~>) => UnitCat (~>) where
   runit :: a ~> (a :* ())
   runit = swapP . lunit
 
-type ConstUCat (~>) = (ConstCat (~>), ConstKon (~>) ())
+type ConstUCat (~>) b = (UnitCat (~>), ConstCatWith (~>) () b)
 
 -- | Inject a constant on the left
-lconst :: (UnitCat (~>), ConstUCat (~>)) => a -> (b ~> (a :* b))
+lconst :: ConstUCat (~>) a => a -> (b ~> (a :* b))
 lconst a = first  (const a) . lunit
 
 -- | Inject a constant on the right
-rconst :: (UnitCat (~>), ConstUCat (~>)) => b -> (a ~> (a :* b))
+rconst :: ConstUCat (~>) b => b -> (a ~> (a :* b))
 rconst b = second (const b) . runit
 
 instance UnitCat (->) where

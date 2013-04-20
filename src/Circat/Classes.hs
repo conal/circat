@@ -36,16 +36,10 @@ import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
 import Circat.State -- (StateCat(..),pureState,StateFun)
 
--- | Convenient name for 'Bool' representations
-type BoolT (~>) = RepT (~>) Bool
-
 -- | Category with boolean operations.
 class ProductCat (~>) => BoolCat (~>) where
-  not :: b ~ BoolT (~>) => b ~> b
-  and, or, xor :: b ~ BoolT (~>) => (b :* b) ~> b
-
--- | Convenient notational alternative
-type BoolCatWith (~>) b = (BoolCat (~>), b ~ BoolT (~>))
+  not :: Bool ~> Bool
+  and, or, xor :: (Bool :* Bool) ~> Bool
 
 -- The Category superclass is just for convenience.
 
@@ -58,13 +52,10 @@ instance BoolCat (->) where
 class BoolCat (~>) => EqCat (~>) where
   type EqKon (~>) a :: Constraint
   type EqKon (~>) a = Yes a
-  eq, neq :: (Eq a, EqKon (~>) a) => (a :* a) ~> BoolT (~>)
+  eq, neq :: (Eq a, EqKon (~>) a) => (a :* a) ~> Bool
   neq = not . eq
 
 -- TODO: Revisit the type constraints for EqCat.
-
--- | Convenient notational alternative
-type ECat (~>) b = (EqCat (~>), b ~ BoolT (~>))
 
 instance EqCat (->) where
   type EqKon (->) a = Yes a
@@ -111,11 +102,11 @@ instance (ClosedCatWith (~>) s, VecCat (~>)) => VecCat (StateExp (~>) s) where
 
 class (PairCat (~>), BoolCat (~>)) => AddCat (~>) where
   -- | Half adder: addends in; sum and carry out. Default via logic.
-  halfAdd :: b ~ BoolT (~>) => (b :* b) ~> (b :* b)
+  halfAdd :: (Bool :* Bool) ~> (Bool :* Bool)
   halfAdd = xor &&& and
   -- | Full adder: carry and addend pairs in; sum and carry out.
   -- Default via 'halfAdd'.
-  fullAdd :: b ~ BoolT (~>) => (b :* Pair b) ~> (b :* b)
+  fullAdd :: (Bool :* Pair Bool) ~> (Bool :* Bool)
   fullAdd = second or . inLassocP (first halfAdd) . second (halfAdd . unPair)
 
 {-
@@ -133,21 +124,20 @@ instance AddCat (->)  -- use defaults
 -- Structure addition with carry in & out
 
 type Adds (~>) f = 
-  (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
+  (Bool :* f (Pair (Bool))) ~> (f (Bool) :* Bool)
 
 class AddCat (~>) => AddsCat (~>) f where
   adds :: Adds (~>) f
 
-instance (ConstUCat (~>), AddCat (~>), VecCat (~>), IsNat n)
-      => AddsCat (~>) (Vec n) where
+type AddK (~>) = (ConstUCat (~>) (Vec Z (Bool)), AddCat (~>), VecCat (~>))
+
+instance (AddK (~>), IsNat n) => AddsCat (~>) (Vec n) where
   adds = addVN nat
 
--- Illegal irreducible constraint ConstKon (~>) ()
--- in superclass/instance head context (Use -XUndecidableInstances to permit this)
+-- Illegal irreducible constraint ConstKon (~>) () in superclass/instance head
+-- context (Use -XUndecidableInstances to permit this)
 
-type AddVP n = forall (~>).
-  (ConstUCat (~>), AddCat (~>), VecCat (~>)) =>
-  Adds (~>) (Vec n)
+type AddVP n = forall (~>). AddK (~>) => Adds (~>) (Vec n)
 
 addVN :: Nat n -> AddVP n
 addVN Zero     = lconst ZVec . fst
@@ -196,21 +186,19 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
     Addition via state and traversal
 --------------------------------------------------------------------}
 
-type AddState (~~>) b =
-  ( StateCat (~~>), StateKon (~~>)
-  , b ~ StateT (~~>), b ~ BoolT (StateBase (~~>))
-  , AddCat (StateBase(~~>)))
+type AddState (~~>) =
+  (StateCat (~~>), StateKon (~~>), StateT (~~>) ~ Bool, AddCat (StateBase(~~>)))
 
 -- Simpler but exposes (~>):
 -- 
 --   type AddState (~~>) (~>) b =
---     (StateCatWith (~~>) (~>) b, AddCat (~>), b ~ BoolT (~>))
+--     (StateCatWith (~~>) (~>) b, AddCat (~>), b ~ Bool)
 
 -- | Full adder with 'StateCat' interface
-fullAddS :: AddState (~~>) b => Pair b ~~> b
+fullAddS :: AddState (~~>) => Pair Bool ~~> Bool
 fullAddS = state fullAdd
 
 -- | Structure adder with 'StateCat' interface
-addS :: (AddState (~~>) b, CTraversableWith f (~~>)) =>
-        f (Pair b) ~~> f b
+addS :: (AddState (~~>), CTraversableWith f (~~>)) =>
+        f (Pair Bool) ~~> f Bool
 addS = traverseC fullAddS

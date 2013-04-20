@@ -1,8 +1,9 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts, TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
-{-# LANGUAGE ExistentialQuantification, GADTs #-}
+{-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -22,7 +23,7 @@
 
 module Circat.Circuit ((:>), toG, outG, bc, outAll) where
 
-import Prelude hiding (id,(.),fst,snd,not,and,or,curry,uncurry)
+import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
@@ -92,6 +93,8 @@ class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: CircuitM a
 
+-- type Pins a = RepT (:>) a               -- misplaced??
+
 genComp :: forall a b. IsSource2 a b =>
            Prim a b -> a -> CircuitM b
 genComp prim a = do b <- genSource
@@ -144,32 +147,37 @@ genSourceT (Succ _) = B <$> genSource
 infixl 1 :>
 
 -- | Circuit category
-type (:>) = Kleisli CircuitM
+newtype a :> b = Circ (Kleisli CircuitM (RepT (:>) a) (RepT (:>) b))
 
-newtype a ::> b = Circ (Kleisli CircuitM (RepT (::>) a) (RepT (::>) b))
+mkC :: (RepT (:>) a -> CircuitM (RepT (:>) b)) -> (a :> b)
+mkC = Circ . Kleisli
 
--- TODO: Seems a bit fishy to use (::>) on the RHS here.
+-- TODO: Seems fishy to use (:>) on the RHS here.
 
--- TODO: Will the product & coproduct instances really work here, or do I need a
--- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
--- from using the categorical instead of monadic form? Perhaps amenability to
--- other interpretations, such as timing and demand analysis.
+-- instance Newtype (a :> b) (Kleisli CircuitM (RepT (:>) a) (RepT (:>) b)) where
+--   pack k = Circ k
+--   unpack (Circ k) = k
 
-primC :: IsSource2 a b => Prim a b -> a :> b
-primC = Kleisli . genComp
+--     Illegal type synonym family application in instance:
+--       Kleisli CircuitM (RepT :> a) (RepT :> b)
 
-namedC :: IsSource2 a b => String -> a :> b
-namedC = primC . Prim
+instance Category (:>) where
+  id = Circ id
+  Circ g . Circ f = Circ (g . f)
 
-type RC a = RepT (:>) a
+instance ProductCat (:>) where
+  fst = Circ fst
+  snd = Circ snd
+  dup = Circ dup
+  Circ f *** Circ g = Circ (f *** g)
 
-type instance RepT (:>) Bool = Pin
+instance UnitCat (:>) where
+  lunit = Circ lunit
+  runit = Circ runit
 
--- Everything else distributes:
-type instance RepT (:>) ()         = ()
-type instance RepT (:>) ( a :* b ) = RC a :* RC b
-type instance RepT (:>) (Vec n a ) = Vec  n (RC a)
-type instance RepT (:>) (Tree n a) = Tree n (RC a)
+instance ConstCat (:>) where
+  type ConstKon (:>) a b = (IsSourceP2 a b, Show b)
+  const = constC
 
 instance BoolCat (:>) where
   not = namedC "not"
@@ -178,30 +186,78 @@ instance BoolCat (:>) where
   xor = namedC "xor"
 
 instance EqCat (:>) where
-  type EqKon (:>) a = IsSource a
+  type EqKon (:>) a = IsSourceP a
   eq  = namedC "eq"
   neq = namedC "neq"
+
+instance PairCat (:>) where
+  toPair = Circ toPair
+  unPair = Circ unPair
+
+instance VecCat (:>) where
+  toVecZ = Circ toVecZ
+  unVecZ = Circ unVecZ
+  toVecS = Circ toVecS
+  unVecS = Circ unVecS
+
+instance TreeCat (:>) where
+  toL = Circ toL
+  unL = Circ unL
+  toB = Circ toB
+  unB = Circ unB
 
 instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
 --   fullAdd = namedC "fullAdd"
   halfAdd = namedC "halfAdd"
 
-instance IsSource2 a b => Show (a :> b) where
+-- TODO: Will the product & coproduct instances really work here, or do I need a
+-- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
+-- from using the categorical instead of monadic form? Perhaps amenability to
+-- other interpretations, such as timing and demand analysis.
+
+type IsSourceP a = IsSource (Pins a)
+type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
+
+primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
+primC = mkC . genComp
+
+namedC :: IsSourceP2 a b => String -> a :> b
+namedC = primC . Prim
+
+constC :: (IsSourceP2 a b, Show b) => b -> a :> b
+constC b = namedC (show b)
+
+type Pins a = RepT (:>) a
+
+type instance RepT (:>) Bool = Pin
+
+-- Everything else distributes:
+type instance RepT (:>) ()         = ()
+type instance RepT (:>) ( a :* b ) = Pins a :* Pins b
+type instance RepT (:>) (Pair a  ) = Pair (Pins a)
+type instance RepT (:>) (Vec n a ) = Vec  n (Pins a)
+type instance RepT (:>) (Tree n a) = Tree n (Pins a)
+
+--     Application is no smaller than the instance head
+--       in the type family application: RepT :> a
+--     (Use -XUndecidableInstances to permit this)
+
+instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
 
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: IsSource2 a b => (a :> b) -> [Comp]
+runC :: IsSourceP2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU (Kleisli f) = toList (snd (evalWS (f ()) (Pin 0)))
+runU (Circ (Kleisli f)) = toList (snd (evalWS (f ()) (Pin 0)))
 
 -- Wrap a circuit with fake input and output
-unitize :: IsSource2 a b => (a :> b) -> (() :> ())
+unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -218,7 +274,7 @@ systemSuccess cmd =
        ExitSuccess -> return ()
        _ -> printf "command \"%s\" failed."
 
-outG :: IsSource2 a b => String -> (a :> b) -> IO ()
+outG :: IsSourceP2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
@@ -237,7 +293,7 @@ outG name circ =
 
 type DGraph = String
 
-toG :: IsSource2 a b => (a :> b) -> DGraph
+toG :: IsSourceP2 a b => (a :> b) -> DGraph
 toG cir = printf "digraph {\n%s}\n"
             (concatMap wrap (prelude ++ recordDots comps))
  where
@@ -306,25 +362,22 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
--- More succinct (and less consistent) name
-type BCat (~>) b = BoolCatWith (~>) b
-
-c0 :: BCat (~>) b => b ~> b
+c0 :: BoolCat (~>) => Bool ~> Bool
 c0 = id
 
-c1 :: BCat (~>) b => b ~> b
+c1 :: BoolCat (~>) => Bool ~> Bool
 c1 = not . not
 
-c2 :: BCat (~>) b => (b :* b) ~> b
+c2 :: BoolCat (~>) => (Bool :* Bool) ~> Bool
 c2 = not . and
 
-c3 :: BCat (~>) b => (b :* b) ~> b
+c3 :: BoolCat (~>) => (Bool :* Bool) ~> Bool
 c3 = not . and . (not *** not)
 
-c4 :: BCat (~>) b => (b :* b) ~> (b :* b)
+c4 :: BoolCat (~>) => (Bool :* Bool) ~> (Bool :* Bool)
 c4 = swapP  -- no components
 
-c5 :: BCat (~>) b => (b :* b) ~> (b :* b)
+c5 :: BoolCat (~>) => (Bool :* Bool) ~> (Bool :* Bool)
 c5 = xor &&& and   -- half-adder
 
 outSimples :: IO ()
@@ -430,15 +483,15 @@ outAll = do outSimples ; outVecs ; outTrees
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSource s, IsSource2 a b, StateCatWith (~~>) (:>) s) =>
+outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith (~~>) (:>) s) =>
          String -> (a ~~> b) -> IO ()
 outSG name = outG name . runState
 
-type (:->) = StateFun (:>) Pin
+type (:->) = StateFun (:>) Bool
 
-type (:+>) = StateExp (:>) Pin
+type (:+>) = StateExp (:>) Bool
 
-type AddS f = f (Pair Pin) :-> f Pin
+type AddS f = f (Pair Bool) :-> f Bool
 
 type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
