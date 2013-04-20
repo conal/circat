@@ -17,21 +17,18 @@
 -- Categories with product and co-product
 ----------------------------------------------------------------------
 
-
 -- TODO: Reconsider naming scheme for classes. Maybe "ProductCat" -->
 -- "CatProduct" or even "CategoryProduct". Compare with Ross's choices. On the
 -- other hand, I like "ProductCat" and "ProductKon".
 
 -- TODO: Consider "Kon" --> "Con". Or explain "Kon" as "constraint kind".
 
-
 module Circat.Category
   ( module Control.Category
-  , RepT
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
-  , ClosedCat(..), ExpT, ClosedCatWith
+  , ClosedCat(..), ClosedCatWith
   , Yes
   ) where
 
@@ -56,12 +53,6 @@ infixr 3 ***, &&&
 class Yes a
 instance Yes a
 
--- | Representations of type in a category
-type family RepT ((~>) :: * -> * -> *) (a :: *) :: *
-
--- The function/Hask category uses straightforward representations.
-type instance RepT (->) a = a
-
 -- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
 -- associated type. Keep the types fairly pretty.
@@ -84,11 +75,6 @@ class Category (~>) => ProductCat (~>) where
   lassocP =  second fst &&& (snd . snd)
   rassocP :: ((a :* b) :* c) ~> (a :* (b :* c))
   rassocP =  (fst . fst) &&& first  snd
-
--- TODO: Use RepT (~>) (a :* b) in place of a :* b above and elsewhere. Ditto
--- for CoproductCat. Find a pleasant notation. Maybe use RepT2 (~>) (:*)
--- instead. Could be an associated *data* type if it helps (for injectivity or
--- whatever).
 
 --   ldistribP :: (a, u :* v) ~> ((a,u) :* (a,v))
 --   ldistribP =  transPair . first  dup -- second fst &&& second snd
@@ -226,13 +212,10 @@ instance Monad m => UnitCat (Kleisli m) where
 
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
 
-type ExpT (~>) u v = RepT (~>) (u -> v)
-
--- TODO: Or maybe RepT (~>) (u ~> v).
-
 class ProductCat (~>) => ClosedCat (~>) where
   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
   type ClosedKon (~>) k = Yes k
+  type ExpT (~>) u v
   apply   :: ClosedKon (~>) a => (ExpT (~>) a b :* a) ~> b
   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> ExpT (~>) b c)
   uncurry :: ClosedKon (~>) b => (a ~> ExpT (~>) b c) -> (a :* b) ~> c
@@ -240,6 +223,7 @@ class ProductCat (~>) => ClosedCat (~>) where
 type ClosedCatWith (~>) k = (ClosedCat (~>), ClosedKon (~>) k)
 
 instance ClosedCat (->) where
+  type ExpT (->) u v = u -> v
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
@@ -256,10 +240,10 @@ distribMF u p = liftM ($ p) u
 -- this instance as a suggestion for specific monads or for newtype wrappers
 -- around some Klieslis.
 
-type instance RepT (Kleisli m) (u -> v) = u :->: v
 
 instance Monad m => ClosedCat (Kleisli m) where
   type ClosedKon (Kleisli m) k = (HasTrie k, Traversable (Trie k))
+  type ExpT (Kleisli m) u v = u :->: v
   apply   = Kleisli (return . uncurry untrie)
   curry   = inNew $ \ f -> sequence . trie . curry f
   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)

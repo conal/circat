@@ -93,8 +93,6 @@ class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: CircuitM a
 
--- type Pins a = RepT (:>) a               -- misplaced??
-
 genComp :: forall a b. IsSource2 a b =>
            Prim a b -> a -> CircuitM b
 genComp prim a = do b <- genSource
@@ -147,14 +145,14 @@ genSourceT (Succ _) = B <$> genSource
 infixl 1 :>
 
 -- | Circuit category
-newtype a :> b = Circ (Kleisli CircuitM (RepT (:>) a) (RepT (:>) b))
+newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
 
-mkC :: (RepT (:>) a -> CircuitM (RepT (:>) b)) -> (a :> b)
+mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
 mkC = Circ . Kleisli
 
 -- TODO: Seems fishy to use (:>) on the RHS here.
 
--- instance Newtype (a :> b) (Kleisli CircuitM (RepT (:>) a) (RepT (:>) b)) where
+-- instance Newtype (a :> b) (Kleisli CircuitM (Pins a) (Pins b)) where
 --   pack k = Circ k
 --   unpack (Circ k) = k
 
@@ -228,16 +226,16 @@ namedC = primC . Prim
 constC :: (IsSourceP2 a b, Show b) => b -> a :> b
 constC b = namedC (show b)
 
-type Pins a = RepT (:>) a
+type family Pins a
 
-type instance RepT (:>) Bool = Pin
+type instance Pins Bool = Pin
 
 -- Everything else distributes:
-type instance RepT (:>) ()         = ()
-type instance RepT (:>) ( a :* b ) = Pins a :* Pins b
-type instance RepT (:>) (Pair a  ) = Pair (Pins a)
-type instance RepT (:>) (Vec n a ) = Vec  n (Pins a)
-type instance RepT (:>) (Tree n a) = Tree n (Pins a)
+type instance Pins ()         = ()
+type instance Pins ( a :* b ) = Pins a :* Pins b
+type instance Pins (Pair a  ) = Pair (Pins a)
+type instance Pins (Vec n a ) = Vec  n (Pins a)
+type instance Pins (Tree n a) = Tree n (Pins a)
 
 --     Application is no smaller than the instance head
 --       in the type family application: RepT :> a
