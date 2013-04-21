@@ -163,6 +163,9 @@ first toVecS     ::               ~> Rs (S n) :* C
 
 -}
 
+-- TODO: Do I really need CTraversableKon, or can I make (~>) into an argument?
+-- Try, and rename "CTraversable" to "TraversableCat". The Kon becomes superclass constraints.
+
 class CTraversable t where
   type CTraversableKon t (~>) :: Constraint
   type CTraversableKon t (~>) = () ~ () -- or just (), if it works
