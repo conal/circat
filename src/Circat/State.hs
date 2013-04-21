@@ -163,7 +163,7 @@ restateF = inState id
 -- | State via exponentials. For (->), isomorphic to 'StateFun'. Can lead to
 -- memoization for other categories.
 newtype StateExp (~>) s a b =
-  StateExp { unStateExp :: a ~> ExpT (~>) s (b :* s) }
+  StateExp { unStateExp :: a ~> Exp (~>) s (b :* s) }
 
 type ClosedCatU (~>) s = (ClosedCatWith (~>) s, UnitCat (~>))
 
@@ -182,7 +182,7 @@ instance ClosedCatU (~>) s => StateCat (StateExp (~>) s) where
 
 f                            :: (s :* a) ~> (b :* s)
 f . swapP                    :: (a :* s) ~> (b :* s)
-curry (f . swapP)            :: a ~> (ExpT (~>) s (b :* s))
+curry (f . swapP)            :: a ~> (Exp (~>) s (b :* s))
 StateExp (curry (f . swapP)) :: StateExp (~>) s a b
 
 Then invert for runState.

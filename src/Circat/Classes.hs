@@ -186,13 +186,14 @@ instance CTraversable Pair where
   type CTraversableKon Pair (~>) = PairCat (~>)
   traverseC f = inPair (f *** f)
 
--- TODO: Move Vec support to a new Vec module, alongside the RTree module.
+-- TODO: Maybe move Vec support to a new Vec module, alongside the RTree module.
 
-traverseCurry :: (ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t) =>
-                 t b -> ((a :* b) ~> c) -> (a ~> t c)
+traverseCurry :: 
+  (ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t) =>
+  t b -> ((a :* b) ~> c) -> (a ~> t c)
 traverseCurry q h = traverseC h . lstrength . rconst q
 
-{-
+{- Derivation:
 
 q :: t b
 h :: a :* b :> c

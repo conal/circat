@@ -236,15 +236,15 @@ instance Functor f => StrongCat (->) f where
 class ProductCat (~>) => ClosedCat (~>) where
   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
   type ClosedKon (~>) k = Yes k
-  type ExpT (~>) u v
-  apply   :: ClosedKon (~>) a => (ExpT (~>) a b :* a) ~> b
-  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> ExpT (~>) b c)
-  uncurry :: ClosedKon (~>) b => (a ~> ExpT (~>) b c) -> (a :* b) ~> c
+  type Exp (~>) u v
+  apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
 
 type ClosedCatWith (~>) k = (ClosedCat (~>), ClosedKon (~>) k)
 
 instance ClosedCat (->) where
-  type ExpT (->) u v = u -> v
+  type Exp (->) u v = u -> v
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
@@ -264,7 +264,7 @@ distribMF u p = liftM ($ p) u
 
 instance Monad m => ClosedCat (Kleisli m) where
   type ClosedKon (Kleisli m) k = (HasTrie k, Traversable (Trie k))
-  type ExpT (Kleisli m) u v = u :->: v
+  type Exp (Kleisli m) u v = u :->: v
   apply   = Kleisli (return . uncurry untrie)
   curry   = inNew $ \ f -> sequence . trie . curry f
   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
