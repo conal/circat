@@ -28,7 +28,7 @@ module Circat.Category
   , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..)
   , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
-  , ClosedCat(..), ClosedCatWith
+  , StrongCat(..), ClosedCat(..), ClosedCatWith
   , Yes
   ) where
 
@@ -52,6 +52,9 @@ infixr 3 ***, &&&
 -- Doesn't seem to do the trick.
 class Yes a
 instance Yes a
+
+class Yes2 a b
+instance Yes2 a b
 
 -- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
@@ -170,17 +173,17 @@ instance Monad m => CoproductCat (Kleisli m) where
 -- | Category with constant morphisms
 class Category (~>) => ConstCat (~>) where
   type ConstKon (~>) a b :: Constraint
-  type ConstKon (~>) a b = ()           -- fix
+  type ConstKon (~>) a b = Yes2 a b           -- fix
   const :: ConstKon (~>) a b => b -> (a ~> b)
 
 type ConstCatWith (~>) a b = (ConstCat (~>), ConstKon (~>) a b)
 
 instance ConstCat (->) where
-  type ConstKon (->) a b = ()           -- fix
+  -- type ConstKon (->) a b = ()           -- fix
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
-  type ConstKon (Kleisli m) a b = ()  -- why necessary?
+  -- type ConstKon (Kleisli m) a b = ()  -- why necessary?
   const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
@@ -209,6 +212,24 @@ instance UnitCat (->) where
 instance Monad m => UnitCat (Kleisli m) where
   lunit = arr lunit
   runit = arr runit
+
+class ProductCat (~>) => StrongCat (~>) f where
+ lstrength :: (a :* f b) ~> f (a :* b)
+ rstrength :: (f a :* b) ~> f (a :* b)
+
+-- TODO: Use generalize Functor
+
+instance Functor f => StrongCat (->) f where
+  lstrength (a, bs) = fmap (a,) bs
+  rstrength (as, b) = fmap (,b) as
+
+-- h :: a :* b :> c
+--
+-- rconst idTrie :: a                 :> (a :* (b :->: b))
+-- lstrength     :: a :* (b :->: b)   :> (b :->: (a :* b))
+-- traverseC h   :: (b :->: (a :* b)) :> (b :->: c)
+--
+-- traverse h . lstrength . rconst idTrie :: a :> (b :->: c)
 
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
 

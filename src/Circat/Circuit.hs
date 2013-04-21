@@ -87,8 +87,7 @@ newPin = do { p <- M.get ; M.put (succ p) ; return p }
 sourcePins :: forall a. IsSource a => a -> [Pin]
 sourcePins s = toList (toPins s)
 
--- The Source type family gives a representation for a type in terms of
--- structures of pins. Maybe drop the Show constraint later (after testing).
+-- | Give a representation for a type in terms of structures of pins.
 class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: CircuitM a
@@ -139,6 +138,21 @@ genSourceT (Succ _) = B <$> genSource
 -- Perhaps rewrite, using the Succ argument.
 
 {--------------------------------------------------------------------
+    Pins representing a given type
+--------------------------------------------------------------------}
+
+type family Pins a
+
+type instance Pins Bool = Pin
+
+-- Everything else distributes:
+type instance Pins ()         = ()
+type instance Pins ( a :* b ) = Pins a :* Pins b
+type instance Pins (Pair a  ) = Pair (Pins a)
+type instance Pins (Vec n a ) = Vec  n (Pins a)
+type instance Pins (Tree n a) = Tree n (Pins a)
+
+{--------------------------------------------------------------------
     Circuit category
 --------------------------------------------------------------------}
 
@@ -150,14 +164,22 @@ newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
 mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
 mkC = Circ . Kleisli
 
--- TODO: Seems fishy to use (:>) on the RHS here.
-
 -- instance Newtype (a :> b) (Kleisli CircuitM (Pins a) (Pins b)) where
 --   pack k = Circ k
 --   unpack (Circ k) = k
-
+-- 
 --     Illegal type synonym family application in instance:
---       Kleisli CircuitM (RepT :> a) (RepT :> b)
+--       Kleisli CircuitM (Pins a) (Pins b)
+
+-- Most instances defer to Kleisli. I'd like to derive these instances
+-- automatically, but GHC says it isn't up for it
+--
+--     Can't make a derived instance of `ProductCat :>'
+--       (even with cunning newtype deriving):
+--       cannot eta-reduce the representation type enough
+-- 
+-- I think these newtype-deriving-like instances only work because of the
+-- distributivity of Pins.
 
 instance Category (:>) where
   id = Circ id
@@ -172,21 +194,6 @@ instance ProductCat (:>) where
 instance UnitCat (:>) where
   lunit = Circ lunit
   runit = Circ runit
-
-instance ConstCat (:>) where
-  type ConstKon (:>) a b = (IsSourceP2 a b, Show b)
-  const = constC
-
-instance BoolCat (:>) where
-  not = namedC "not"
-  and = namedC "and"
-  or  = namedC "or"
-  xor = namedC "xor"
-
-instance EqCat (:>) where
-  type EqKon (:>) a = IsSourceP a
-  eq  = namedC "eq"
-  neq = namedC "neq"
 
 instance PairCat (:>) where
   toPair = Circ toPair
@@ -204,18 +211,35 @@ instance TreeCat (:>) where
   toB = Circ toB
   unB = Circ unB
 
+-- The other instances make circuit components
+
+type IsSourceP a = IsSource (Pins a)
+type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
+
+instance ConstCat (:>) where
+  type ConstKon (:>) a b = (IsSourceP2 a b, Show b)
+  const = constC
+
+instance BoolCat (:>) where
+  not = namedC "not"
+  and = namedC "and"
+  or  = namedC "or"
+  xor = namedC "xor"
+
+instance EqCat (:>) where
+  type EqKon (:>) a = IsSourceP a
+  eq  = namedC "eq"
+  neq = namedC "neq"
+
 instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
 --   fullAdd = namedC "fullAdd"
-  halfAdd = namedC "halfAdd"
+--   halfAdd = namedC "halfAdd"
 
 -- TODO: Will the product & coproduct instances really work here, or do I need a
 -- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
 -- from using the categorical instead of monadic form? Perhaps amenability to
 -- other interpretations, such as timing and demand analysis.
-
-type IsSourceP a = IsSource (Pins a)
-type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
 
 primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
 primC = mkC . genComp
@@ -226,23 +250,12 @@ namedC = primC . Prim
 constC :: (IsSourceP2 a b, Show b) => b -> a :> b
 constC b = namedC (show b)
 
-type family Pins a
-
-type instance Pins Bool = Pin
-
--- Everything else distributes:
-type instance Pins ()         = ()
-type instance Pins ( a :* b ) = Pins a :* Pins b
-type instance Pins (Pair a  ) = Pair (Pins a)
-type instance Pins (Vec n a ) = Vec  n (Pins a)
-type instance Pins (Tree n a) = Tree n (Pins a)
+instance IsSourceP2 a b => Show (a :> b) where
+  show = show . runC
 
 --     Application is no smaller than the instance head
 --       in the type family application: RepT :> a
 --     (Use -XUndecidableInstances to permit this)
-
-instance IsSourceP2 a b => Show (a :> b) where
-  show = show . runC
 
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
@@ -515,4 +528,3 @@ addVS16 = addS
 
 addTS16 :: AddTS N4
 addTS16 = addS
-

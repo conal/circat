@@ -31,6 +31,9 @@ import GHC.Prim (Constraint)
 
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
+-- Temporary
+import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
+
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
@@ -167,10 +170,6 @@ class CTraversable t where
 
 type CTraversableWith t (~>) = (CTraversable t, CTraversableKon t (~>))
 
-instance CTraversable Pair where
-  type CTraversableKon Pair (~>) = PairCat (~>)
-  traverseC f = inPair (f *** f)
-
 instance CTraversable (Vec Z) where
   type CTraversableKon (Vec Z) (~>) = VecCat (~>)
   traverseC _ = reVecZ
@@ -180,7 +179,39 @@ instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
     (VecCat (~>), CTraversableKon (Vec n) (~>))
   traverseC f = inVecS (f *** traverseC f)
 
+instance CTraversable Pair where
+  type CTraversableKon Pair (~>) = PairCat (~>)
+  traverseC f = inPair (f *** f)
+
 -- TODO: Move Vec support to a new Vec module, alongside the RTree module.
+
+traverseCurry :: (ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t) =>
+                 t b -> ((a :* b) ~> c) -> (a ~> t c)
+traverseCurry q h = traverseC h . lstrength . rconst q
+
+{-
+
+q :: t b
+h :: a :* b :> c
+
+rconst q    :: a          ~> (a :* t b)
+lstrength   :: a :* t b   ~> t (a :* b)
+traverseC h :: t (a :* b) ~> t c
+
+traverse h . lstrength . rconst idTrie :: a ~> t c
+
+-}
+
+-- Special case. To remove.
+
+trieCurry :: ( HasTrie b, StrongCat (~>) (Trie b)
+             , CTraversableWith (Trie b) (~>)
+             , UnitCat (~>), ConstUCat (~>) (b :->: b) ) =>
+             ((a :* b) ~> c) -> (a ~> (b :->: c))
+trieCurry = traverseCurry idTrie
+
+-- TODO: Move CTraversable and trieCurry to Category.
+
 
 {--------------------------------------------------------------------
     Addition via state and traversal
@@ -202,3 +233,5 @@ fullAddS = state fullAdd
 addS :: (AddState (~~>), CTraversableWith f (~~>)) =>
         f (Pair Bool) ~~> f Bool
 addS = traverseC fullAddS
+
+-- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.
