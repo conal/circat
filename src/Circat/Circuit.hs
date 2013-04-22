@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types #-}
@@ -165,6 +165,26 @@ newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
 mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
 mkC = Circ . Kleisli
 
+primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
+primC = mkC . genComp
+
+namedC :: IsSourceP2 a b => String -> a :> b
+namedC = primC . Prim
+
+constC :: (IsSourceP2 a b, Show b) => b -> a :> b
+constC b = namedC (show b)
+
+-- General mux. Later specialize to simple muxes and make more of them.
+
+muxC :: (IsSourceP2 ((k :->: v) :* k) v, HasTrie k) =>
+        ((k :->: v) :* k) :> v
+muxC = namedC "mux"
+
+-- muxC :: -- (IsSourceP2 ((k :->: v) :* k) v, HasTrie k) =>
+--         ((k :->: v) :* k) :> v
+-- muxC = error "muxC: not implemented"
+
+
 -- instance Newtype (a :> b) (Kleisli CircuitM (Pins a) (Pins b)) where
 --   pack k = Circ k
 --   unpack (Circ k) = k
@@ -216,32 +236,32 @@ instance TreeCat (:>) where
 
 -- End of deriving-like instances.
 
--- For ClosedCat, we'll use tries.
+-- fpins :: Pins (f a) ~> f (Pins a)
+-- fpins = error "fpins undefined"
 
-instance ClosedCat (:>) where
-  type Exp (:>) u v = u :->: v
-  type ClosedKon (:>) u = HasTrie u
-  apply = muxC
-  curry = undefined
-  uncurry = undefined
+-- unfpins :: f (Pins a) ~> Pins (f a)
+-- unfpins = error "unfpins undefined"
 
-{-
-newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
+-- instance StrongCat (:>) f where
+--   lstrength = Circ $ unfpins . lstrength . second fpins
 
-type CircuitM = WriterT (Seq Comp) (State PinSupply)
+  -- rstrength = Circ rstrength
 
-apply   :: ((a :->: b) :* a) ~> b
-curry   :: ((a :* b) ~> c) -> (a ~> (b :->: c))
-uncurry :: (a ~> (b :->: c)) -> (a :* b) ~> c
--}
+--   lstrength :: (a :* f b) :> f (a :* b)
+--   rstrength :: (f a :* b) :> f (a :* b)
 
--- class ProductCat (~>) => ClosedCat (~>) where
---   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
---   type Exp (~>) u v
+-- want :: Kleisli CircuitM (Pins (a :* f b)) (Pins (f (a :* b)))
+--      =~ Kleisli CircuitM (Pins a :* Pins (f b)) (Pins (f (a :* b)))
 
---   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
---   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
---   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+-- lstrength :: Kleisli CircuitM (Pins a :* f (Pins b)) (f (Pins a :* Pins b))
+-- unfpins . lstrength . second fpins
+
+--    (a :* f b) :> f (a :* b)
+-- =~ Pins (a :* f b) -> CircuitM (Pins (f (a :* b)))
+-- =~ Pins a :* Pins (f b) -> CircuitM (Pins (f (a :* b)))
+
+-- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins (a :* b)))
+-- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins a :* Pins b))
 
 
 -- The other instances make circuit components
@@ -269,24 +289,49 @@ instance AddCat (:>) where
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
 
--- TODO: Will the product & coproduct instances really work here, or do I need a
--- wrapper around Kleisli? Maybe they just work. Hm. If so, what benefits arise
--- from using the categorical instead of monadic form? Perhaps amenability to
--- other interpretations, such as timing and demand analysis.
+-- For ClosedCat, we'll use tries.
 
-primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
-primC = mkC . genComp
+-- instance ClosedCat (:>) where
+--   type Exp (:>) u v = u :->: v
+--   type ClosedKon (:>) u = HasTrie u
+--   apply = muxC
+--   curry = undefined
+--   uncurry = undefined
 
-namedC :: IsSourceP2 a b => String -> a :> b
-namedC = primC . Prim
+--     Could not deduce (IsSource (Pins b),
+--                       IsSource (Pins a),
+--                       IsSource (Pins (Trie a b)))
+--       arising from a use of `muxC'
 
-constC :: (IsSourceP2 a b, Show b) => b -> a :> b
-constC b = namedC (show b)
+{-
+newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
 
--- General mux. Later specialize to simple muxes and make more of them.
-muxC :: IsSourceP2 ((k :->: v) :* k) v =>
-        HasTrie k => ((k :->: v) :* k) :> v
-muxC = namedC "mux"
+type CircuitM = WriterT (Seq Comp) (State PinSupply)
+
+apply   :: ((a :->: b) :* a) :> b
+curry   :: ((a :* b) :> c) -> (a :> (b :->: c))
+uncurry :: (a :> (b :->: c)) -> (a :* b) :> c
+-}
+
+--   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+--   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+--   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+
+applyC :: ( HasTrie a, IsSource (Pins a), IsSource (Pins b)
+          , IsSource (Pins (a :->: b)) ) =>
+          ((a :->: b) :* a) :> b
+applyC = muxC
+
+curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
+          , IsSource (Pins (b :->: b)), StrongCat (:>) (Trie b)) =>
+          ((a :* b) :> c) -> (a :> (b :->: c))
+curryC = traverseCurry idTrie
+
+-- TODO: Give StrongCat instance and drop constraint above.
+
+-- uncurryC :: (a :> (b :->: c)) -> (a :* b) :> c
+
+
 
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC

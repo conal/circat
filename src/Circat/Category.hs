@@ -214,22 +214,18 @@ instance Monad m => UnitCat (Kleisli m) where
   runit = arr runit
 
 class ProductCat (~>) => StrongCat (~>) f where
- lstrength :: (a :* f b) ~> f (a :* b)
- rstrength :: (f a :* b) ~> f (a :* b)
+  lstrength :: (a :* f b) ~> f (a :* b)
+  rstrength :: (f a :* b) ~> f (a :* b)
 
--- TODO: Use generalize Functor
+-- TODO: Use generalized Functor
 
 instance Functor f => StrongCat (->) f where
   lstrength (a, bs) = fmap (a,) bs
   rstrength (as, b) = fmap (,b) as
 
--- h :: a :* b :> c
---
--- rconst idTrie :: a                 :> (a :* (b :->: b))
--- lstrength     :: a :* (b :->: b)   :> (b :->: (a :* b))
--- traverseC h   :: (b :->: (a :* b)) :> (b :->: c)
---
--- traverse h . lstrength . rconst idTrie :: a :> (b :->: c)
+instance (Monad m, Functor f) => StrongCat (Kleisli m) f where
+  lstrength = arr lstrength
+  rstrength = arr rstrength
 
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories
 -- package:
