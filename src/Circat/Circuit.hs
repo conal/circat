@@ -263,6 +263,15 @@ instance TreeCat (:>) where
 -- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins (a :* b)))
 -- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins a :* Pins b))
 
+-- Start modest: only pairs (for memoizing one carry bit)
+
+instance StrongCat (:>) Pair where
+  type StrongKon (:>) Pair a b = ()
+  lstrength = Circ lstrength
+  rstrength = Circ rstrength
+
+-- want: forall a. Pins (f a) == f (Pins a)
+-- Can I express?
 
 -- The other instances make circuit components
 
@@ -323,11 +332,12 @@ applyC :: ( HasTrie a, IsSource (Pins a), IsSource (Pins b)
 applyC = muxC
 
 curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
-          , IsSource (Pins (b :->: b)), StrongCat (:>) (Trie b)) =>
+          , IsSource (Pins (b :->: b))
+          , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b ) => 
           ((a :* b) :> c) -> (a :> (b :->: c))
 curryC = traverseCurry idTrie
 
--- TODO: Give StrongCat instance and drop constraint above.
+-- TODO: Give StrongCat instance and drop constraint(s) above.
 
 -- uncurryC :: (a :> (b :->: c)) -> (a :* b) :> c
 
