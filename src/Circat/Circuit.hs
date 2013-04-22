@@ -7,7 +7,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -29,7 +29,7 @@ import qualified Prelude as P
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
-import Control.Arrow (Kleisli(..))
+import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 
 import qualified System.Info as SI
@@ -49,6 +49,7 @@ import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import Text.Printf (printf)
 
 import TypeUnary.Vec hiding (get)
+import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
 import Circat.Misc ((:*),(<~),Unop)
 import Circat.Category
@@ -172,7 +173,7 @@ mkC = Circ . Kleisli
 --       Kleisli CircuitM (Pins a) (Pins b)
 
 -- Most instances defer to Kleisli. I'd like to derive these instances
--- automatically, but GHC says it isn't up for it
+-- automatically, but GHC says it isn't up for it:
 --
 --     Can't make a derived instance of `ProductCat :>'
 --       (even with cunning newtype deriving):
@@ -180,6 +181,8 @@ mkC = Circ . Kleisli
 -- 
 -- I think these newtype-deriving-like instances only work because of the
 -- distributivity of Pins.
+
+-- Start of deriving-like instances.
 
 instance Category (:>) where
   id = Circ id
@@ -210,6 +213,36 @@ instance TreeCat (:>) where
   unL = Circ unL
   toB = Circ toB
   unB = Circ unB
+
+-- End of deriving-like instances.
+
+-- For ClosedCat, we'll use tries.
+
+instance ClosedCat (:>) where
+  type Exp (:>) u v = u :->: v
+  type ClosedKon (:>) u = HasTrie u
+  apply = muxC
+  curry = undefined
+  uncurry = undefined
+
+{-
+newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
+
+type CircuitM = WriterT (Seq Comp) (State PinSupply)
+
+apply   :: ((a :->: b) :* a) ~> b
+curry   :: ((a :* b) ~> c) -> (a ~> (b :->: c))
+uncurry :: (a ~> (b :->: c)) -> (a :* b) ~> c
+-}
+
+-- class ProductCat (~>) => ClosedCat (~>) where
+--   type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
+--   type Exp (~>) u v
+
+--   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+--   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+--   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+
 
 -- The other instances make circuit components
 
@@ -249,6 +282,11 @@ namedC = primC . Prim
 
 constC :: (IsSourceP2 a b, Show b) => b -> a :> b
 constC b = namedC (show b)
+
+-- General mux. Later specialize to simple muxes and make more of them.
+muxC :: IsSourceP2 ((k :->: v) :* k) v =>
+        HasTrie k => ((k :->: v) :* k) :> v
+muxC = namedC "mux"
 
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC

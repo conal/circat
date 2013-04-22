@@ -182,7 +182,7 @@ instance ClosedCatU (~>) s => StateCat (StateExp (~>) s) where
 
 f                            :: (s :* a) ~> (b :* s)
 f . swapP                    :: (a :* s) ~> (b :* s)
-curry (f . swapP)            :: a ~> (Exp (~>) s (b :* s))
+curry (f . swapP)            :: a ~> (ExpT (~>) s (b :* s))
 StateExp (curry (f . swapP)) :: StateExp (~>) s a b
 
 Then invert for runState.

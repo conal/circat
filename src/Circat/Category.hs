@@ -234,17 +234,18 @@ instance Functor f => StrongCat (->) f where
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
 
 class ProductCat (~>) => ClosedCat (~>) where
-  type ClosedKon (~>) k :: Constraint  -- ^ On the 'Exp' domain
-  type ClosedKon (~>) k = Yes k
+  type ClosedKon (~>) u :: Constraint  -- ^ On the 'Exp' domain
+  type ClosedKon (~>) u = ()
   type Exp (~>) u v
   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
 
-type ClosedCatWith (~>) k = (ClosedCat (~>), ClosedKon (~>) k)
+type ClosedCatWith (~>) u = (ClosedCat (~>), ClosedKon (~>) u)
 
 instance ClosedCat (->) where
   type Exp (->) u v = u -> v
+  type ClosedKon (->) u = ()
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
@@ -263,7 +264,7 @@ distribMF u p = liftM ($ p) u
 
 
 instance Monad m => ClosedCat (Kleisli m) where
-  type ClosedKon (Kleisli m) k = (HasTrie k, Traversable (Trie k))
+  type ClosedKon (Kleisli m) u = (HasTrie u, Traversable (Trie u))
   type Exp (Kleisli m) u v = u :->: v
   apply   = Kleisli (return . uncurry untrie)
   curry   = inNew $ \ f -> sequence . trie . curry f
