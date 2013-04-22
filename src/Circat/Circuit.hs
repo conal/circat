@@ -234,7 +234,15 @@ instance TreeCat (:>) where
   toB = Circ toB
   unB = Circ unB
 
--- End of deriving-like instances.
+-- Start modest: only pairs (for memoizing one carry bit)
+
+instance StrongCat (:>) Pair where
+  type StrongKon (:>) Pair a b = ()
+  lstrength = Circ lstrength
+  rstrength = Circ rstrength
+
+-- To generalize from Pair, I want: forall a. Pins (f a) == f (Pins a)
+-- Can I express in Haskell?
 
 -- fpins :: Pins (f a) ~> f (Pins a)
 -- fpins = error "fpins undefined"
@@ -263,15 +271,7 @@ instance TreeCat (:>) where
 -- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins (a :* b)))
 -- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins a :* Pins b))
 
--- Start modest: only pairs (for memoizing one carry bit)
-
-instance StrongCat (:>) Pair where
-  type StrongKon (:>) Pair a b = ()
-  lstrength = Circ lstrength
-  rstrength = Circ rstrength
-
--- want: forall a. Pins (f a) == f (Pins a)
--- Can I express?
+-- End of deriving-like instances.
 
 -- The other instances make circuit components
 
@@ -336,6 +336,15 @@ curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
           , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b ) => 
           ((a :* b) :> c) -> (a :> (b :->: c))
 curryC = traverseCurry idTrie
+
+curryPairC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
+              , IsSource (Pins (b :->: b))
+              , b ~ Bool
+              -- , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b 
+              ) => 
+              ((a :* b) :> c) -> (a :> (b :->: c))
+curryPairC = traverseCurry idTrie
+
 
 -- TODO: Give StrongCat instance and drop constraint(s) above.
 

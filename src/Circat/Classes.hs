@@ -189,7 +189,8 @@ instance CTraversable Pair where
 -- TODO: Maybe move Vec support to a new Vec module, alongside the RTree module.
 
 traverseCurry :: 
-  (ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t) =>
+  ( ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t
+    , StrongKon (~>) t a b ) =>
   t b -> ((a :* b) ~> c) -> (a ~> t c)
 traverseCurry q h = traverseC h . lstrength . rconst q
 
@@ -208,11 +209,11 @@ traverse h . lstrength . rconst idTrie :: a ~> t c
 
 -- Special case. To remove.
 
-trieCurry :: ( HasTrie b, StrongCat (~>) (Trie b)
-             , CTraversableWith (Trie b) (~>)
-             , UnitCat (~>), ConstUCat (~>) (b :->: b) ) =>
-             ((a :* b) ~> c) -> (a ~> (b :->: c))
-trieCurry = traverseCurry idTrie
+-- trieCurry :: ( HasTrie b, StrongCat (~>) (Trie b)
+--              , CTraversableWith (Trie b) (~>)
+--              , UnitCat (~>), ConstUCat (~>) (b :->: b) ) =>
+--              ((a :* b) ~> c) -> (a ~> (b :->: c))
+-- trieCurry = traverseCurry idTrie
 
 -- TODO: Move CTraversable and trieCurry to Category.
 

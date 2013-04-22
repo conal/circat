@@ -214,16 +214,19 @@ instance Monad m => UnitCat (Kleisli m) where
   runit = arr runit
 
 class ProductCat (~>) => StrongCat (~>) f where
-  lstrength :: (a :* f b) ~> f (a :* b)
-  rstrength :: (f a :* b) ~> f (a :* b)
+  type StrongKon (~>) f a b :: Constraint
+  lstrength :: StrongKon (~>) f a b => (a :* f b) ~> f (a :* b)
+  rstrength :: StrongKon (~>) f a b => (f a :* b) ~> f (a :* b)
 
 -- TODO: Use generalized Functor
 
 instance Functor f => StrongCat (->) f where
+  type StrongKon (->) f a b = ()
   lstrength (a, bs) = fmap (a,) bs
   rstrength (as, b) = fmap (,b) as
 
 instance (Monad m, Functor f) => StrongCat (Kleisli m) f where
+  type StrongKon (Kleisli m) f a b = ()
   lstrength = arr lstrength
   rstrength = arr rstrength
 
