@@ -231,7 +231,8 @@ instance Functor f => StrongCat (->) f where
 --
 -- traverse h . lstrength . rconst idTrie :: a :> (b :->: c)
 
--- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories package:
+-- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories
+-- package:
 
 class ProductCat (~>) => ClosedCat (~>) where
   type ClosedKon (~>) u :: Constraint  -- ^ On the 'Exp' domain
