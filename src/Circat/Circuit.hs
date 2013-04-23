@@ -333,22 +333,22 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-c0 :: BoolWith (~>) bool => bool ~> bool
+c0 :: BoolWith (~>) b => b ~> b
 c0 = id
 
-c1 :: BoolWith (~>) bool => bool ~> bool
+c1 :: BoolWith (~>) b => b ~> b
 c1 = not . not
 
-c2 :: BoolWith (~>) bool => (bool :* bool) ~> bool
+c2 :: BoolWith (~>) b => (b :* b) ~> b
 c2 = not . and
 
-c3 :: BoolWith (~>) bool => (bool :* bool) ~> bool
+c3 :: BoolWith (~>) b => (b :* b) ~> b
 c3 = not . and . (not *** not)
 
-c4 :: BoolWith (~>) bool => (bool :* bool) ~> (bool :* bool)
+c4 :: BoolWith (~>) b => (b :* b) ~> (b :* b)
 c4 = swapP  -- no components
 
-c5 :: BoolWith (~>) bool => (bool :* bool) ~> (bool :* bool)
+c5 :: BoolWith (~>) b => (b :* b) ~> (b :* b)
 c5 = xor &&& and   -- half-adder
 
 outSimples :: IO ()
