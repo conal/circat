@@ -38,13 +38,13 @@ import qualified Prelude as P
 import Control.Category
 import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
-import Control.Monad (liftM,liftM2)
-import Data.Traversable (Traversable,sequence)
+import Control.Monad (liftM2) -- liftM,
+-- import Data.Traversable (Traversable,sequence)
 import GHC.Prim (Constraint)
 
-import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
+-- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
-import Circat.Misc ((:*),(:+),(<~),inNew,inNew2)
+import Circat.Misc ((:*),(:+),(<~),inNew2) -- ,inNew
 
 infixr 3 ***, &&&
 
@@ -239,7 +239,7 @@ class ProductCat (~>) => ClosedCat (~>) where
   type Exp (~>) u v
   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
-  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> ((a :* b) ~> c)
 
 type ClosedCatWith (~>) u = (ClosedCat (~>), ClosedKon (~>) u)
 
@@ -252,8 +252,8 @@ instance ClosedCat (->) where
 
 -- TODO: Would MemoTrie work as well?
 
-distribMF :: Monad m => m (p -> q) -> (p -> m q)
-distribMF u p = liftM ($ p) u
+-- distribMF :: Monad m => m (p -> q) -> (p -> m q)
+-- distribMF u p = liftM ($ p) u
 
 -- TODO: Is there a standard name for distribMF?
 -- It's a distribution/transposition.
@@ -262,13 +262,12 @@ distribMF u p = liftM ($ p) u
 -- this instance as a suggestion for specific monads or for newtype wrappers
 -- around some Klieslis.
 
-
-instance Monad m => ClosedCat (Kleisli m) where
-  type ClosedKon (Kleisli m) u = (HasTrie u, Traversable (Trie u))
-  type Exp (Kleisli m) u v = u :->: v
-  apply   = Kleisli (return . uncurry untrie)
-  curry   = inNew $ \ f -> sequence . trie . curry f
-  uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
+-- instance Monad m => ClosedCat (Kleisli m) where
+--   type ClosedKon (Kleisli m) u = (HasTrie u, Traversable (Trie u))
+--   type Exp (Kleisli m) u v = u :->: v
+--   apply   = Kleisli (return . uncurry untrie)
+--   curry   = inNew $ \ f -> sequence . trie . curry f
+--   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
 
 {- 
 

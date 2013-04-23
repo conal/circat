@@ -25,14 +25,16 @@ module Circat.Circuit
   -- ((:>), toG, outG, bc, outAll)
     where
 
-import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry)
+import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry,sequence)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
+import Control.Monad (liftM)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
+import Data.Traversable (Traversable(..))
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -53,12 +55,14 @@ import Text.Printf (printf)
 import TypeUnary.Vec hiding (get)
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
-import Circat.Misc ((:*),(<~),Unop)
+import Circat.Misc ((:*),(<~),Unop,inNew)
 import Circat.Category
 import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
+
+
 
 {--------------------------------------------------------------------
     The circuit monad
@@ -173,14 +177,15 @@ primC = mkC . genComp
 namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
-constC :: (IsSource2 a b, Show b) => b -> a :> b
+-- constC :: (IsSource2 a b, Show b) => b -> a :> b
+constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
 constC b = namedC (show b)
 
 -- General mux. Later specialize to simple muxes and make more of them.
 
-muxC :: (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
-        ((k :->: v) :* k) :> v
-muxC = namedC "mux"
+-- muxC :: (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
+--         ((k :->: v) :* k) :> v
+-- muxC = namedC "mux"
 
 -- muxC :: -- (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
 --         ((k :->: v) :* k) :> v
@@ -351,6 +356,12 @@ c4 = swapP  -- no components
 c5 :: BoolWith (~>) b => (b :* b) ~> (b :* b)
 c5 = xor &&& and   -- half-adder
 
+c6 :: b ~ BoolT (:>) => () :> b
+c6 = constC False
+
+c7 :: b ~ BoolT (:>) => b :> b
+c7 = constC False
+
 outSimples :: IO ()
 outSimples = do
   outG "c0" c0
@@ -359,6 +370,7 @@ outSimples = do
   outG "c3" c3
   outG "c4" c4
   outG "c5" c5
+  outG "c6" c6
 
 {- For instance,
 
@@ -619,3 +631,48 @@ addTBS1 :: AddTBS N1
 addTBS1 = addBS
 
 -}
+
+{--------------------------------------------------------------------
+    Another pass at ClosedCat
+--------------------------------------------------------------------}
+
+type family Unpins a
+
+type instance Unpins Pin = Bool
+
+-- Everything else distributes:
+type instance Unpins ()         = ()
+type instance Unpins ( a :* b ) = Unpins a :* Unpins b
+type instance Unpins (Pair a  ) = Pair (Unpins a)
+type instance Unpins (Vec n a ) = Vec  n (Unpins a)
+type instance Unpins (Tree n a) = Tree n (Unpins a)
+
+
+distribMF :: Monad m => m (p -> q) -> (p -> m q)
+distribMF u p = liftM ($ p) u
+
+-- instance ClosedCat (:>) where
+--   type ClosedKon (:>) u = (HasTrie u, Traversable (Trie (Unpins u)))
+--   type Exp (:>) u v = Unpins u :->: v
+--   apply = muxC
+
+--   curry   = inNew $ \ f -> sequence . trie . curry f
+--   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
+
+--   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+--   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+--   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+
+{-
+  apply   :: ClosedKon (:>) a => ((Unpins a :->: b) :* a) :> b
+  curry   :: ClosedKon (:>) b => ((a :* b) :> c) -> (a :> (Unpins b :->: c))
+  uncurry :: ClosedKon (:>) b => (a :> (Unpins b :->: c)) -> ((a :* b) :> c)
+
+uncurry untrie :: ((k :->: v) :* k) -> v
+uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
+
+-}
+
+muxC :: (IsSource2 ((Unpins k :->: v) :* k) v, HasTrie k) =>
+        ((Unpins k :->: v) :* k) :> v
+muxC = namedC "mux"
