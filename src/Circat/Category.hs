@@ -183,7 +183,7 @@ instance ConstCat (->) where
   const = P.const
 
 instance Monad m => ConstCat (Kleisli m) where
-  -- type ConstKon (Kleisli m) a b = ()  -- why necessary?
+  type ConstKon (Kleisli m) a b = ()  -- why necessary?
   const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.

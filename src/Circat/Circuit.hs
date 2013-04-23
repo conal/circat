@@ -21,7 +21,9 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit ((:>), toG, outG, bc, outAll) where
+module Circat.Circuit
+  -- ((:>), toG, outG, bc, outAll)
+    where
 
 import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry)
 import qualified Prelude as P
@@ -160,136 +162,46 @@ type instance Pins (Tree n a) = Tree n (Pins a)
 infixl 1 :>
 
 -- | Circuit category
-newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
+type (:>) = Kleisli CircuitM
 
-mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
-mkC = Circ . Kleisli
+mkC :: (a -> CircuitM b) -> (a :> b)
+mkC = Kleisli
 
-primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
+primC :: IsSource2 a b => Prim a b -> a :> b
 primC = mkC . genComp
 
-namedC :: IsSourceP2 a b => String -> a :> b
+namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
-constC :: (IsSourceP2 a b, Show b) => b -> a :> b
+constC :: (IsSource2 a b, Show b) => b -> a :> b
 constC b = namedC (show b)
 
 -- General mux. Later specialize to simple muxes and make more of them.
 
-muxC :: (IsSourceP2 ((k :->: v) :* k) v, HasTrie k) =>
+muxC :: (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
         ((k :->: v) :* k) :> v
 muxC = namedC "mux"
 
--- muxC :: -- (IsSourceP2 ((k :->: v) :* k) v, HasTrie k) =>
+-- muxC :: -- (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
 --         ((k :->: v) :* k) :> v
 -- muxC = error "muxC: not implemented"
 
+-- instance ConstCat (:>) where
+--   type ConstKon (:>) a b = () -- (IsSource2 a b, Show b)
+--   const = constC
 
--- instance Newtype (a :> b) (Kleisli CircuitM (Pins a) (Pins b)) where
---   pack k = Circ k
---   unpack (Circ k) = k
--- 
---     Illegal type synonym family application in instance:
---       Kleisli CircuitM (Pins a) (Pins b)
-
--- Most instances defer to Kleisli. I'd like to derive these instances
--- automatically, but GHC says it isn't up for it:
---
---     Can't make a derived instance of `ProductCat :>'
---       (even with cunning newtype deriving):
---       cannot eta-reduce the representation type enough
--- 
--- I think these newtype-deriving-like instances only work because of the
--- distributivity of Pins.
-
--- Start of deriving-like instances.
-
-instance Category (:>) where
-  id = Circ id
-  Circ g . Circ f = Circ (g . f)
-
-instance ProductCat (:>) where
-  fst = Circ fst
-  snd = Circ snd
-  dup = Circ dup
-  Circ f *** Circ g = Circ (f *** g)
-
-instance UnitCat (:>) where
-  lunit = Circ lunit
-  runit = Circ runit
-
-instance PairCat (:>) where
-  toPair = Circ toPair
-  unPair = Circ unPair
-
-instance VecCat (:>) where
-  toVecZ = Circ toVecZ
-  unVecZ = Circ unVecZ
-  toVecS = Circ toVecS
-  unVecS = Circ unVecS
-
-instance TreeCat (:>) where
-  toL = Circ toL
-  unL = Circ unL
-  toB = Circ toB
-  unB = Circ unB
-
--- Start modest: only pairs (for memoizing one carry bit)
-
-instance StrongCat (:>) Pair where
-  type StrongKon (:>) Pair a b = ()
-  lstrength = Circ lstrength
-  rstrength = Circ rstrength
-
--- To generalize from Pair, I want: forall a. Pins (f a) == f (Pins a)
--- Can I express in Haskell?
-
--- fpins :: Pins (f a) ~> f (Pins a)
--- fpins = error "fpins undefined"
-
--- unfpins :: f (Pins a) ~> Pins (f a)
--- unfpins = error "unfpins undefined"
-
--- instance StrongCat (:>) f where
---   lstrength = Circ $ unfpins . lstrength . second fpins
-
-  -- rstrength = Circ rstrength
-
---   lstrength :: (a :* f b) :> f (a :* b)
---   rstrength :: (f a :* b) :> f (a :* b)
-
--- want :: Kleisli CircuitM (Pins (a :* f b)) (Pins (f (a :* b)))
---      =~ Kleisli CircuitM (Pins a :* Pins (f b)) (Pins (f (a :* b)))
-
--- lstrength :: Kleisli CircuitM (Pins a :* f (Pins b)) (f (Pins a :* Pins b))
--- unfpins . lstrength . second fpins
-
---    (a :* f b) :> f (a :* b)
--- =~ Pins (a :* f b) -> CircuitM (Pins (f (a :* b)))
--- =~ Pins a :* Pins (f b) -> CircuitM (Pins (f (a :* b)))
-
--- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins (a :* b)))
--- =~ Pins a :* f (Pins b) -> CircuitM (f (Pins a :* Pins b))
-
--- End of deriving-like instances.
-
--- The other instances make circuit components
-
-type IsSourceP a = IsSource (Pins a)
-type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
-
-instance ConstCat (:>) where
-  type ConstKon (:>) a b = (IsSourceP2 a b, Show b)
-  const = constC
+-- TODO: Kleisli already defines an ConstCat instance, and it doesn't use
+-- constC. Can it work for (:>)?
 
 instance BoolCat (:>) where
+  type BoolT (:>) = Pin
   not = namedC "not"
   and = namedC "and"
   or  = namedC "or"
   xor = namedC "xor"
 
 instance EqCat (:>) where
-  type EqKon (:>) a = IsSourceP a
+  type EqKon (:>) a = IsSource a
   eq  = namedC "eq"
   neq = namedC "neq"
 
@@ -298,7 +210,7 @@ instance AddCat (:>) where
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
 
-instance IsSourceP2 a b => Show (a :> b) where
+instance IsSource2 a b => Show (a :> b) where
   show = show . runC
 
 --     Application is no smaller than the instance head
@@ -309,14 +221,14 @@ evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: IsSourceP2 a b => (a :> b) -> [Comp]
+runC :: IsSource2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU (Circ (Kleisli f)) = toList (snd (evalWS (f ()) (Pin 0)))
+runU (Kleisli f) = toList (snd (evalWS (f ()) (Pin 0)))
 
 -- Wrap a circuit with fake input and output
-unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
+unitize :: IsSource2 a b => (a :> b) -> (() :> ())
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -333,7 +245,7 @@ systemSuccess cmd =
        ExitSuccess -> return ()
        _ -> printf "command \"%s\" failed."
 
-outG :: IsSourceP2 a b => String -> (a :> b) -> IO ()
+outG :: IsSource2 a b => String -> (a :> b) -> IO ()
 outG name circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
@@ -352,7 +264,7 @@ outG name circ =
 
 type DGraph = String
 
-toG :: IsSourceP2 a b => (a :> b) -> DGraph
+toG :: IsSource2 a b => (a :> b) -> DGraph
 toG cir = printf "digraph {\n%s}\n"
             (concatMap wrap (prelude ++ recordDots comps))
  where
@@ -421,22 +333,22 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-c0 :: BoolCat (~>) => Bool ~> Bool
+c0 :: BoolWith (~>) bool => bool ~> bool
 c0 = id
 
-c1 :: BoolCat (~>) => Bool ~> Bool
+c1 :: BoolWith (~>) bool => bool ~> bool
 c1 = not . not
 
-c2 :: BoolCat (~>) => (Bool :* Bool) ~> Bool
+c2 :: BoolWith (~>) bool => (bool :* bool) ~> bool
 c2 = not . and
 
-c3 :: BoolCat (~>) => (Bool :* Bool) ~> Bool
+c3 :: BoolWith (~>) bool => (bool :* bool) ~> bool
 c3 = not . and . (not *** not)
 
-c4 :: BoolCat (~>) => (Bool :* Bool) ~> (Bool :* Bool)
+c4 :: BoolWith (~>) bool => (bool :* bool) ~> (bool :* bool)
 c4 = swapP  -- no components
 
-c5 :: BoolCat (~>) => (Bool :* Bool) ~> (Bool :* Bool)
+c5 :: BoolWith (~>) bool => (bool :* bool) ~> (bool :* bool)
 c5 = xor &&& and   -- half-adder
 
 outSimples :: IO ()
@@ -542,13 +454,13 @@ outAll = do outSimples ; outVecs ; outTrees
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith (~~>) (:>) s) =>
+outSG :: (IsSource s, IsSource2 a b, StateCatWith (~~>) (:>) s) =>
          String -> (a ~~> b) -> IO ()
 outSG name = outG name . runState
 
-type (:->) = StateFun (:>) Bool
+type (:->) = StateFun (:>) (BoolT (:>))
 
-type AddS f = f (Pair Bool) :-> f Bool
+type AddS f = f (Pair (BoolT (:>))) :-> f (BoolT (:>))
 
 type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
@@ -571,6 +483,8 @@ addVS16 = addS
 -- outSG "addVS4" addVS4
 --   or
 -- outG "addVS4" (runState addVS4)
+
+{-
 
 addTS16 :: AddTS N4
 addTS16 = addS
@@ -607,24 +521,24 @@ uncurry :: (a :> (b :->: c)) -> (a :* b) :> c
 --   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
 --   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
 
-applyC :: ( HasTrie a, IsSourceP2 a b, IsSourceP (a :->: b) ) =>
+applyC :: ( HasTrie a, IsSource2 a b, IsSource (a :->: b) ) =>
           ((a :->: b) :* a) :> b
 applyC = muxC
 
 curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
-          , IsSourceP (b :->: b)
+          , IsSource (b :->: b)
           -- , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b
-          , b ~ Bool
+          , b ~ bool
           ) => 
           ((a :* b) :> c) -> (a :> (b :->: c))
 curryC = traverseCurry idTrie
 
--- TODO: Give StrongCat instance and drop constraint the Strong or Bool
+-- TODO: Give StrongCat instance and drop constraint the Strong or bool
 -- constraint above.
 
 -- uncurryC :: (a :> (b :->: c)) -> (a :* b) :> c
 
-uncurryC :: (HasTrie b, IsSourceP2 b c, IsSourceP (b :->: c)) =>
+uncurryC :: (HasTrie b, IsSource2 b c, IsSource (b :->: c)) =>
             (a :> (b :->: c)) -> ((a :* b) :> c)
 uncurryC h = applyC . first h
 
@@ -645,52 +559,52 @@ apply . first h :: (a :* b) :> c
 
 
 infixr 1 :+>
--- Temporary specialization of StateExp to (:>) and Bool
+-- Temporary specialization of StateExp to (:>) and bool
 newtype (a :+> b) =
-  BStateExp { unBStateExp :: a :> (Bool :->: (b :* Bool)) }
+  BStateExp { unBStateExp :: a :> (bool :->: (b :* bool)) }
 
 pureBState :: (a :> b) -> a :+> b
 pureBState f = bstate (swapP . second f)
 
-inBState :: (s ~ t, s ~ Bool, IsSourceP b) =>
+inBState :: (s ~ t, s ~ bool, IsSource b) =>
             (((s :* a) :> (b :* s)) -> ((t :* c) :> (d :* t)))
          -> (a :+> b                -> c :+> d)
 inBState = bstate <~ runBState
 
-inBState2 :: (s ~ t, u ~ s, s ~ Bool, IsSourceP b, IsSourceP d) =>
+inBState2 :: (s ~ t, u ~ s, s ~ bool, IsSource b, IsSource d) =>
              (((s :* a) :> (b :* s)) -> ((t :* c) :> (d :* t)) -> ((u :* e) :> (f :* u)))
          -> (a :+> b                -> c :+> d                -> e :+> f)
 inBState2 = inBState <~ runBState
 
 
--- Oh. I don't think I can define a Category instance, because of the IsSourceP
+-- Oh. I don't think I can define a Category instance, because of the IsSource
 -- constraints.
 
 
 -- Temporary specialization of state and runState
 
-bstate :: (s ~ Bool) =>
+bstate :: (s ~ bool) =>
           (s :* a) :> (b :* s) -> a :+> b
 bstate f  = BStateExp (curryC (f . swapP))
 
-runBState :: (s ~ Bool, IsSourceP b) =>
+runBState :: (s ~ bool, IsSource b) =>
              a :+> b -> (s :* a) :> (b :* s)
 runBState st = uncurryC (unBStateExp st) . swapP
 
 -- | Full adder with 'StateCat' interface
-fullAddBS :: Pair Bool :+> Bool
+fullAddBS :: Pair bool :+> bool
 fullAddBS = bstate fullAdd
 
 -- | Structure adder with 'StateCat' interface
 addBS :: CTraversableWith t (:+>) =>
-         t (Pair Bool) :+> t Bool
+         t (Pair bool) :+> t bool
 addBS = traverseC fullAddBS
 
-outBSG :: IsSourceP2 a b =>
+outBSG :: IsSource2 a b =>
           String -> (a :+> b) -> IO ()
 outBSG name = outG name . runBState
 
-type AddBS f = f (Pair Bool) :+> f Bool
+type AddBS f = f (Pair bool) :+> f bool
 
 type AddVBS n = AddBS (Vec  n)
 type AddTBS n = AddBS (Tree n)
@@ -703,3 +617,5 @@ addVBS1 = addBS
 
 addTBS1 :: AddTBS N1
 addTBS1 = addBS
+
+-}
