@@ -298,60 +298,6 @@ instance AddCat (:>) where
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
 
--- For ClosedCat, we'll use tries.
-
--- instance ClosedCat (:>) where
---   type Exp (:>) u v = u :->: v
---   type ClosedKon (:>) u = HasTrie u
---   apply = muxC
---   curry = undefined
---   uncurry = undefined
-
---     Could not deduce (IsSource (Pins b),
---                       IsSource (Pins a),
---                       IsSource (Pins (Trie a b)))
---       arising from a use of `muxC'
-
-{-
-newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
-
-type CircuitM = WriterT (Seq Comp) (State PinSupply)
-
-apply   :: ((a :->: b) :* a) :> b
-curry   :: ((a :* b) :> c) -> (a :> (b :->: c))
-uncurry :: (a :> (b :->: c)) -> (a :* b) :> c
--}
-
---   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
---   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
---   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
-
-applyC :: ( HasTrie a, IsSource (Pins a), IsSource (Pins b)
-          , IsSource (Pins (a :->: b)) ) =>
-          ((a :->: b) :* a) :> b
-applyC = muxC
-
-curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
-          , IsSource (Pins (b :->: b))
-          , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b ) => 
-          ((a :* b) :> c) -> (a :> (b :->: c))
-curryC = traverseCurry idTrie
-
-curryPairC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
-              , IsSource (Pins (b :->: b))
-              , b ~ Bool
-              -- , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b 
-              ) => 
-              ((a :* b) :> c) -> (a :> (b :->: c))
-curryPairC = traverseCurry idTrie
-
-
--- TODO: Give StrongCat instance and drop constraint(s) above.
-
--- uncurryC :: (a :> (b :->: c)) -> (a :* b) :> c
-
-
-
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
 
@@ -602,8 +548,6 @@ outSG name = outG name . runState
 
 type (:->) = StateFun (:>) Bool
 
-type (:+>) = StateExp (:>) Bool
-
 type AddS f = f (Pair Bool) :-> f Bool
 
 type AddVS n = AddS (Vec  n)
@@ -630,3 +574,132 @@ addVS16 = addS
 
 addTS16 :: AddTS N4
 addTS16 = addS
+
+{--------------------------------------------------------------------
+    Temporary hack for StateExp
+--------------------------------------------------------------------}
+
+-- For ClosedCat, we'll use tries.
+
+-- instance ClosedCat (:>) where
+--   type Exp (:>) u v = u :->: v
+--   type ClosedKon (:>) u = HasTrie u
+--   apply = muxC
+--   curry = undefined
+--   uncurry = undefined
+
+--     Could not deduce (IsSource (Pins b),
+--                       IsSource (Pins a),
+--                       IsSource (Pins (Trie a b)))
+--       arising from a use of `muxC'
+
+{-
+newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
+
+type CircuitM = WriterT (Seq Comp) (State PinSupply)
+
+apply   :: ((a :->: b) :* a) :> b
+curry   :: ((a :* b) :> c) -> (a :> (b :->: c))
+uncurry :: (a :> (b :->: c)) -> (a :* b) :> c
+-}
+
+--   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
+--   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
+--   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+
+applyC :: ( HasTrie a, IsSourceP2 a b, IsSourceP (a :->: b) ) =>
+          ((a :->: b) :* a) :> b
+applyC = muxC
+
+curryC :: ( HasTrie b, Show (b :->: b), CTraversableWith (Trie b) (:>)
+          , IsSourceP (b :->: b)
+          -- , StrongCat (:>) (Trie b), StrongKon (:>) (Trie b) a b
+          , b ~ Bool
+          ) => 
+          ((a :* b) :> c) -> (a :> (b :->: c))
+curryC = traverseCurry idTrie
+
+-- TODO: Give StrongCat instance and drop constraint the Strong or Bool
+-- constraint above.
+
+-- uncurryC :: (a :> (b :->: c)) -> (a :* b) :> c
+
+uncurryC :: (HasTrie b, IsSourceP2 b c, IsSourceP (b :->: c)) =>
+            (a :> (b :->: c)) -> ((a :* b) :> c)
+uncurryC h = applyC . first h
+
+{-
+
+h :: a :> (b :->: c)
+first h :: (a :* b) :> ((b :->: c) :* b)
+apply . first h :: (a :* b) :> c
+
+-}
+
+-- instance ClosedCatU (~>) s => StateCat (StateExp (~>) s) where
+--   type StateKon  (StateExp (~>) s) = ClosedKon (~>) s
+--   type StateBase (StateExp (~>) s) = (~>)
+--   type StateT    (StateExp (~>) s) = s
+--   state    f  = StateExp (curry (f . swapP))
+--   runState st = uncurry (unStateExp st) . swapP
+
+
+infixr 1 :+>
+-- Temporary specialization of StateExp to (:>) and Bool
+newtype (a :+> b) =
+  BStateExp { unBStateExp :: a :> (Bool :->: (b :* Bool)) }
+
+pureBState :: (a :> b) -> a :+> b
+pureBState f = bstate (swapP . second f)
+
+inBState :: (s ~ t, s ~ Bool, IsSourceP b) =>
+            (((s :* a) :> (b :* s)) -> ((t :* c) :> (d :* t)))
+         -> (a :+> b                -> c :+> d)
+inBState = bstate <~ runBState
+
+inBState2 :: (s ~ t, u ~ s, s ~ Bool, IsSourceP b, IsSourceP d) =>
+             (((s :* a) :> (b :* s)) -> ((t :* c) :> (d :* t)) -> ((u :* e) :> (f :* u)))
+         -> (a :+> b                -> c :+> d                -> e :+> f)
+inBState2 = inBState <~ runBState
+
+
+-- Oh. I don't think I can define a Category instance, because of the IsSourceP
+-- constraints.
+
+
+-- Temporary specialization of state and runState
+
+bstate :: (s ~ Bool) =>
+          (s :* a) :> (b :* s) -> a :+> b
+bstate f  = BStateExp (curryC (f . swapP))
+
+runBState :: (s ~ Bool, IsSourceP b) =>
+             a :+> b -> (s :* a) :> (b :* s)
+runBState st = uncurryC (unBStateExp st) . swapP
+
+-- | Full adder with 'StateCat' interface
+fullAddBS :: Pair Bool :+> Bool
+fullAddBS = bstate fullAdd
+
+-- | Structure adder with 'StateCat' interface
+addBS :: CTraversableWith t (:+>) =>
+         t (Pair Bool) :+> t Bool
+addBS = traverseC fullAddBS
+
+outBSG :: IsSourceP2 a b =>
+          String -> (a :+> b) -> IO ()
+outBSG name = outG name . runBState
+
+type AddBS f = f (Pair Bool) :+> f Bool
+
+type AddVBS n = AddBS (Vec  n)
+type AddTBS n = AddBS (Tree n)
+
+addVBS1 :: AddVBS N1
+addVBS1 = addBS
+
+-- addVBS2 :: AddVBS N2
+-- addVBS2 = addBS
+
+addTBS1 :: AddTBS N1
+addTBS1 = addBS

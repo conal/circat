@@ -31,9 +31,6 @@ import GHC.Prim (Constraint)
 
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
--- Temporary
-import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
-
 import Circat.Misc ((:*),(<~))
 import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
 import Circat.Pair
