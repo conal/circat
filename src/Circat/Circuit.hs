@@ -21,9 +21,7 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit
-  -- ((:>), toG, outG, bc, outAll)
-    where
+module Circat.Circuit (CircuitM,(:>), toG, outG, bc, outAll) where
 
 import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry,sequence)
 import qualified Prelude as P
@@ -45,12 +43,12 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq,singleton)
+import Text.Printf (printf)
 
 -- mtl
 import Control.Monad.State (State,evalState)
 import qualified Control.Monad.State as M
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
-import Text.Printf (printf)
 
 import TypeUnary.Vec hiding (get)
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
