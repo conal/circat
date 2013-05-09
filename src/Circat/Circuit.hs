@@ -650,9 +650,15 @@ distribMF :: Monad m => m (p -> q) -> (p -> m q)
 distribMF u p = liftM ($ p) u
 
 -- instance ClosedCat (:>) where
---   type ClosedKon (:>) u = (HasTrie u, Traversable (Trie (Unpins u)))
+--   type ClosedKon (:>) u =
+--     (IsSource u, HasTrie (Unpins u), Traversable (Trie (Unpins u)))
 --   type Exp (:>) u v = Unpins u :->: v
 --   apply = muxC
+
+--     Could not deduce (IsSource b, IsSource (Trie (Unpins a) b))
+--       arising from a use of `muxC'
+
+
 
 --   curry   = inNew $ \ f -> sequence . trie . curry f
 --   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
@@ -671,6 +677,6 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 -}
 
-muxC :: (IsSource2 ((Unpins k :->: v) :* k) v, HasTrie k) =>
-        ((Unpins k :->: v) :* k) :> v
+muxC :: (IsSource2 ((Unpins u :->: v) :* u) v, HasTrie (Unpins u)) =>
+        ((Unpins u :->: v) :* u) :> v
 muxC = namedC "mux"
