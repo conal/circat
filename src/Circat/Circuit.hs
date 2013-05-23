@@ -263,8 +263,10 @@ outG name circ =
    (outType,res) = ("pdf","")
                    -- ("svg","")
                    -- ("png","-Gdpi=200")
-   open | SI.os == "darwin" = "open"
-        | otherwise         = error "unknown open for OS"
+   open = case SI.os of
+            "darwin" -> "open"
+            "linux"  -> "xdg-open"
+            _        -> error "unknown open for OS"
 
 type DGraph = String
 
