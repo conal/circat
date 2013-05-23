@@ -12,6 +12,7 @@
 -- |
 -- Module      :  Circat.Classes
 -- Copyright   :  (c) 2013 Tabula, Inc.
+-- License     :  BSD3
 -- 
 -- Maintainer  :  conal@tabula.com
 -- Stability   :  experimental
@@ -37,12 +38,12 @@ import Circat.Pair
 import Circat.State -- (StateCat(..),pureState,StateFun)
 
 -- | Category with boolean operations.
-class ProductCat (~>) => BoolCat (~>) where
-  type BoolT (~>)
-  not :: b ~ BoolT (~>) => b ~> b
-  and, or, xor :: b ~ BoolT (~>) => (b :* b) ~> b
+class ProductCat k => BoolCat k where
+  type BoolT k
+  not :: b ~ BoolT k => b `k` b
+  and, or, xor :: b ~ BoolT k => (b :* b) `k` b
 
-type BoolWith (~>) b = (BoolCat (~>), b ~ BoolT (~>))
+type BoolWith k b = (BoolCat k, b ~ BoolT k)
 
 -- The Category superclass is just for convenience.
 
@@ -53,10 +54,10 @@ instance BoolCat (->) where
   or  = P.uncurry (||)
   xor = P.uncurry (/=)
 
-class BoolCat (~>) => EqCat (~>) where
-  type EqKon (~>) a :: Constraint
-  type EqKon (~>) a = Yes a
-  eq, neq :: (Eq a, EqKon (~>) a, b ~ BoolT (~>)) => (a :* a) ~> b
+class BoolCat k => EqCat k where
+  type EqKon k a :: Constraint
+  type EqKon k a = Yes a
+  eq, neq :: (Eq a, EqKon k a, b ~ BoolT k) => (a :* a) `k` b
   neq = not . eq
 
 -- TODO: Revisit the type constraints for EqCat.
@@ -66,18 +67,18 @@ instance EqCat (->) where
   eq  = P.uncurry (==)
   neq = P.uncurry (/=)
 
-class (UnitCat (~>), ProductCat (~>)) => VecCat (~>) where
-  toVecZ :: () ~> Vec Z a
-  unVecZ :: Vec Z a ~> ()
-  toVecS :: (a :* Vec n a) ~> Vec (S n) a
-  unVecS :: Vec (S n) a ~> (a :* Vec n a)
+class (UnitCat k, ProductCat k) => VecCat k where
+  toVecZ :: () `k` Vec Z a
+  unVecZ :: Vec Z a `k` ()
+  toVecS :: (a :* Vec n a) `k` Vec (S n) a
+  unVecS :: Vec (S n) a `k` (a :* Vec n a)
 
-reVecZ :: VecCat (~>) => Vec Z a ~> Vec Z b
+reVecZ :: VecCat k => Vec Z a `k` Vec Z b
 reVecZ = toVecZ . unVecZ
 
-inVecS :: VecCat (~>) =>
-          ((a :* Vec m a) ~> (b :* Vec n b))
-       -> (Vec  (S m)  a ~> Vec  (S n)   b)
+inVecS :: VecCat k =>
+          ((a :* Vec m a) `k` (b :* Vec n b))
+       -> (Vec  (S m)  a `k` Vec  (S n)   b)
 inVecS = toVecS <~ unVecS
 
 instance VecCat (->) where
@@ -92,27 +93,27 @@ instance Monad m => VecCat (Kleisli m) where
   toVecS = arr toVecS
   unVecS = arr unVecS
 
-instance VecCat (~>) => VecCat (StateFun (~>) s) where
+instance VecCat k => VecCat (StateFun k s) where
   toVecZ = pureState toVecZ
   unVecZ = pureState unVecZ
   toVecS = pureState toVecS
   unVecS = pureState unVecS
 
-instance (ClosedCatWith (~>) s, VecCat (~>)) => VecCat (StateExp (~>) s) where
+instance (ClosedCatWith k s, VecCat k) => VecCat (StateExp k s) where
   toVecZ = pureState toVecZ
   unVecZ = pureState unVecZ
   toVecS = pureState toVecS
   unVecS = pureState unVecS
 
-class (PairCat (~>), BoolCat (~>)) => AddCat (~>) where
+class (PairCat k, BoolCat k) => AddCat k where
   -- | Half adder: addends in; sum and carry out. Default via logic.
-  halfAdd :: b ~ BoolT (~>) =>
-             (b :* b) ~> (b :* b)
+  halfAdd :: b ~ BoolT k =>
+             (b :* b) `k` (b :* b)
   halfAdd = xor &&& and
   -- | Full adder: carry and addend pairs in; sum and carry out.
   -- Default via 'halfAdd'.
-  fullAdd :: b ~ BoolT (~>) =>
-             (b :* Pair b) ~> (b :* b)
+  fullAdd :: b ~ BoolT k =>
+             (b :* Pair b) `k` (b :* b)
   fullAdd = second or . inLassocP (first halfAdd) . second (halfAdd . unPair)
 
 {-
@@ -129,21 +130,21 @@ instance AddCat (->)  -- use defaults
 
 -- Structure addition with carry in & out
 
-type Adds (~>) f = 
-  (BoolT (~>) :* f (Pair (BoolT (~>)))) ~> (f (BoolT (~>)) :* BoolT (~>))
+type Adds k f = 
+  (BoolT k :* f (Pair (BoolT k))) `k` (f (BoolT k) :* BoolT k)
 
-class AddCat (~>) => AddsCat (~>) f where
-  adds :: Adds (~>) f
+class AddCat k => AddsCat k f where
+  adds :: Adds k f
 
-type AddK (~>) = (ConstUCat (~>) (Vec Z (BoolT (~>))), AddCat (~>), VecCat (~>))
+type AddK k = (ConstUCat k (Vec Z (BoolT k)), AddCat k, VecCat k)
 
-instance (AddK (~>), IsNat n) => AddsCat (~>) (Vec n) where
+instance (AddK k, IsNat n) => AddsCat k (Vec n) where
   adds = addVN nat
 
--- Illegal irreducible constraint ConstKon (~>) () in superclass/instance head
+-- Illegal irreducible constraint ConstKon k () in superclass/instance head
 -- context (Use -XUndecidableInstances to permit this)
 
-type AddVP n = forall (~>). AddK (~>) => Adds (~>) (Vec n)
+type AddVP n = forall k. AddK k => Adds k (Vec n)
 
 addVN :: Nat n -> AddVP n
 addVN Zero     = lconst ZVec . fst
@@ -156,45 +157,45 @@ addVN (Succ n) = first toVecS . lassocP . second (addVN n)
 
 -- C carry, A addend pair, R result
 
-second unVecS    :: C :* As (S n) ~> C :* (A :* As n)
-lassocP          ::               ~> (C :* A) :* As n
-first fullAdd    ::               ~> (S :* C) :* As n
-rassocP          ::               ~> S :* (C :* As n)
-second (addVN n) ::               ~> S :* (Rs n :* C)
-lassocP          ::               ~> (S :* Rs n) :* C
-first toVecS     ::               ~> Rs (S n) :* C
+second unVecS    :: C :* As (S n) `k` C :* (A :* As n)
+lassocP          ::               `k` (C :* A) :* As n
+first fullAdd    ::               `k` (S :* C) :* As n
+rassocP          ::               `k` S :* (C :* As n)
+second (addVN n) ::               `k` S :* (Rs n :* C)
+lassocP          ::               `k` (S :* Rs n) :* C
+first toVecS     ::               `k` Rs (S n) :* C
 
 -}
 
--- TODO: Do I really need CTraversableKon, or can I make (~>) into an argument?
+-- TODO: Do I really need CTraversableKon, or can I make k into an argument?
 -- Try, and rename "CTraversable" to "TraversableCat". The Kon becomes superclass constraints.
 
 class CTraversable t where
-  type CTraversableKon t (~>) :: Constraint
-  type CTraversableKon t (~>) = () ~ () -- or just (), if it works
-  traverseC :: CTraversableKon t (~>) => (a ~> b) -> (t a ~> t b)
+  type CTraversableKon t k :: Constraint
+  type CTraversableKon t k = () ~ () -- or just (), if it works
+  traverseC :: CTraversableKon t k => (a `k` b) -> (t a `k` t b)
 
-type CTraversableWith t (~>) = (CTraversable t, CTraversableKon t (~>))
+type CTraversableWith t k = (CTraversable t, CTraversableKon t k)
 
 instance CTraversable (Vec Z) where
-  type CTraversableKon (Vec Z) (~>) = VecCat (~>)
+  type CTraversableKon (Vec Z) k = VecCat k
   traverseC _ = reVecZ
 
 instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
-  type CTraversableKon (Vec (S n)) (~>) =
-    (VecCat (~>), CTraversableKon (Vec n) (~>))
+  type CTraversableKon (Vec (S n)) k =
+    (VecCat k, CTraversableKon (Vec n) k)
   traverseC f = inVecS (f *** traverseC f)
 
 instance CTraversable Pair where
-  type CTraversableKon Pair (~>) = PairCat (~>)
+  type CTraversableKon Pair k = PairCat k
   traverseC f = inPair (f *** f)
 
 -- TODO: Maybe move Vec support to a new Vec module, alongside the RTree module.
 
 traverseCurry :: 
-  ( ConstUCat (~>) (t b), CTraversableWith t (~>), StrongCat (~>) t
-  , StrongKon (~>) t a b ) =>
-  t b -> ((a :* b) ~> c) -> (a ~> t c)
+  ( ConstUCat k (t b), CTraversableWith t k, StrongCat k t
+  , StrongKon k t a b ) =>
+  t b -> ((a :* b) `k` c) -> (a `k` t c)
 traverseCurry q h = traverseC h . lstrength . rconst q
 
 {- Derivation:
@@ -202,20 +203,20 @@ traverseCurry q h = traverseC h . lstrength . rconst q
 q :: t b
 h :: a :* b :> c
 
-rconst q    :: a          ~> (a :* t b)
-lstrength   :: a :* t b   ~> t (a :* b)
-traverseC h :: t (a :* b) ~> t c
+rconst q    :: a          `k` (a :* t b)
+lstrength   :: a :* t b   `k` t (a :* b)
+traverseC h :: t (a :* b) `k` t c
 
-traverse h . lstrength . rconst idTrie :: a ~> t c
+traverse h . lstrength . rconst idTrie :: a `k` t c
 
 -}
 
 -- Special case. To remove.
 
--- trieCurry :: ( HasTrie b, StrongCat (~>) (Trie b)
---              , CTraversableWith (Trie b) (~>)
---              , UnitCat (~>), ConstUCat (~>) (b :->: b) ) =>
---              ((a :* b) ~> c) -> (a ~> (b :->: c))
+-- trieCurry :: ( HasTrie b, StrongCat k (Trie b)
+--              , CTraversableWith (Trie b) k
+--              , UnitCat k, ConstUCat k (b :->: b) ) =>
+--              ((a :* b) `k` c) -> (a `k` (b :->: c))
 -- trieCurry = traverseCurry idTrie
 
 -- TODO: Move CTraversable and trieCurry to Category.
@@ -225,22 +226,22 @@ traverse h . lstrength . rconst idTrie :: a ~> t c
     Addition via state and traversal
 --------------------------------------------------------------------}
 
-type AddState (~~>) =
-  (StateCat (~~>), StateKon (~~>), StateT (~~>) ~ BoolT (StateBase (~~>)), AddCat (StateBase (~~>)))
+type AddState sk =
+  (StateCat sk, StateKon sk, StateT sk ~ BoolT (StateBase sk), AddCat (StateBase sk))
 
--- Simpler but exposes (~>):
+-- Simpler but exposes k:
 -- 
---   type AddState (~~>) (~>) b =
---     (StateCatWith (~~>) (~>) b, AddCat (~>), b ~ Bool)
+--   type AddState sk k b =
+--     (StateCatWith sk k b, AddCat k, b ~ Bool)
 
 -- | Full adder with 'StateCat' interface
-fullAddS :: AddState (~~>) => b ~ BoolT (StateBase (~~>)) =>
-                              Pair b ~~> b
+fullAddS :: AddState sk => b ~ BoolT (StateBase sk) =>
+                              Pair b `sk` b
 fullAddS = state fullAdd
 
 -- | Structure adder with 'StateCat' interface
-addS :: (AddState (~~>), CTraversableWith f (~~>), b ~ BoolT (StateBase (~~>))) =>
-        f (Pair b) ~~> f b
+addS :: (AddState sk, CTraversableWith f sk, b ~ BoolT (StateBase sk)) =>
+        f (Pair b) `sk` f b
 addS = traverseC fullAddS
 
 -- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.

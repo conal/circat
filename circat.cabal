@@ -7,8 +7,8 @@ Description:
   Experiments in circuit construction using a categorical vocabulary
 Author:              Conal Elliott
 Maintainer:          conal@tabula.com
-Copyright:           (c) 2013 by Tabula, Inc
-License:             AllRightsReserved
+Copyright:           (c) 2013 by Tabula Inc
+License:             BSD3
 Stability:           experimental
 build-type:          Simple
 

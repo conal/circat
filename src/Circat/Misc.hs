@@ -8,6 +8,7 @@
 -- |
 -- Module      :  Circat.Misc
 -- Copyright   :  (c) 2013 Tabula, Inc.
+-- License     :  BSD3
 -- 
 -- Maintainer  :  conal@tabula.com
 -- Stability   :  experimental

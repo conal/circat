@@ -56,16 +56,16 @@ instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B uv) = showsApp1 "B" p uv
 
-class PairCat (~>) => TreeCat (~>) where
-  toL :: a ~> Tree Z a
-  unL :: Tree Z a ~> a
-  toB :: IsNat n => Pair (Tree n a) ~> Tree (S n) a
-  unB :: IsNat n => Tree (S n) a ~> Pair (Tree n a)
+class PairCat k => TreeCat k where
+  toL :: a `k` Tree Z a
+  unL :: Tree Z a `k` a
+  toB :: IsNat n => Pair (Tree n a) `k` Tree (S n) a
+  unB :: IsNat n => Tree (S n) a `k` Pair (Tree n a)
 
-toB' :: (TreeCat (~>), IsNat n) => (Tree n a :* Tree n a) ~> Tree (S n) a
+toB' :: (TreeCat k, IsNat n) => (Tree n a :* Tree n a) `k` Tree (S n) a
 toB' = toB . toPair
 
-unB' :: (TreeCat (~>), IsNat n) => Tree (S n) a ~> (Tree n a :* Tree n a)
+unB' :: (TreeCat k, IsNat n) => Tree (S n) a `k` (Tree n a :* Tree n a)
 unB' = unPair . unB
 
 instance TreeCat (->) where
@@ -80,33 +80,33 @@ instance Monad m => TreeCat (Kleisli m) where
   toB = arr toB
   unB = arr unB
 
-instance (UnitCat (~>), TreeCat (~>)) => TreeCat (StateFun (~>) s) where
+instance (UnitCat k, TreeCat k) => TreeCat (StateFun k s) where
   toL = pureState toL
   unL = pureState unL
   toB = pureState toB
   unB = pureState unB
 
-instance (ClosedCatWith (~>) s, UnitCat (~>), TreeCat (~>))
-      => TreeCat (StateExp (~>) s) where
+instance (ClosedCatWith k s, UnitCat k, TreeCat k)
+      => TreeCat (StateExp k s) where
   toL = pureState toL
   unL = pureState unL
   toB = pureState toB
   unB = pureState unB
 
-inL :: TreeCat (~>) => (a ~> b) -> (Tree Z a ~> Tree Z b)
+inL :: TreeCat k => (a `k` b) -> (Tree Z a `k` Tree Z b)
 inL = toL <~ unL
 
-inB :: (TreeCat (~>), IsNat m, IsNat n) =>
-       (Pair (Tree m a) ~> Pair (Tree n b))
-    -> (Tree (S m) a ~> Tree (S n) b)
+inB :: (TreeCat k, IsNat m, IsNat n) =>
+       (Pair (Tree m a) `k` Pair (Tree n b))
+    -> (Tree (S m) a `k` Tree (S n) b)
 inB = toB <~ unB
 
-inL2 :: TreeCat (~>) => (a -> b ~> c) -> (Tree Z a -> Tree Z b ~> Tree Z c)
+inL2 :: TreeCat k => (a -> b `k` c) -> (Tree Z a -> Tree Z b `k` Tree Z c)
 inL2 = inL <~ unL
 
-inB2 :: (TreeCat (~>), IsNat m, IsNat n, IsNat o) =>
-        (Pair (Tree m a) -> Pair (Tree n b) ~> Pair (Tree o c))
-     -> (Tree (S m) a -> Tree (S n) b ~> Tree (S o) c)
+inB2 :: (TreeCat k, IsNat m, IsNat n, IsNat o) =>
+        (Pair (Tree m a) -> Pair (Tree n b) `k` Pair (Tree o c))
+     -> (Tree (S m) a -> Tree (S n) b `k` Tree (S o) c)
 inB2 = inB <~ unB
 
 -- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
@@ -180,24 +180,24 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -}
 
 instance CTraversable (Tree Z) where
-  type CTraversableKon (Tree Z) (~>) = TreeCat (~>)
+  type CTraversableKon (Tree Z) k = TreeCat k
   traverseC = inL
 
 instance (IsNat n, CTraversable (Tree n)) => CTraversable (Tree (S n)) where
-  type CTraversableKon (Tree (S n)) (~>) =
-    (TreeCat (~>), CTraversableKon (Tree n) (~>))
+  type CTraversableKon (Tree (S n)) k =
+    (TreeCat k, CTraversableKon (Tree n) k)
   traverseC = inB . traverseC . traverseC
 
 {--------------------------------------------------------------------
     Addition
 --------------------------------------------------------------------}
 
-instance (ConstCat (~>), AddCat (~>), TreeCat (~>), IsNat n)
-      => AddsCat (~>) (Tree n) where
+instance (ConstCat k, AddCat k, TreeCat k, IsNat n)
+      => AddsCat k (Tree n) where
   adds = addTN nat
 
-type AddTP n = forall (~>). (ConstCat (~>), AddCat (~>), TreeCat (~>)) =>
-               Adds (~>) (Tree n)
+type AddTP n = forall k. (ConstCat k, AddCat k, TreeCat k) =>
+               Adds k (Tree n)
 
 addTN :: Nat n -> AddTP n
 addTN Zero     = first toL . fullAdd . second unL
@@ -211,13 +211,13 @@ addTN (Succ n) =
 
 -- C carry, A addend pair, R result
 
-second unB'      :: C * As (S n) ~> C * (As n * As n)
-lassocP          ::              ~> (C * As n) * As n
-first (addTN n)  ::              ~> (Rs n * C) * As n
-rassocP          ::              ~> Rs n * (C * As n)
-second (addTN n) ::              ~> Rs n * (Rs n * C)
-lassocP          ::              ~> (Rs n * Rs n) * C
-first toB'       ::              ~> Rs (S n) * C
+second unB'      :: C * As (S n) `k` C * (As n * As n)
+lassocP          ::              `k` (C * As n) * As n
+first (addTN n)  ::              `k` (Rs n * C) * As n
+rassocP          ::              `k` Rs n * (C * As n)
+second (addTN n) ::              `k` Rs n * (Rs n * C)
+lassocP          ::              `k` (Rs n * Rs n) * C
+first toB'       ::              `k` Rs (S n) * C
 
 -}
 

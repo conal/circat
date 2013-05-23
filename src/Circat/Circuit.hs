@@ -14,6 +14,7 @@
 -- |
 -- Module      :  Circat.Circuit
 -- Copyright   :  (c) 2013 Tabula, Inc.
+-- License     :  BSD3
 -- 
 -- Maintainer  :  conal@tabula.com
 -- Stability   :  experimental
@@ -336,22 +337,22 @@ bc = id
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-c0 :: BoolWith (~>) b => b ~> b
+c0 :: BoolWith k b => b `k` b
 c0 = id
 
-c1 :: BoolWith (~>) b => b ~> b
+c1 :: BoolWith k b => b `k` b
 c1 = not . not
 
-c2 :: BoolWith (~>) b => (b :* b) ~> b
+c2 :: BoolWith k b => (b :* b) `k` b
 c2 = not . and
 
-c3 :: BoolWith (~>) b => (b :* b) ~> b
+c3 :: BoolWith k b => (b :* b) `k` b
 c3 = not . and . (not *** not)
 
-c4 :: BoolWith (~>) b => (b :* b) ~> (b :* b)
+c4 :: BoolWith k b => (b :* b) `k` (b :* b)
 c4 = swapP  -- no components
 
-c5 :: BoolWith (~>) b => (b :* b) ~> (b :* b)
+c5 :: BoolWith k b => (b :* b) `k` (b :* b)
 c5 = xor &&& and   -- half-adder
 
 c6 :: b ~ BoolT (:>) => () :> b
@@ -464,8 +465,8 @@ outAll = do outSimples ; outVecs ; outTrees
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSource s, IsSource2 a b, StateCatWith (~~>) (:>) s) =>
-         String -> (a ~~> b) -> IO ()
+outSG :: (IsSource s, IsSource2 a b, StateCatWith sk (:>) s) =>
+         String -> (a `sk` b) -> IO ()
 outSG name = outG name . runState
 
 type (:->) = StateFun (:>) (BoolT (:>))
@@ -527,9 +528,9 @@ curry   :: ((a :* b) :> c) -> (a :> (b :->: c))
 uncurry :: (a :> (b :->: c)) -> (a :* b) :> c
 -}
 
---   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
---   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
---   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+--   apply   :: ClosedKon k a => (Exp k a b :* a) `k` b
+--   curry   :: ClosedKon k b => ((a :* b) `k` c) -> (a `k` Exp k b c)
+--   uncurry :: ClosedKon k b => (a `k` Exp k b c) -> (a :* b) `k` c
 
 applyC :: ( HasTrie a, IsSource2 a b, IsSource (a :->: b) ) =>
           ((a :->: b) :* a) :> b
@@ -560,10 +561,10 @@ apply . first h :: (a :* b) :> c
 
 -}
 
--- instance ClosedCatU (~>) s => StateCat (StateExp (~>) s) where
---   type StateKon  (StateExp (~>) s) = ClosedKon (~>) s
---   type StateBase (StateExp (~>) s) = (~>)
---   type StateT    (StateExp (~>) s) = s
+-- instance ClosedCatU k s => StateCat (StateExp k s) where
+--   type StateKon  (StateExp k s) = ClosedKon k s
+--   type StateBase (StateExp k s) = k
+--   type StateT    (StateExp k s) = s
 --   state    f  = StateExp (curry (f . swapP))
 --   runState st = uncurry (unStateExp st) . swapP
 
@@ -663,9 +664,9 @@ distribMF u p = liftM ($ p) u
 --   curry   = inNew $ \ f -> sequence . trie . curry f
 --   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
 
---   apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
---   curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
---   uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> (a :* b) ~> c
+--   apply   :: ClosedKon k a => (Exp k a b :* a) `k` b
+--   curry   :: ClosedKon k b => ((a :* b) `k` c) -> (a `k` Exp k b c)
+--   uncurry :: ClosedKon k b => (a `k` Exp k b c) -> (a :* b) `k` c
 
 {-
   apply   :: ClosedKon (:>) a => ((Unpins a :->: b) :* a) :> b

@@ -10,6 +10,7 @@
 -- |
 -- Module      :  Circat.Category
 -- Copyright   :  (c) 2013 Tabula, Inc.
+-- License     :  BSD3
 -- 
 -- Maintainer  :  conal@tabula.com
 -- Stability   :  experimental
@@ -59,53 +60,53 @@ instance Yes2 a b
 -- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
 -- associated type. Keep the types fairly pretty.
-class Category (~>) => ProductCat (~>) where
-  fst     :: (a :* b) ~> a
-  snd     :: (a :* b) ~> b
-  dup     :: a ~> (a :* a)
+class Category k => ProductCat k where
+  fst     :: (a :* b) `k` a
+  snd     :: (a :* b) `k` b
+  dup     :: a `k` (a :* a)
   dup     =  id &&& id
-  swapP   :: (a :* b) ~> (b :* a)
+  swapP   :: (a :* b) `k` (b :* a)
   swapP   =  snd &&& fst
-  (***)   :: (a ~> c) -> (b ~> d) -> ((a :* b) ~> (c :* d))
+  (***)   :: (a `k` c) -> (b `k` d) -> ((a :* b) `k` (c :* d))
   f *** g =  f . fst &&& g . snd
-  (&&&)   :: (a ~> c) -> (a ~> d) -> (a ~> (c :* d))
+  (&&&)   :: (a `k` c) -> (a `k` d) -> (a `k` (c :* d))
   f &&& g =  (f *** g) . dup
-  first   :: (a ~> a') -> ((a :* b) ~> (a' :* b))
+  first   :: (a `k` a') -> ((a :* b) `k` (a' :* b))
   first   =  (*** id)
-  second  :: (b ~> b') -> ((a :* b) ~> (a :* b'))
+  second  :: (b `k` b') -> ((a :* b) `k` (a :* b'))
   second  =  (id ***)
-  lassocP :: (a :* (b :* c)) ~> ((a :* b) :* c)
+  lassocP :: (a :* (b :* c)) `k` ((a :* b) :* c)
   lassocP =  second fst &&& (snd . snd)
-  rassocP :: ((a :* b) :* c) ~> (a :* (b :* c))
+  rassocP :: ((a :* b) :* c) `k` (a :* (b :* c))
   rassocP =  (fst . fst) &&& first  snd
 
---   ldistribP :: (a, u :* v) ~> ((a,u) :* (a,v))
+--   ldistribP :: (a, u :* v) `k` ((a,u) :* (a,v))
 --   ldistribP =  transPair . first  dup -- second fst &&& second snd
---   rdistribP :: (u :* v, b) ~> ((u,b) :* (v,b))
+--   rdistribP :: (u :* v, b) `k` ((u,b) :* (v,b))
 --   rdistribP =  transPair . second dup -- first  fst &&& first  snd
 
 -- | Operate on left-associated form
-inLassocP :: ProductCat (~>) =>
-             (((a :* b) :* c) ~> ((a' :* b') :* c'))
-          -> ((a :* (b :* c)) ~> (a' :* (b' :* c')))
+inLassocP :: ProductCat k =>
+             (((a :* b) :* c) `k` ((a' :* b') :* c'))
+          -> ((a :* (b :* c)) `k` (a' :* (b' :* c')))
 inLassocP = rassocP <~ lassocP
 
 -- | Operate on right-associated form
-inRassocP :: ProductCat (~>) =>
-             ((a :* (b :* c)) ~> (a' :* (b' :* c')))
-          -> (((a :* b) :* c) ~> ((a' :* b') :* c'))
+inRassocP :: ProductCat k =>
+             ((a :* (b :* c)) `k` (a' :* (b' :* c')))
+          -> (((a :* b) :* c) `k` ((a' :* b') :* c'))
 inRassocP = lassocP <~ rassocP
 
 -- | Left-associate and operate on left
-inLassocPF :: ProductCat (~>) =>
-              ((a :* b) ~> (a' :* b'))
-           -> ((a :* (b :* c)) ~> (a' :* (b' :* c)))
+inLassocPF :: ProductCat k =>
+              ((a :* b) `k` (a' :* b'))
+           -> ((a :* (b :* c)) `k` (a' :* (b' :* c)))
 inLassocPF = inLassocP . first
 
 -- | Right-associate and operate on right
-inRassocPS :: ProductCat (~>) =>
-              ((b :* c) ~> (b' :* c'))
-           -> (((a :* b) :* c) ~> ((a :* b') :* c'))
+inRassocPS :: ProductCat k =>
+              ((b :* c) `k` (b' :* c'))
+           -> (((a :* b) :* c) `k` ((a :* b') :* c'))
 inRassocPS = inRassocP . second
 
 
@@ -114,29 +115,29 @@ infixr 2 +++, |||
 -- | Category with co-product. Minimal definition: 'lft', 'rht', and either
 -- (a) '(|||)', (b) both '(+++)' and 'jam', or (c) both '(|||)' and '(+++)'.
 -- TODO: Generalize '(:+)' to an associated type. Keep the types fairly pretty.
-class Category (~>) => CoproductCat (~>) where
-  lft       :: a ~> (a :+ b)
-  rht       :: b ~> (a :+ b)
-  jam       :: (a :+ a) ~> a                  -- dual to dup. standard name?
+class Category k => CoproductCat k where
+  lft       :: a `k` (a :+ b)
+  rht       :: b `k` (a :+ b)
+  jam       :: (a :+ a) `k` a                  -- dual to dup. standard name?
   jam       =  id ||| id
-  (+++)     :: (a ~> c) -> (b ~> d) -> ((a :+ b) ~> (c :+ d))
+  (+++)     :: (a `k` c) -> (b `k` d) -> ((a :+ b) `k` (c :+ d))
   f +++ g   =  lft . f ||| rht . g
-  (|||)     :: (a ~> c) -> (b ~> c) -> ((a :+ b) ~>  c)
+  (|||)     :: (a `k` c) -> (b `k` c) -> ((a :+ b) `k`  c)
   f ||| g   =  jam . (f +++ g)
-  left      :: (a ~> a') -> ((a :+ b) ~> (a' :+ b ))
+  left      :: (a `k` a') -> ((a :+ b) `k` (a' :+ b ))
   left      =  (+++ id)
-  right     :: (b ~> b') -> ((a :+ b) ~> (a  :+ b'))
+  right     :: (b `k` b') -> ((a :+ b) `k` (a  :+ b'))
   right     =  (id +++)
-  ldistribS :: (a, u :+ v) ~> ((a,u) :+ (a,v))
-  rdistribS :: (u :+ v, b) ~> ((u,b) :+ (v,b))
-  swapS     :: (a :+ b) ~> (b :+ a)
+  ldistribS :: (a, u :+ v) `k` ((a,u) :+ (a,v))
+  rdistribS :: (u :+ v, b) `k` ((u,b) :+ (v,b))
+  swapS     :: (a :+ b) `k` (b :+ a)
   swapS     =  rht ||| lft
-  lassocS   :: (a :+ (b :+ c)) ~> ((a :+ b) :+ c)
-  rassocS   :: ((a :+ b) :+ c) ~> (a :+ (b :+ c))
+  lassocS   :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
+  rassocS   :: ((a :+ b) :+ c) `k` (a :+ (b :+ c))
   lassocS   =  lft.lft ||| (lft.rht ||| rht)
   rassocS   =  (lft ||| rht.lft) ||| rht.rht
 
-  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat (~>)
+  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
 
 instance ProductCat (->) where
   fst   = P.fst
@@ -171,12 +172,12 @@ instance Monad m => CoproductCat (Kleisli m) where
 
 
 -- | Category with constant morphisms
-class Category (~>) => ConstCat (~>) where
-  type ConstKon (~>) a b :: Constraint
-  type ConstKon (~>) a b = Yes2 a b           -- fix
-  const :: ConstKon (~>) a b => b -> (a ~> b)
+class Category k => ConstCat k where
+  type ConstKon k a b :: Constraint
+  type ConstKon k a b = Yes2 a b           -- fix
+  const :: ConstKon k a b => b -> (a `k` b)
 
-type ConstCatWith (~>) a b = (ConstCat (~>), ConstKon (~>) a b)
+type ConstCatWith k a b = (ConstCat k, ConstKon k a b)
 
 instance ConstCat (->) where
   -- type ConstKon (->) a b = ()           -- fix
@@ -187,22 +188,22 @@ instance Monad m => ConstCat (Kleisli m) where
   const a = arr (const a)
 
 -- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
-class ProductCat (~>) => UnitCat (~>) where
-  type UnitKon (~>) a :: Constraint
-  type UnitKon (~>) a = Yes a
-  lunit :: a ~> (() :* a)
+class ProductCat k => UnitCat k where
+  type UnitKon k a :: Constraint
+  type UnitKon k a = Yes a
+  lunit :: a `k` (() :* a)
   lunit = swapP . runit
-  runit :: a ~> (a :* ())
+  runit :: a `k` (a :* ())
   runit = swapP . lunit
 
-type ConstUCat (~>) b = (UnitCat (~>), ConstCatWith (~>) () b)
+type ConstUCat k b = (UnitCat k, ConstCatWith k () b)
 
 -- | Inject a constant on the left
-lconst :: ConstUCat (~>) a => a -> (b ~> (a :* b))
+lconst :: ConstUCat k a => a -> (b `k` (a :* b))
 lconst a = first  (const a) . lunit
 
 -- | Inject a constant on the right
-rconst :: ConstUCat (~>) b => b -> (a ~> (a :* b))
+rconst :: ConstUCat k b => b -> (a `k` (a :* b))
 rconst b = second (const b) . runit
 
 instance UnitCat (->) where
@@ -213,10 +214,10 @@ instance Monad m => UnitCat (Kleisli m) where
   lunit = arr lunit
   runit = arr runit
 
-class ProductCat (~>) => StrongCat (~>) f where
-  type StrongKon (~>) f a b :: Constraint
-  lstrength :: StrongKon (~>) f a b => (a :* f b) ~> f (a :* b)
-  rstrength :: StrongKon (~>) f a b => (f a :* b) ~> f (a :* b)
+class ProductCat k => StrongCat k f where
+  type StrongKon k f a b :: Constraint
+  lstrength :: StrongKon k f a b => (a :* f b) `k` f (a :* b)
+  rstrength :: StrongKon k f a b => (f a :* b) `k` f (a :* b)
 
 -- TODO: Use generalized Functor
 
@@ -233,15 +234,15 @@ instance (Monad m, Functor f) => StrongCat (Kleisli m) f where
 -- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories
 -- package:
 
-class ProductCat (~>) => ClosedCat (~>) where
-  type ClosedKon (~>) u :: Constraint  -- ^ On the 'Exp' domain
-  type ClosedKon (~>) u = ()
-  type Exp (~>) u v
-  apply   :: ClosedKon (~>) a => (Exp (~>) a b :* a) ~> b
-  curry   :: ClosedKon (~>) b => ((a :* b) ~> c) -> (a ~> Exp (~>) b c)
-  uncurry :: ClosedKon (~>) b => (a ~> Exp (~>) b c) -> ((a :* b) ~> c)
+class ProductCat k => ClosedCat k where
+  type ClosedKon k u :: Constraint  -- On the 'Exp' domain
+  type ClosedKon k u = ()
+  type Exp k u v
+  apply   :: ClosedKon k a => (Exp k a b :* a) `k` b
+  curry   :: ClosedKon k b => ((a :* b) `k` c) -> (a `k` Exp k b c)
+  uncurry :: ClosedKon k b => (a `k` Exp k b c) -> ((a :* b) `k` c)
 
-type ClosedCatWith (~>) u = (ClosedCat (~>), ClosedKon (~>) u)
+type ClosedCatWith k u = (ClosedCat k, ClosedKon k u)
 
 instance ClosedCat (->) where
   type Exp (->) u v = u -> v
@@ -273,14 +274,14 @@ instance ClosedCat (->) where
 
 Derivations:
 
-apply :: ((a +> b) :* a) ~> b
+apply :: ((a +> b) :* a) `k` b
       :: Kleisli m ((a :->: b) :* a) b
       =~ (a :->: b) :* a -> m b
 
 return . uncurry untrie :: (a :->: b) :* a -> m b
 Kleisli (return . uncurry untrie) :: Kleisli m ((a :->: b) :* a) b
 
-curry :: ((a :* b) ~> c) -> a ~> (b +> c)
+curry :: ((a :* b) `k` c) -> a `k` (b +> c)
       :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
       =~ (a :* b -> m c) -> (a -> m (b :->: c))
 
@@ -292,7 +293,7 @@ sequenceA . trie . curry f :: a -> m (b :->: c)
 inNew (\ f -> sequenceA . trie . curry f)
   :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
 
-uncurry :: a ~> (b +> c) -> ((a :* b) ~> c)
+uncurry :: a `k` (b +> c) -> ((a :* b) `k` c)
         :: Kleisli m a (b :->: c) -> Kleisli m (a :* b) c
         =~ (a -> m (b :->: c)) -> (a :* b -> m c)
 

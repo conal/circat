@@ -11,6 +11,7 @@
 -- |
 -- Module      :  Circat.Pair
 -- Copyright   :  (c) 2013 Tabula, Inc.
+-- License     :  BSD3
 -- 
 -- Maintainer  :  conal@tabula.com
 -- Stability   :  experimental
@@ -36,9 +37,9 @@ import Circat.State (pureState,StateFun,StateExp)
 -- 
 -- plus many more instances
 
-class ProductCat (~>) => PairCat (~>) where
-  toPair :: (a :* a) ~> Pair a
-  unPair :: Pair a ~> (a :* a)
+class ProductCat k => PairCat k where
+  toPair :: (a :* a) `k` Pair a
+  unPair :: Pair a `k` (a :* a)
 
 instance PairCat (->) where
   toPair (a,b) = a :# b
@@ -48,18 +49,18 @@ instance Monad m => PairCat (Kleisli m) where
   toPair = arr toPair
   unPair = arr unPair
 
-instance (UnitCat (~>), PairCat (~>)) => PairCat (StateFun (~>) s) where
+instance (UnitCat k, PairCat k) => PairCat (StateFun k s) where
   toPair = pureState toPair
   unPair = pureState unPair
 
-instance (ClosedCatWith (~>) s, UnitCat (~>), PairCat (~>))
-      => PairCat (StateExp (~>) s) where
+instance (ClosedCatWith k s, UnitCat k, PairCat k)
+      => PairCat (StateExp k s) where
   toPair = pureState toPair
   unPair = pureState unPair
 
---     Illegal irreducible constraint ClosedKon (~>) s
+--     Illegal irreducible constraint ClosedKon k s
 --     in superclass/instance head context (Use -XUndecidableInstances to permit this)
 
-inPair :: PairCat (~>) =>
-          ((a :* a) ~> (b :* b)) -> (Pair a ~> Pair b)
+inPair :: PairCat k =>
+          ((a :* a) `k` (b :* b)) -> (Pair a `k` Pair b)
 inPair = toPair <~ unPair
