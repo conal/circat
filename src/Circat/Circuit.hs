@@ -24,8 +24,8 @@
 
 module Circat.Circuit 
   (CircuitM, (:>), (:~>)
-  , Pin, Pins, IsSource2
-  , Comp', CompNum, toG, outG, constC
+  , Pin, Pins, IsSource, IsSource2, namedC, constC
+  , Comp', CompNum, toG, outG
   , simpleComp, runC, tagged
   ) where
 
