@@ -12,6 +12,10 @@
 -- 
 -- Circuit to Netlist conversion
 ----------------------------------------------------------------------
+
+-- TODO: Use Text.Printf to replace the awkward string formations in this
+-- module.
+
 module Circat.Netlist 
   ( toNetlist, mk_module
   , genVHDL, V.ppModule
@@ -190,4 +194,3 @@ portComp dir comps
            ++ " found in the list of comps. "
            ++ if length fC > 1 then " Multiple comps found " ++ show fC 
               else " No comps found."
-
