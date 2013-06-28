@@ -257,8 +257,8 @@ outG name circ =
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
-     --systemSuccess $
-       --printf "%s %s" open (outFile outType)
+     systemSuccess $
+       printf "%s %s" open (outFile outType)
  where
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
@@ -267,7 +267,7 @@ outG name circ =
                    -- ("png","-Gdpi=200")
    open = case SI.os of
             "darwin" -> "open"
-            "linux"  -> "xdg-open"
+            "linux"  -> "acroread"
             _        -> error "unknown open for OS"
 
 type DGraph = String
