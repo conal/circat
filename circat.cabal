@@ -17,6 +17,7 @@ Library
   Include-Dirs:        src
   Build-Depends:       base<5, ghc-prim, containers, process, directory, newtype, mtl
                      , type-unary, functor-combo >= 0.3.1
+                     , netlist >= 0.3.1, verilog >= 0.2, netlist-to-verilog >= 0.1, netlist-to-vhdl >= 0.3.1
   Exposed-Modules:     
                        Circat.Misc
                        Circat.Show
@@ -26,3 +27,5 @@ Library
                        Circat.Pair
                        Circat.RTree
                        Circat.Circuit
+                       Circat.Examples
+                       Circat.Netlist
