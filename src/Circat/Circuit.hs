@@ -267,7 +267,7 @@ outG name circ =
                    -- ("png","-Gdpi=200")
    open = case SI.os of
             "darwin" -> "open"
-            "linux"  -> "acroread"
+            "linux"  -> "display"
             _        -> error "unknown open for OS"
 
 type DGraph = String

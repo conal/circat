@@ -88,6 +88,7 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
           ++ show name ++ " not supported."
+
 -- unary operations                                                  
 moduleAssign p2w c@(_,(name,[i],[o])) = 
   [NetAssign (lw o p2w) (ExprUnary unaryOp iE)]
@@ -102,10 +103,14 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
           ++ show name ++ " not supported." ++ show c
 
 -- constant sources
-moduleAssign p2w (_,(name,[],[o])) = [NetAssign (lw o p2w) (ExprLit Nothing exprBit)] 
-  where exprBit = case name of 
-                    "True"  -> ExprBit T
-                    "False" -> ExprBit F
+moduleAssign p2w (_,(name,[],[o])) = 
+  [NetAssign (lw o p2w) (ExprLit Nothing (ExprBit bit))] 
+  where 
+    bit = case name of 
+            "True"  -> T
+            "False" -> F
+            _       -> error $ "Circat.Netlist.moduleAssign: Literal "
+                       ++ name ++ " not recognized."
 
 -- output assignments
 moduleAssign p2w (_,("Out",ps,[])) =
