@@ -276,6 +276,9 @@ outG name circ =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
+-- TODO: Instead of failing, emit a message about the generated file. Perhaps
+-- simply use "echo".
+
 type DGraph = String
 
 toG :: IsSource2 a b => (a :> b) -> DGraph
