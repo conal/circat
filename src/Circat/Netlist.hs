@@ -68,10 +68,14 @@ moduleAssigns :: Map Pin String -> [(CompNum,Comp')] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
 moduleAssign :: Map Pin String -> (CompNum,Comp') -> [Decl]
-moduleAssign _ (_,("In",_,_)) = []
+-- "In" comps are never assigned
+moduleAssign _ (_,("In",_,_)) = [] 
+-- binary operations
 moduleAssign p2w (_,(name,[i0,i1],[o])) = 
-  [NetAssign (lw o p2w) (ExprBinary binOp (expVar i0 p2w) (expVar i1 p2w))]
+  [NetAssign (lw o p2w) (ExprBinary binOp i0E i1E)]
   where
+    i0E = expVar i0 p2w
+    i1E = expVar i1 p2w
     binOp = 
       case name of
         "and"  -> And
@@ -84,10 +88,11 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
           ++ show name ++ " not supported."
-                                              
+-- unary operations                                                  
 moduleAssign p2w c@(_,(name,[i],[o])) = 
-  [NetAssign (lw o p2w) (ExprUnary unaryOp (expVar i p2w))]
+  [NetAssign (lw o p2w) (ExprUnary unaryOp iE)]
   where
+    iE = expVar i p2w
     unaryOp = 
       case name of
         "not" -> Neg
@@ -96,17 +101,20 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
           ++ show name ++ " not supported." ++ show c
 
-moduleAssign p2w (_,("Out",ps,[])) =
-  map (\(n,p) -> NetAssign (outPortName n) (expVar p p2w)) (tagged ps)
-  where
-     outPortName = portName "Out" ps
-
+-- constant sources
 moduleAssign p2w (_,(name,[],[o])) = [NetAssign (lw o p2w) (ExprLit (Just 1) exprBit)] 
   where exprBit = case name of 
                     "True"  -> ExprBit T
                     "False" -> ExprBit F
-         
-moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c ++ " not supported."
+
+-- output assignments
+moduleAssign p2w (_,("Out",ps,[])) =
+  map (\(n,p) -> NetAssign (outPortName n) (expVar p p2w)) (tagged ps)
+  where
+     outPortName = portName "Out" ps
+     
+moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
+                   ++ " not supported."
 
 expVar :: Pin -> Map Pin String -> Expr
 expVar p p2w = ExprVar (lw p p2w)
@@ -120,8 +128,8 @@ lookupWireName pin p2w = fromMaybe err (M.lookup pin p2w)
     err = error ("Circat.Netlist.lookupWireName: Pin " ++ show pin
                  ++ " does not have a wire name.")
     
-
--- | Generates a wire declaration for all Comp outputs
+-- | Generates a wire declaration for all Comp outputs along with 
+-- a map from Pin to wire name
 moduleNets :: [(CompNum,Comp')] -> ([PinToWireName],[Decl])
 moduleNets = unzip . concatMap moduleNet
 
