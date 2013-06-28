@@ -28,3 +28,4 @@ Library
                        Circat.RTree
                        Circat.Circuit
                        Circat.Examples
+                       Circat.Netlist
