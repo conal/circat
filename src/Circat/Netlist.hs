@@ -102,7 +102,7 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
           ++ show name ++ " not supported." ++ show c
 
 -- constant sources
-moduleAssign p2w (_,(name,[],[o])) = [NetAssign (lw o p2w) (ExprLit (Just 1) exprBit)] 
+moduleAssign p2w (_,(name,[],[o])) = [NetAssign (lw o p2w) (ExprLit Nothing exprBit)] 
   where exprBit = case name of 
                     "True"  -> ExprBit T
                     "False" -> ExprBit F
