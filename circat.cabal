@@ -1,31 +1,37 @@
-Name:                circat
-Version:             0.1
-Cabal-Version:       >= 1.6
-Synopsis:            A categorical framework for circuit construction
-Category:            circuits, categories
+Name:               circat
+Version:            0.1
+Cabal-Version:      >= 1.6
+Synopsis:           A categorical framework for circuit construction
+Category:           circuits, categories
 Description: 
   Experiments in circuit construction using a categorical vocabulary
-Author:              Conal Elliott
-Maintainer:          conal@tabula.com
-Copyright:           (c) 2013 by Tabula Inc
-License:             BSD3
-Stability:           experimental
-build-type:          Simple
+Author:             Conal Elliott
+Maintainer:         conal@tabula.com
+Copyright:          (c) 2013 by Tabula Inc
+License:            BSD3
+Stability:          experimental
+build-type:         Simple
+
+source-repository head
+  type:             git
+  location:         git://github.com/conal/circat
 
 Library
-  hs-Source-Dirs:      src
-  Include-Dirs:        src
-  Build-Depends:       base<5, ghc-prim, containers, process, directory, newtype, mtl
-                     , type-unary, functor-combo >= 0.3.1
-                     , netlist >= 0.3.1, verilog >= 0.2, netlist-to-verilog >= 0.1, netlist-to-vhdl >= 0.3.1
+  hs-Source-Dirs:   src
+  Include-Dirs:     src
+  Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
+                  , type-unary, functor-combo >= 0.3.1
+                  , netlist >= 0.3.1, verilog >= 0.2
+                  , netlist-to-verilog >= 0.1, netlist-to-vhdl >= 0.3.1
   Exposed-Modules:     
-                       Circat.Misc
-                       Circat.Show
-                       Circat.Category
-                       Circat.State
-                       Circat.Classes
-                       Circat.Pair
-                       Circat.RTree
-                       Circat.Circuit
-                       Circat.Examples
-                       Circat.Netlist
+                    Circat.Misc
+                    Circat.Show
+                    Circat.Category
+                    Circat.State
+                    Circat.Classes
+                    Circat.Pair
+                    Circat.RTree
+                    Circat.Circuit
+                    Circat.Netlist
+  Other-Modules:
+                    Circat.Examples
