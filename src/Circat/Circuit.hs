@@ -22,7 +22,10 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-module Circat.Circuit (CircuitM,(:>), toG, outG, bc, outAll) where
+module Circat.Circuit
+  ( CircuitM, Pins, (:>), (:~>), constC
+  , toG, outG, bc, outAll
+  ) where
 
 import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry,sequence)
 import qualified Prelude as P
@@ -98,6 +101,7 @@ class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: CircuitM a
 
+-- Instantiate a 'Prim'
 genComp :: forall a b. IsSource2 a b =>
            Prim a b -> a -> CircuitM b
 genComp prim a = do b <- genSource
@@ -162,10 +166,12 @@ type instance Pins (Tree n a) = Tree n (Pins a)
     Circuit category
 --------------------------------------------------------------------}
 
-infixl 1 :>
+infixl 1 :>, :~>
 
 -- | Circuit category
 type (:>) = Kleisli CircuitM
+
+type a :~> b = Pins a :> Pins b
 
 mkC :: (a -> CircuitM b) -> (a :> b)
 mkC = Kleisli
