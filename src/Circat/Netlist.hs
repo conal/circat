@@ -18,19 +18,18 @@ module Circat.Netlist
   , toV, outV) where
 
 import Data.Functor ((<$>))
-import Data.Maybe(fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as M
 
 import System.Directory (createDirectoryIfMissing)
 
-import Circat.Circuit ((:>), IsSource2, Comp', simpleComp, runC
-                      , tagged, CompNum
-                      , Pin)
+import Circat.Circuit
+  ((:>), IsSource2, Comp', simpleComp, runC , tagged, CompNum, Pin)
 
-import Language.Netlist.AST ( Module(..), Ident, Range, Decl(..)
-                            , BinaryOp(..), UnaryOp(..), Expr(..)
-                            , ExprLit (..), Bit (..))
+import Language.Netlist.AST
+  ( Module(..), Decl(..), Expr(..), ExprLit (..)
+  , Bit (..), BinaryOp(..), UnaryOp(..), Ident, Range )
 
 import Language.Netlist.GenVHDL(genVHDL)
 import Language.Netlist.GenVerilog(mk_module)
@@ -43,7 +42,7 @@ outV cirName cir =
   do createDirectoryIfMissing False outDir
      writeFile filePath (toV cirName cir)
   where
-    outDir = "out"
+    outDir   = "out"
     filePath = outDir ++ "/" ++ cirName ++ ".v"
 
 toV :: IsSource2 a b => String -> (a :> b) -> String
@@ -87,20 +86,19 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         "neq"  -> NotEquals
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
-          ++ show name ++ " not supported."
+                  ++ show name ++ " not supported."
 
 -- unary operations                                                  
 moduleAssign p2w c@(_,(name,[i],[o])) = 
   [NetAssign (lw o p2w) (ExprUnary unaryOp iE)]
   where
     iE = expVar i p2w
-    unaryOp = 
-      case name of
-        "not" -> Neg
-        "False" -> Neg
-        _ -> err
+    unaryOp = case name of
+                "not"   -> Neg
+                "False" -> Neg
+                _       -> err
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
-          ++ show name ++ " not supported." ++ show c
+                  ++ show name ++ " not supported." ++ show c
 
 -- constant sources
 moduleAssign p2w (_,(name,[],[o])) = 
@@ -110,7 +108,7 @@ moduleAssign p2w (_,(name,[],[o])) =
             "True"  -> T
             "False" -> F
             _       -> error $ "Circat.Netlist.moduleAssign: Literal "
-                       ++ name ++ " not recognized."
+                                ++ name ++ " not recognized."
 
 -- output assignments
 moduleAssign p2w (_,("Out",ps,[])) =
@@ -119,7 +117,7 @@ moduleAssign p2w (_,("Out",ps,[])) =
      outPortName = portName "Out" ps
      
 moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
-                   ++ " not supported."
+                           ++ " not supported."
 
 expVar :: Pin -> Map Pin String -> Expr
 expVar p p2w = ExprVar (lw p p2w)
@@ -130,8 +128,8 @@ lw = lookupWireName
 lookupWireName :: Pin -> Map Pin String -> String
 lookupWireName pin p2w = fromMaybe err (M.lookup pin p2w)
   where
-    err = error ("Circat.Netlist.lookupWireName: Pin " ++ show pin
-                 ++ " does not have a wire name.")
+    err = error $ "Circat.Netlist.lookupWireName: Pin " ++ show pin
+                  ++ " does not have a wire name."
     
 -- | Generates a wire declaration for all Comp outputs along with 
 -- a map from Pin to wire name
@@ -145,7 +143,11 @@ moduleNet c@(_,(_,_,outs)) =
   [((outs!!i,wireName i), NetDecl (wireName i) Nothing Nothing) | i <- [0..length outs-1]]
   where
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
-  
+
+-- TODO: Wherever we see !!, we're doing a linear-time operation that could be
+-- done in log time instead. Consider changing the representation to from [] to
+-- IntMap.
+
 instName :: (CompNum,Comp') -> String
 instName (num,(name,_,_)) = name ++"_I"++show num
 
@@ -158,11 +160,11 @@ modulePorts comp' =
     ("Out",ins,[])   -> ([],map snd $ ports "Out" ins) 
     _                -> 
       error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
-             ++ " not recognized." 
+               ++ " not recognized." 
   where
     ports dir ps =  
-      [let name = portName dir ps i in ((ps!!i,name),(name,Nothing)) 
-       | i <- [0..length ps-1]
+      [ let name = portName dir ps i in ((ps!!i,name),(name,Nothing)) 
+      | i <- [0..length ps-1]
       ]
 
 portName :: (Show b) => String -> [a] -> b  -> String
@@ -182,10 +184,10 @@ portComp dir comps
     floc = "Circat.Netlist.gPortComp"
     eIllegalDir = 
       floc ++ ": Illegal value for dir " ++ dir
-      ++ ". Valid values are In or Out"            
+           ++ ". Valid values are In or Out"            
     eIncorrectComps = 
       floc ++ ": Incorrect number of comps named " ++ dir 
-      ++ " found in the list of comps. "
-      ++ if length fC > 1 then " Multiple comps found " ++ show fC 
-         else " No comps found."
+           ++ " found in the list of comps. "
+           ++ if length fC > 1 then " Multiple comps found " ++ show fC 
+              else " No comps found."
 
