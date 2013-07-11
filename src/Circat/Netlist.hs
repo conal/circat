@@ -91,6 +91,9 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
+moduleAssign p2w (_,("mux",[a,b,c],[o])) =
+  [NetAssign (lw o p2w)
+    (ExprCond (expVar a p2w) (expVar b p2w) (expVar c p2w))]
 
 -- unary operations                                                  
 moduleAssign p2w c@(_,(name,[i],[o])) = 
