@@ -25,7 +25,7 @@
 module Circat.Circuit 
   (CircuitM, (:>), (:~>)
   , Pin, Pins, IsSource, IsSource2, namedC, constC
-  , Comp', CompNum, toG, outG
+  , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
 
@@ -110,6 +110,12 @@ genComp prim a = do b <- genSource
                     tell (singleton (Comp prim a b))
                     return b
 
+constComp :: forall a b. IsSource b =>
+             String -> a -> CircuitM b
+constComp str _ = do b <- genSource
+                     tell (singleton (Comp (Prim str) () b))
+                     return b
+
 type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
@@ -185,8 +191,11 @@ namedC :: IsSource2 a b => String -> a :> b
 namedC = primC . Prim
 
 -- constC :: (IsSource2 a b, Show b) => b -> a :> b
+-- constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
+-- constC b = namedC (show b)
+
 constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
-constC b = namedC (show b)
+constC b = mkC (constComp (show b))
 
 -- General mux. Later specialize to simple muxes and make more of them.
 
@@ -258,7 +267,17 @@ systemSuccess cmd =
        _ -> printf "command \"%s\" failed."
 
 outG :: IsSource2 a b => String -> (a :> b) -> IO ()
-outG name circ = 
+outG = outGWith ("pdf","")
+
+-- Some options:
+-- 
+-- ("pdf","")
+-- ("svg","")
+-- ("png","-Gdpi=200")
+-- ("jpg","-Gdpi=200")
+
+outGWith :: IsSource2 a b => (String,String) -> String -> (a :> b) -> IO ()
+outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
@@ -268,9 +287,6 @@ outG name circ =
  where
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
-   (outType,res) = ("pdf","")
-                   -- ("svg","")
-                   -- ("png","-Gdpi=200")
    open = case SI.os of
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
@@ -285,7 +301,7 @@ toG :: IsSource2 a b => (a :> b) -> DGraph
 toG cir = printf "digraph {\n%s}\n"
             (concatMap wrap (prelude ++ recordDots comps))
  where
-   prelude = ["rankdir=LR","node [shape=Mrecord]"] -- maybe add fixedsize=true
+   prelude = ["rankdir=LR","node [shape=Mrecord]"{-, "ranksep=1"-}, "ratio=1"] -- maybe add fixedsize=true
    comps = simpleComp <$> runC cir
    wrap  = ("  " ++) . (++ ";\n")
 
