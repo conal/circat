@@ -36,7 +36,7 @@ import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
 import Control.Monad (liftM)
-import Control.Arrow (arr,Kleisli(..))
+import Control.Arrow (arr,(^<<),Kleisli(..))
 import Data.Foldable (foldMap,toList)
 import Data.Traversable (Traversable(..))
 
@@ -59,7 +59,7 @@ import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import TypeUnary.Vec hiding (get)
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
-import Circat.Misc ((:*),(<~),Unop,inNew)
+import Circat.Misc ((:*),(:+),(<~),Unop,inNew)
 import Circat.Category
 import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
@@ -577,3 +577,50 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 muxC :: (IsSource2 ((Unpins u :->: v) :* u) v, HasTrie (Unpins u)) =>
         ((Unpins u :->: v) :* u) :> v
 muxC = namedC "mux"
+
+{--------------------------------------------------------------------
+    Coproducts
+--------------------------------------------------------------------}
+
+-- Move elsewhere
+
+infixl 6 :++
+
+data a :++ b = UP { sumPins :: [Pin], sumFlag :: Pin }
+
+type instance Pins (a :+ b) = Pins a :++ Pins b
+
+pinsSource :: IsSource a => [Pin] -> a
+pinsSource = undefined
+
+-- For a CoproductCat instance, I'll have to change back to having 'Pins' be in
+-- the category definition or have an associated type for Coprod. For now,
+-- give Pins-oriented definitions:
+
+lftC :: IsSource (Pins a) => a :~> a :+ b
+lftC = uncurry UP ^<< (arr sourcePins &&& constC False)
+
+rhtC :: IsSource (Pins b) => b :~> a :+ b
+rhtC = uncurry UP ^<< (arr sourcePins &&& constC True)
+
+-- TODO: refactor with something like the following:
+-- 
+--   unsafeInject :: IsSource q => Bool -> q :> Pins (a :+ b)
+--   unsafeInject flag = uncurry UP ^<< (arr sourcePins &&& constC flag)
+-- 
+-- My first attempt yielded a non-injectivity error.
+
+-- infixr 2 |||*
+-- (|||*) :: -- HasTy3 a b c =>
+--           IsSource (Pins c) =>
+--           (a :~> c) -> (b :~> c) -> (a :+ b :~> c)
+
+-- non-injectivity error:
+-- f |||* g = muxC . first toPair . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
+-- f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
+
+condC :: IsSource (Pins c) => ((c :* c) :* Bool) :~> c
+condC = muxC . first toPair
+
+unsafeExtract :: IsSource (Pins c) => a :+ b :~> c
+unsafeExtract = arr (pinsSource . sumPins)
