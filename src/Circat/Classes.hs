@@ -39,16 +39,12 @@ import Circat.State -- (StateCat(..),pureState,StateFun)
 
 -- | Category with boolean operations.
 class ProductCat k => BoolCat k where
-  type BoolT k
-  not :: b ~ BoolT k => b `k` b
-  and, or, xor :: b ~ BoolT k => (b :* b) `k` b
-
-type BoolWith k b = (BoolCat k, b ~ BoolT k)
+  not :: Bool `k` Bool
+  and, or, xor :: (Bool :* Bool) `k` Bool
 
 -- The Category superclass is just for convenience.
 
 instance BoolCat (->) where
-  type BoolT (->) = Bool
   not = P.not
   and = P.uncurry (&&)
   or  = P.uncurry (||)
@@ -57,7 +53,7 @@ instance BoolCat (->) where
 class BoolCat k => EqCat k where
   type EqKon k a :: Constraint
   type EqKon k a = Yes a
-  eq, neq :: (Eq a, EqKon k a, b ~ BoolT k) => (a :* a) `k` b
+  eq, neq :: (Eq a, EqKon k a) => (a :* a) `k` Bool
   neq = not . eq
 
 -- TODO: Revisit the type constraints for EqCat.
@@ -107,14 +103,14 @@ instance (ClosedCatWith k s, VecCat k) => VecCat (StateExp k s) where
 
 class (PairCat k, BoolCat k) => AddCat k where
   -- | Half adder: addends in; sum and carry out. Default via logic.
-  halfAdd :: b ~ BoolT k =>
-             (b :* b) `k` (b :* b)
+  halfAdd :: (Bool :* Bool) `k` (Bool :* Bool)
   halfAdd = xor &&& and
   -- | Full adder: carry and addend pairs in; sum and carry out.
   -- Default via 'halfAdd'.
-  fullAdd :: b ~ BoolT k =>
-             (b :* Pair b) `k` (b :* b)
+  fullAdd :: (Bool :* Pair Bool) `k` (Bool :* Bool)
   fullAdd = second or . inLassocP (first halfAdd) . second (halfAdd . unPair)
+
+-- TODO: Why use Pair Bool in fullAdd, and Bool :* Bool in halfAdd?
 
 {-
 
@@ -131,12 +127,12 @@ instance AddCat (->)  -- use defaults
 -- Structure addition with carry in & out
 
 type Adds k f = 
-  (BoolT k :* f (Pair (BoolT k))) `k` (f (BoolT k) :* BoolT k)
+  (Bool :* f (Pair Bool)) `k` (f Bool :* Bool)
 
 class AddCat k => AddsCat k f where
   adds :: Adds k f
 
-type AddK k = (ConstUCat k (Vec Z (BoolT k)), AddCat k, VecCat k)
+type AddK k = (ConstUCat k (Vec Z Bool), AddCat k, VecCat k)
 
 instance (AddK k, IsNat n) => AddsCat k (Vec n) where
   adds = addVN nat
@@ -227,7 +223,7 @@ traverse h . lstrength . rconst idTrie :: a `k` t c
 --------------------------------------------------------------------}
 
 type AddState sk =
-  (StateCat sk, StateKon sk, StateT sk ~ BoolT (StateBase sk), AddCat (StateBase sk))
+  (StateCat sk, StateKon sk, StateT sk ~ Bool, AddCat (StateBase sk))
 
 -- Simpler but exposes k:
 -- 
@@ -235,12 +231,11 @@ type AddState sk =
 --     (StateCatWith sk k b, AddCat k, b ~ Bool)
 
 -- | Full adder with 'StateCat' interface
-fullAddS :: AddState sk => b ~ BoolT (StateBase sk) =>
-                              Pair b `sk` b
+fullAddS :: AddState sk => Pair Bool `sk` Bool
 fullAddS = state fullAdd
 
 -- | Structure adder with 'StateCat' interface
-addS :: (AddState sk, CTraversableWith f sk, b ~ BoolT (StateBase sk)) =>
+addS :: (AddState sk, CTraversableWith f sk, b ~ Bool) =>
         f (Pair b) `sk` f b
 addS = traverseC fullAddS
 

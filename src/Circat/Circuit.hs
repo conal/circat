@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
@@ -23,7 +23,7 @@
 ----------------------------------------------------------------------
 
 module Circat.Circuit 
-  (CircuitM, (:>), (:~>)
+  (CircuitM, (:>)
   , Pin, Pins, IsSource, IsSource2, namedC, constC
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
@@ -102,6 +102,7 @@ sourcePins s = toList (toPins s)
 class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: CircuitM a
+  numPins   :: a -> Int
 
 -- Instantiate a 'Prim'
 genComp :: forall a b. IsSource2 a b =>
@@ -116,25 +117,33 @@ constComp str _ = do b <- genSource
                      tell (singleton (Comp (Prim str) () b))
                      return b
 
+constM :: (Show q, IsSource b) =>
+          q -> a -> CircuitM b
+constM q = constComp (show q)
+
 type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
   toPins () = mempty
   genSource = pure ()
+  numPins _ = 0
 
 instance IsSource Pin where
   toPins p  = singleton p
   genSource = newPin
+  numPins _ = 1
 
 instance IsSource2 a b => IsSource (a :* b) where
   toPins (sa,sb) = toPins sa <> toPins sb
   genSource      = liftA2 (,) genSource genSource
+  numPins ~(a,b) = numPins a + numPins b
 
 -- instance IsSource (a :+ b) where ... ???
 
 instance (IsNat n, IsSource a) => IsSource (Vec n a) where
   toPins    = foldMap toPins
   genSource = genSourceV nat
+  numPins _ = natToZ (nat :: Nat n) * numPins (undefined :: a)
 
 genSourceV :: IsSource a => Nat n -> CircuitM (Vec n a)
 genSourceV Zero     = pure ZVec
@@ -143,10 +152,12 @@ genSourceV (Succ n) = liftA2 (:<) genSource (genSourceV n)
 instance IsSource a => IsSource (Pair a) where
   toPins    = foldMap toPins
   genSource = toPair <$> genSource
+  numPins _ = 2 * numPins (undefined :: a)
 
 instance (IsNat n, IsSource a) => IsSource (Tree n a) where
   toPins    = foldMap toPins
   genSource = genSourceT nat
+  numPins _ = 2 ^ (natToZ (nat :: Nat n) :: Int) * numPins (undefined :: a)
 
 genSourceT :: IsSource a => Nat n -> CircuitM (Tree n a)
 genSourceT Zero     = L <$> genSource
@@ -174,28 +185,37 @@ type instance Pins (Tree n a) = Tree n (Pins a)
     Circuit category
 --------------------------------------------------------------------}
 
-infixl 1 :>, :~>
+infixl 1 :>, :+>
+
+-- | Internal representation for '(:>)'.
+type a :+> b = Kleisli CircuitM (Pins a) (Pins b)
 
 -- | Circuit category
-type (:>) = Kleisli CircuitM
+newtype a :> b = C { unC :: a :+> b }
 
-type a :~> b = Pins a :> Pins b
+type IsSourceP a = IsSource (Pins a)
 
-mkC :: (a -> CircuitM b) -> (a :> b)
-mkC = Kleisli
+type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
 
-primC :: IsSource2 a b => Prim a b -> a :> b
+mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
+mkC = C . Kleisli
+
+unmkC :: (a :> b) -> (Pins a -> CircuitM (Pins b))
+unmkC (C (Kleisli f)) = f
+
+primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
 primC = mkC . genComp
 
-namedC :: IsSource2 a b => String -> a :> b
+namedC :: IsSourceP2 a b => String -> a :> b
 namedC = primC . Prim
 
 -- constC :: (IsSource2 a b, Show b) => b -> a :> b
 -- constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
 -- constC b = namedC (show b)
 
-constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
-constC b = mkC (constComp (show b))
+constC :: (IsSourceP2 a b, Show b) => b -> a :> b
+constC = mkC . constM
+-- constC b = mkC (constComp (show b))
 
 -- General mux. Later specialize to simple muxes and make more of them.
 
@@ -214,15 +234,63 @@ constC b = mkC (constComp (show b))
 -- TODO: Kleisli already defines an ConstCat instance, and it doesn't use
 -- constC. Can it work for (:>)?
 
+-- instance Newtype (a :> b) (Source a -> CircuitM (Source b)) where
+--   pack   = C
+--   unpack = unC
+-- 
+--     Illegal type synonym family application in instance.
+--
+-- So define manually:
+
+inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
+inC = C <~ unC
+
+inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
+     -> (a :> b -> a' :> b' -> a'' :> b'')
+inC2 = inC <~ unC
+
+instance Category (:>) where
+  id  = C id
+  (.) = inC2 (.)
+
+instance ProductCat (:>) where
+  fst   = C fst
+  snd   = C snd
+  dup   = C dup
+  (***) = inC2 (***)
+  (&&&) = inC2 (&&&)
+
+-- instance CategoryCoproduct (:>) where
+--   lft       = 
+--   rht       = 
+--   jam       = 
+--   ldistribS = 
+--   rdistribS = 
+--   (+++)     = 
+--   (|||)     = 
+
+instance UnitCat (:>) where
+  lunit = C lunit
+  runit = C runit
+
+instance PairCat (:>) where
+  toPair = C toPair
+  unPair = C unPair
+
+instance VecCat (:>) where
+  toVecZ = C toVecZ
+  unVecZ = C unVecZ
+  toVecS = C toVecS
+  unVecS = C unVecS
+
 instance BoolCat (:>) where
-  type BoolT (:>) = Pin
   not = namedC "not"
   and = namedC "and"
   or  = namedC "or"
   xor = namedC "xor"
 
 instance EqCat (:>) where
-  type EqKon (:>) a = IsSource a
+  type EqKon (:>) a = IsSource (Pins a)
   eq  = namedC "eq"
   neq = namedC "neq"
 
@@ -231,7 +299,7 @@ instance AddCat (:>) where
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
 
-instance IsSource2 a b => Show (a :> b) where
+instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
 
 --     Application is no smaller than the instance head
@@ -242,14 +310,14 @@ evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: IsSource2 a b => (a :> b) -> [Comp]
+runC :: IsSourceP2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU (Kleisli f) = toList (snd (evalWS (f ()) (Pin 0)))
+runU cir = toList (snd (evalWS (unmkC cir ()) (Pin 0)))
 
 -- Wrap a circuit with fake input and output
-unitize :: IsSource2 a b => (a :> b) -> (() :> ())
+unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -266,7 +334,7 @@ systemSuccess cmd =
        ExitSuccess -> return ()
        _ -> printf "command \"%s\" failed."
 
-outG :: IsSource2 a b => String -> (a :> b) -> IO ()
+outG :: IsSourceP2 a b => String -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
 
 -- Some options:
@@ -276,7 +344,7 @@ outG = outGWith ("pdf","")
 -- ("png","-Gdpi=200")
 -- ("jpg","-Gdpi=200")
 
-outGWith :: IsSource2 a b => (String,String) -> String -> (a :> b) -> IO ()
+outGWith :: IsSourceP2 a b => (String,String) -> String -> (a :> b) -> IO ()
 outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (toG circ)
@@ -297,7 +365,7 @@ outGWith (outType,res) name circ =
 
 type DGraph = String
 
-toG :: IsSource2 a b => (a :> b) -> DGraph
+toG :: IsSourceP2 a b => (a :> b) -> DGraph
 toG cir = printf "digraph {\n%s}\n"
             (concatMap wrap (prelude ++ recordDots comps))
  where
@@ -361,13 +429,13 @@ sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSource s, IsSource2 a b, StateCatWith sk (:>) s) =>
+outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
          String -> (a `sk` b) -> IO ()
 outSG name = outG name . runState
 
-type (:->) = StateFun (:>) (BoolT (:>))
+type (:->) = StateFun (:>) Bool
 
-type AddS f = f (Pair (BoolT (:>))) :-> f (BoolT (:>))
+type AddS f = f (Pair Bool) :-> f Bool
 
 type AddVS n = AddS (Vec  n)
 type AddTS n = AddS (Tree n)
@@ -574,8 +642,8 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 -}
 
-muxC :: (IsSource2 ((Unpins u :->: v) :* u) v, HasTrie (Unpins u)) =>
-        ((Unpins u :->: v) :* u) :> v
+muxC :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
+        ((u :->: v) :* u) :> v
 muxC = namedC "mux"
 
 {--------------------------------------------------------------------
@@ -591,36 +659,43 @@ data a :++ b = UP { sumPins :: [Pin], sumFlag :: Pin }
 type instance Pins (a :+ b) = Pins a :++ Pins b
 
 pinsSource :: IsSource a => [Pin] -> a
-pinsSource = undefined
+pinsSource = error "pinsSource: not yet implemented"
 
 -- For a CoproductCat instance, I'll have to change back to having 'Pins' be in
 -- the category definition or have an associated type for Coprod. For now,
 -- give Pins-oriented definitions:
 
-lftC :: IsSource (Pins a) => a :~> a :+ b
-lftC = uncurry UP ^<< (arr sourcePins &&& constC False)
+unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
+                Bool -> q :> a :+ b
+unsafeInject flag = mkC $ \ q ->
+  do x <- constM flag q
+     let nq  = numPins (undefined :: Pins q)
+         na  = numPins (undefined :: Pins a)
+         nb  = numPins (undefined :: Pins b)
+         pad = replicate (max na nb - nq) x
+     return (UP (sourcePins q ++ pad) x)
 
-rhtC :: IsSource (Pins b) => b :~> a :+ b
-rhtC = uncurry UP ^<< (arr sourcePins &&& constC True)
+lftC :: IsSourceP2 a b => a :> a :+ b
+lftC = unsafeInject False
 
--- TODO: refactor with something like the following:
--- 
---   unsafeInject :: IsSource q => Bool -> q :> Pins (a :+ b)
---   unsafeInject flag = uncurry UP ^<< (arr sourcePins &&& constC flag)
--- 
--- My first attempt yielded a non-injectivity error.
+rhtC :: IsSourceP2 a b => b :> a :+ b
+rhtC = unsafeInject True
 
--- infixr 2 |||*
--- (|||*) :: -- HasTy3 a b c =>
---           IsSource (Pins c) =>
---           (a :~> c) -> (b :~> c) -> (a :+ b :~> c)
+-- OOPS: I think I have to pad in lftC and rhtC.
 
--- non-injectivity error:
+infixr 2 |||*
+(|||*) :: (IsSourceP2 a b, IsSourceP c) =>
+          (a :> c) -> (b :> c) -> (a :+ b :> c)
+f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& pureC sumFlag)
+
 -- f |||* g = muxC . first toPair . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
--- f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
 
-condC :: IsSource (Pins c) => ((c :* c) :* Bool) :~> c
+
+condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
 condC = muxC . first toPair
 
-unsafeExtract :: IsSource (Pins c) => a :+ b :~> c
-unsafeExtract = arr (pinsSource . sumPins)
+unsafeExtract :: IsSource (Pins c) => a :+ b :> c
+unsafeExtract = pureC (pinsSource . sumPins)
+
+pureC :: (Pins a -> Pins b) -> (a :> b)
+pureC f = mkC (return . f)
