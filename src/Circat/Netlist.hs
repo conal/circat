@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, ConstraintKinds #-}
+{-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -29,7 +29,7 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ((:>), IsSource2, Comp', simpleComp, runC , tagged, CompNum, Pin)
+  ((:>), IsSourceP2, Comp', simpleComp, runC , tagged, CompNum, Pin)
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..)
@@ -41,7 +41,7 @@ import qualified Language.Verilog as V
 
 type PinToWireName   = (Pin,String) 
 
-outV :: IsSource2 a b => String -> (a :> b) -> IO ()
+outV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
 outV cirName cir = 
   do createDirectoryIfMissing False outDir
      writeFile filePath (toV cirName cir)
@@ -49,11 +49,11 @@ outV cirName cir =
     outDir   = "out"
     filePath = outDir ++ "/" ++ cirName ++ ".v"
 
-toV :: IsSource2 a b => String -> (a :> b) -> String
+toV :: IsSourceP2 a b => String -> (a :> b) -> String
 toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
 
 -- | Converts a Circuit to a Module
-toNetlist :: IsSource2 a b => String -> (a :> b) -> Module
+toNetlist :: IsSourceP2 a b => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
   where comps  = simpleComp <$> runC cir
         ncomps      = tagged comps

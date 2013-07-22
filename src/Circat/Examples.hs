@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds, FlexibleContexts #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -31,55 +31,51 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
+outGV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
+outGV name cir = 
+  do outG name cir
+     outG name cir
+
 bc :: Unop (a :> b)
 bc = id
 
 -- Write in most general form and then display by applying 'bc' (to
 -- type-narrow).
 
-c0 :: BoolWith k b => b `k` b
+c0 :: BoolCat k => Bool `k` Bool
 c0 = id
 
-c1 :: BoolWith k b => b `k` b
+c1 :: BoolCat k => Bool `k` Bool
 c1 = not . not
 
-c2 :: BoolWith k b => (b :* b) `k` b
+c2 :: BoolCat k => (Bool :* Bool) `k` Bool
 c2 = not . and
 
-c3 :: BoolWith k b => (b :* b) `k` b
+c3 :: BoolCat k => (Bool :* Bool) `k` Bool
 c3 = not . and . (not *** not)
 
-c4 :: BoolWith k b => (b :* b) `k` (b :* b)
+c4 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
 c4 = swapP  -- no components
 
-c5 :: BoolWith k b => (b :* b) `k` (b :* b)
+c5 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
 c5 = xor &&& and   -- half-adder
 
-c6 :: b ~ BoolT (:>) => () :> b
+c6 :: () :> Bool
 c6 = constC False
 
-c7 :: b ~ BoolT (:>) => b :> b
+c7 :: Bool :> Bool
 c7 = constC False
 
 outSimples :: IO ()
 outSimples = 
-  do outG "c0" c0
-     outG "c1" c1
-     outG "c2" c2
-     outG "c3" c3
-     outG "c4" c4
-     outG "c5" c5
-     outG "c6" c6
-     outG "c7" c7
-     outV "c0" c0
-     outV "c1" c1
-     outV "c2" c2
-     outV "c3" c3
-     outV "c4" c4
-     outV "c5" c5
-     outV "c6" c6
-     outV "c7" c7
-  
+  do outGV "c0" c0
+     outGV "c1" c1
+     outGV "c2" c2
+     outGV "c3" c3
+     outGV "c4" c4
+     outGV "c5" c5
+     outGV "c6" c6
+     outGV "c7" c7
 
 {- For instance,
 
@@ -138,16 +134,11 @@ addV16 = adds
 
 outVecs :: IO ()
 outVecs = do
-  outG "addV1"  addV1
-  outG "addV2"  addV2
-  outG "addV4"  addV4
-  outG "addV8"  addV8
-  outG "addV16" addV16
-  outV "addV1"  addV1
-  outV "addV2"  addV2
-  outV "addV4"  addV4
-  outV "addV8"  addV8
-  outV "addV16" addV16
+  outGV "addV1"  addV1
+  outGV "addV2"  addV2
+  outGV "addV4"  addV4
+  outGV "addV8"  addV8
+  outGV "addV16" addV16
 
 -- Trees (identical results)
 
@@ -168,16 +159,11 @@ addT16 = adds
 
 outTrees :: IO ()
 outTrees = do
-  outG "addT1"  addT1
-  outG "addT2"  addT2
-  outG "addT4"  addT4
-  outG "addT8"  addT8
-  outG "addT16" addT16
-  outV "addT1"  addT1
-  outV "addT2"  addT2
-  outV "addT4"  addT4
-  outV "addT8"  addT8
-  outV "addT16" addT16
+  outGV "addT1"  addT1
+  outGV "addT2"  addT2
+  outGV "addT4"  addT4
+  outGV "addT8"  addT8
+  outGV "addT16" addT16
 
 outAll :: IO ()
 outAll = do outSimples ; outVecs ; outTrees

@@ -23,8 +23,8 @@
 ----------------------------------------------------------------------
 
 module Circat.Circuit 
-  (CircuitM, (:>)
-  , Pin, Pins, IsSource, IsSource2, namedC, constC
+  ( CircuitM, (:>)
+  , Pin, Pins, IsSourceP, IsSourceP2, namedC, constC
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -273,15 +273,13 @@ instance UnitCat (:>) where
   lunit = C lunit
   runit = C runit
 
+instance ConstCat (:>) where
+  type ConstKon (:>) a b = (Show b, IsSourceP2 a b)
+  const = constC
+
 instance PairCat (:>) where
   toPair = C toPair
   unPair = C unPair
-
-instance VecCat (:>) where
-  toVecZ = C toVecZ
-  unVecZ = C unVecZ
-  toVecS = C toVecS
-  unVecS = C unVecS
 
 instance BoolCat (:>) where
   not = namedC "not"
@@ -298,6 +296,18 @@ instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
+
+instance VecCat (:>) where
+  toVecZ = C toVecZ
+  unVecZ = C unVecZ
+  toVecS = C toVecS
+  unVecS = C unVecS
+
+instance TreeCat (:>) where
+  toL = C toL
+  unL = C unL
+  toB = C toB
+  unB = C unB
 
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
@@ -661,10 +671,6 @@ type instance Pins (a :+ b) = Pins a :++ Pins b
 pinsSource :: IsSource a => [Pin] -> a
 pinsSource = error "pinsSource: not yet implemented"
 
--- For a CoproductCat instance, I'll have to change back to having 'Pins' be in
--- the category definition or have an associated type for Coprod. For now,
--- give Pins-oriented definitions:
-
 unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
                 Bool -> q :> a :+ b
 unsafeInject flag = mkC $ \ q ->
@@ -680,8 +686,6 @@ lftC = unsafeInject False
 
 rhtC :: IsSourceP2 a b => b :> a :+ b
 rhtC = unsafeInject True
-
--- OOPS: I think I have to pad in lftC and rhtC.
 
 infixr 2 |||*
 (|||*) :: (IsSourceP2 a b, IsSourceP c) =>
