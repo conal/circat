@@ -36,6 +36,9 @@ outGV name cir =
   do outG name cir
      outG name cir
 
+-- outG = outGWith ("pdf","")  -- change as desired.
+
+-- Handy for showing the graph representation in ghci.
 bc :: Unop (a :> b)
 bc = id
 
@@ -164,6 +167,73 @@ outTrees = do
   outGV "addT4"  addT4
   outGV "addT8"  addT8
   outGV "addT16" addT16
+
+----
+
+{-
+
+-- Stateful addition via StateFun
+
+outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
+         String -> (a `sk` b) -> IO ()
+outSG name = outG name . runState
+
+type (:->) = StateFun (:>) Bool
+
+type AddS f = f (Pair Bool) :-> f Bool
+
+type AddVS n = AddS (Vec  n)
+type AddTS n = AddS (Tree n)
+
+addVS1 :: AddVS N1
+addVS1 = addS
+
+addVS2 :: AddVS N2
+addVS2 = addS
+
+addVS4 :: AddVS N4
+addVS4 = addS
+
+addVS8 :: AddVS N8
+addVS8 = addS
+
+addVS16 :: AddVS N16
+addVS16 = addS
+
+-- outSG "addVS4" addVS4
+--   or
+-- outG "addVS4" (runState addVS4)
+
+type AddS f = f (Pair Bool) :-> f Bool
+
+type AddVS n = AddS (Vec  n)
+type AddTS n = AddS (Tree n)
+
+addVS1 :: AddVS N1
+addVS1 = addS
+
+addVS2 :: AddVS N2
+addVS2 = addS
+
+addVS4 :: AddVS N4
+addVS4 = addS
+
+addVS8 :: AddVS N8
+addVS8 = addS
+
+addVS16 :: AddVS N16
+addVS16 = addS
+
+-- outSG "addVS4" addVS4
+--   or
+-- outG "addVS4" (runState addVS4)
+
+-}
+
+-- addTS16 :: AddTS N4
+-- addTS16 = addS
+
+----
 
 outAll :: IO ()
 outAll = do outSimples ; outVecs ; outTrees

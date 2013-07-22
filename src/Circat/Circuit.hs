@@ -25,6 +25,7 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constC
+  , lftC, rhtC, (|||*)
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -445,34 +446,7 @@ outSG name = outG name . runState
 
 type (:->) = StateFun (:>) Bool
 
-type AddS f = f (Pair Bool) :-> f Bool
-
-type AddVS n = AddS (Vec  n)
-type AddTS n = AddS (Tree n)
-
-addVS1 :: AddVS N1
-addVS1 = addS
-
-addVS2 :: AddVS N2
-addVS2 = addS
-
-addVS4 :: AddVS N4
-addVS4 = addS
-
-addVS8 :: AddVS N8
-addVS8 = addS
-
-addVS16 :: AddVS N16
-addVS16 = addS
-
--- outSG "addVS4" addVS4
---   or
--- outG "addVS4" (runState addVS4)
-
 {-
-
-addTS16 :: AddTS N4
-addTS16 = addS
 
 {--------------------------------------------------------------------
     Temporary hack for StateExp
@@ -694,7 +668,6 @@ f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& pureC sumFlag)
 
 -- f |||* g = muxC . first toPair . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
 
-
 condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
 condC = muxC . first toPair
 
@@ -703,3 +676,6 @@ unsafeExtract = pureC (pinsSource . sumPins)
 
 pureC :: (Pins a -> Pins b) -> (a :> b)
 pureC f = mkC (return . f)
+
+-- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
+-- move lftC, rhtC, (|||*) into a CoproductCat instance. Tricky.
