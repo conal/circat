@@ -36,7 +36,7 @@ import qualified Prelude as P
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (pure,liftA2)
-import Control.Monad (liftM)
+import Control.Monad (liftM,liftM2)
 import Control.Arrow (arr,(^<<),Kleisli(..))
 import Data.Foldable (foldMap,toList)
 import Data.Traversable (Traversable(..))
@@ -88,10 +88,15 @@ deriving instance Show Comp
 type CircuitM = WriterT (Seq Comp) (State PinSupply)
 
 newtype Pin = Pin Int deriving (Eq,Ord,Show,Enum)
-type PinSupply = Pin  -- Next free pin
+type PinSupply = [Pin]
 
-newPin :: CircuitM Pin
-newPin = do { p <- M.get ; M.put (succ p) ; return p }
+type MonadPins = M.MonadState PinSupply
+
+newPin :: M.MonadState PinSupply m => m Pin
+newPin = do { (p:ps') <- M.get ; M.put ps' ; return p }
+
+-- runCircuitM :: CircuitM a -> PinSupply -> (a,PinSupply)
+-- runCircuitM 
 
 {--------------------------------------------------------------------
     Pins
@@ -103,7 +108,7 @@ sourcePins s = toList (toPins s)
 -- | Give a representation for a type in terms of structures of pins.
 class Show a => IsSource a where
   toPins    :: a -> Seq Pin
-  genSource :: CircuitM a
+  genSource :: MonadPins m => m a
   numPins   :: a -> Int
 
 -- Instantiate a 'Prim'
@@ -127,7 +132,7 @@ type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
   toPins () = mempty
-  genSource = pure ()
+  genSource = return ()
   numPins _ = 0
 
 instance IsSource Pin where
@@ -137,7 +142,7 @@ instance IsSource Pin where
 
 instance IsSource2 a b => IsSource (a :* b) where
   toPins (sa,sb) = toPins sa <> toPins sb
-  genSource      = liftA2 (,) genSource genSource
+  genSource      = liftM2 (,) genSource genSource
   numPins ~(a,b) = numPins a + numPins b
 
 -- instance IsSource (a :+ b) where ... ???
@@ -147,13 +152,13 @@ instance (IsNat n, IsSource a) => IsSource (Vec n a) where
   genSource = genSourceV nat
   numPins _ = natToZ (nat :: Nat n) * numPins (undefined :: a)
 
-genSourceV :: IsSource a => Nat n -> CircuitM (Vec n a)
-genSourceV Zero     = pure ZVec
-genSourceV (Succ n) = liftA2 (:<) genSource (genSourceV n)
+genSourceV :: (MonadPins m, IsSource a) => Nat n -> m (Vec n a)
+genSourceV Zero     = return ZVec
+genSourceV (Succ n) = liftM2 (:<) genSource (genSourceV n)
 
 instance IsSource a => IsSource (Pair a) where
   toPins    = foldMap toPins
-  genSource = toPair <$> genSource
+  genSource = liftM toPair genSource
   numPins _ = 2 * numPins (undefined :: a)
 
 instance (IsNat n, IsSource a) => IsSource (Tree n a) where
@@ -161,9 +166,9 @@ instance (IsNat n, IsSource a) => IsSource (Tree n a) where
   genSource = genSourceT nat
   numPins _ = 2 ^ (natToZ (nat :: Nat n) :: Int) * numPins (undefined :: a)
 
-genSourceT :: IsSource a => Nat n -> CircuitM (Tree n a)
-genSourceT Zero     = L <$> genSource
-genSourceT (Succ _) = B <$> genSource
+genSourceT :: (MonadPins m, IsSource a) => Nat n -> m (Tree n a)
+genSourceT Zero     = liftM L genSource
+genSourceT (Succ _) = liftM B genSource
 
 -- TODO: does the recounting of nat lead to quadratic work?
 -- Perhaps rewrite, using the Succ argument.
@@ -326,7 +331,7 @@ runC :: IsSourceP2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU cir = toList (snd (evalWS (unmkC cir ()) (Pin 0)))
+runU cir = toList (snd (evalWS (unmkC cir ()) (Pin <$> [0 ..])))
 
 -- Wrap a circuit with fake input and output
 unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
@@ -646,13 +651,13 @@ type instance Pins (a :+ b) = Pins a :++ Pins b
 instance IsSource2 a b => IsSource (a :++ b) where
   toPins (UP ps f) = ps <> singleton f
   genSource =
-    liftA2 UP (Seq.replicateM (numPins (undefined :: (a :++ b)) - 1) newPin)
+    liftM2 UP (Seq.replicateM (numPins (undefined :: (a :++ b)) - 1) newPin)
               newPin
   numPins _ =
     (numPins (undefined :: a) `max` numPins (undefined :: b)) + 1
 
 pinsSource :: IsSource a => Seq Pin -> a
-pinsSource = error "pinsSource: not yet implemented"
+pinsSource pins = M.evalState genSource (toList pins)
 
 unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
                 Bool -> q :> a :+ b
