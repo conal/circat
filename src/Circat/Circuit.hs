@@ -50,6 +50,7 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq,singleton)
+import qualified Data.Sequence as Seq
 import Text.Printf (printf)
 
 -- mtl
@@ -638,11 +639,19 @@ muxC = namedC "mux"
 
 infixl 6 :++
 
-data a :++ b = UP { sumPins :: [Pin], sumFlag :: Pin }
+data a :++ b = UP { sumPins :: Seq Pin, sumFlag :: Pin } deriving Show
 
 type instance Pins (a :+ b) = Pins a :++ Pins b
 
-pinsSource :: IsSource a => [Pin] -> a
+instance IsSource2 a b => IsSource (a :++ b) where
+  toPins (UP ps f) = ps <> singleton f
+  genSource =
+    liftA2 UP (Seq.replicateM (numPins (undefined :: (a :++ b)) - 1) newPin)
+              newPin
+  numPins _ =
+    (numPins (undefined :: a) `max` numPins (undefined :: b)) + 1
+
+pinsSource :: IsSource a => Seq Pin -> a
 pinsSource = error "pinsSource: not yet implemented"
 
 unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
@@ -652,8 +661,8 @@ unsafeInject flag = mkC $ \ q ->
      let nq  = numPins (undefined :: Pins q)
          na  = numPins (undefined :: Pins a)
          nb  = numPins (undefined :: Pins b)
-         pad = replicate (max na nb - nq) x
-     return (UP (sourcePins q ++ pad) x)
+         pad = Seq.replicate (max na nb - nq) x
+     return (UP (toPins q <> pad) x)
 
 lftC :: IsSourceP2 a b => a :> a :+ b
 lftC = unsafeInject False
