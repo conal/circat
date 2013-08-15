@@ -23,7 +23,7 @@ module Circat.State
   ( StateCat(..), StateCatWith, pureState, StateFun(..), StateExp(..)
   ) where
 
-import Prelude hiding (id,(.),fst,snd,const,curry,uncurry)
+import Prelude hiding (id,(.),const,curry,uncurry)
 import qualified Prelude as P
 
 import Control.Category
@@ -52,10 +52,10 @@ class UnitCat (StateBase sk) => StateCat sk where
               a `sk` b -> (s :* a) `k` (b :* s)
   -- | Get state
   get :: StateParts sk k s => a `sk` s
-  get = state (dup   . fst)
+  get = state (dup   . exl)
   -- | Set state
   put :: StateParts sk k s => s `sk` ()
-  put = state (lunit . snd)
+  put = state (lunit . exr)
 
 type StateParts sk k s =
   (k ~ StateBase sk, s ~ StateT sk, StateKon sk)
@@ -73,9 +73,9 @@ type StateCatWith sk k s = (StateCat sk, StateParts sk k s)
 --   runState :: StateParts k (.`k`) s =>  -- ^ Run a stateful computation
 --               a `k` b -> (s :* a) .`k` (b :* s)
 --   get :: s ~ StateT k => a `k` s     -- ^ Get state
---   get = state (dup   . fst)
+--   get = state (dup   . exl)
 --   put :: s ~ StateT k => s `k` ()    -- ^ Set state
---   put = state (lunit . snd)
+--   put = state (lunit . exr)
 
 pureState :: StateCatWith sk k s => (a `k` b) -> a `sk` b
 pureState f = state (swapP . second f)
@@ -110,8 +110,8 @@ instance UnitCat k => Category (StateFun k s) where
   (.) = inState2 $ \ g f -> g . swapP . f
 
 instance UnitCat k => ProductCat (StateFun k s) where
-  fst   = pureState fst
-  snd   = pureState snd
+  exl   = pureState exl
+  exr   = pureState exr
   dup   = pureState dup
   (***) = inState2 $ \ f g -> lassocP . second g . inLassocP (first f)
 
@@ -204,8 +204,8 @@ instance ClosedCatU k s => Category (StateExp k s) where
 --     head context (Use -XUndecidableInstances to permit this)
 
 instance ClosedCatU k s => ProductCat (StateExp k s) where
-  fst   = pureState fst  -- or restateF fst
-  snd   = pureState snd
+  exl   = pureState exl  -- or restateF exl
+  exr   = pureState exr
   dup   = pureState dup
   (***) = asStateFun2 (***)
 

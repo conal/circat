@@ -24,7 +24,7 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const,not,and,or,fst,snd)
+import Prelude hiding (id,(.),const,not,and,or)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
 
@@ -143,7 +143,7 @@ instance (AddK k, IsNat n) => AddsCat k (Vec n) where
 type AddVP n = forall k. AddK k => Adds k (Vec n)
 
 addVN :: Nat n -> AddVP n
-addVN Zero     = lconst ZVec . fst
+addVN Zero     = lconst ZVec . exl
 
 addVN (Succ n) = first toVecS . lassocP . second (addVN n)
                . rassocP . first fullAdd . lassocP

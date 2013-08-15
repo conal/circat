@@ -25,12 +25,12 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constC
-  , lftC, rhtC, (|||*)
+  , inlC, inrC, (|||*)
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
 
-import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry,sequence)
+import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
@@ -261,15 +261,15 @@ instance Category (:>) where
   (.) = inC2 (.)
 
 instance ProductCat (:>) where
-  fst   = C fst
-  snd   = C snd
+  exl   = C exl
+  exr   = C exr
   dup   = C dup
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
 -- instance CategoryCoproduct (:>) where
---   lft       = 
---   rht       = 
+--   inl       = 
+--   inr       = 
 --   jam       = 
 --   ldistribS = 
 --   rdistribS = 
@@ -331,7 +331,7 @@ runC :: IsSourceP2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (() :> ()) -> [Comp]
-runU cir = toList (snd (evalWS (unmkC cir ()) (Pin <$> [0 ..])))
+runU cir = toList (exr (evalWS (unmkC cir ()) (Pin <$> [0 ..])))
 
 -- Wrap a circuit with fake input and output
 unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
@@ -420,7 +420,7 @@ recordDots comps = nodes ++ edges
        where
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
-         labs dir bs = intercalate "|" (portSticker . fst <$> tagged bs)
+         labs dir bs = intercalate "|" (portSticker . exl <$> tagged bs)
           where
             -- portSticker = bracket . portLab dir
             portSticker p = bracket (portLab dir p) {- ++ show p -} -- show p for port # debugging
@@ -669,11 +669,11 @@ unsafeInject flag = mkC $ \ q ->
          pad = Seq.replicate (max na nb - nq) x
      return (UP (toPins q <> pad) x)
 
-lftC :: IsSourceP2 a b => a :> a :+ b
-lftC = unsafeInject False
+inlC :: IsSourceP2 a b => a :> a :+ b
+inlC = unsafeInject False
 
-rhtC :: IsSourceP2 a b => b :> a :+ b
-rhtC = unsafeInject True
+inrC :: IsSourceP2 a b => b :> a :+ b
+inrC = unsafeInject True
 
 infixr 2 |||*
 (|||*) :: (IsSourceP2 a b, IsSourceP c) =>
@@ -692,4 +692,4 @@ pureC :: (Pins a -> Pins b) -> (a :> b)
 pureC f = mkC (return . f)
 
 -- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
--- move lftC, rhtC, (|||*) into a CoproductCat instance. Tricky.
+-- move inlC, inrC, (|||*) into a CoproductCat instance. Tricky.

@@ -15,7 +15,7 @@
 
 module Circat.Examples (outSimples,outAll,bc,outV) where
 
-import Prelude hiding (id,(.),const,fst,snd,not,and,or,curry,uncurry,sequence)
+import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 import TypeUnary.Vec hiding (get)
 
 import Circat.Circuit

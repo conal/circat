@@ -33,7 +33,7 @@ module Circat.Category
   , Yes
   ) where
 
-import Prelude hiding (id,(.),fst,snd,const,curry,uncurry,sequence)
+import Prelude hiding (id,(.),const,curry,uncurry,sequence)
 import qualified Prelude as P
 
 import Control.Category
@@ -57,18 +57,18 @@ instance Yes a
 class Yes2 a b
 instance Yes2 a b
 
--- | Category with product. Minimal definition: 'fst', 'snd', and either (a)
+-- | Category with product. Minimal definition: 'exl', 'exr', and either (a)
 -- '(&&&)' or (b) both '(***)' and 'dup'. TODO: Generalize '(:*)' to an
 -- associated type. Keep the types fairly pretty.
 class Category k => ProductCat k where
-  fst     :: (a :* b) `k` a
-  snd     :: (a :* b) `k` b
+  exl     :: (a :* b) `k` a
+  exr     :: (a :* b) `k` b
   dup     :: a `k` (a :* a)
   dup     =  id &&& id
   swapP   :: (a :* b) `k` (b :* a)
-  swapP   =  snd &&& fst
+  swapP   =  exr &&& exl
   (***)   :: (a `k` c) -> (b `k` d) -> ((a :* b) `k` (c :* d))
-  f *** g =  f . fst &&& g . snd
+  f *** g =  f . exl &&& g . exr
   (&&&)   :: (a `k` c) -> (a `k` d) -> (a `k` (c :* d))
   f &&& g =  (f *** g) . dup
   first   :: (a `k` a') -> ((a :* b) `k` (a' :* b))
@@ -76,14 +76,14 @@ class Category k => ProductCat k where
   second  :: (b `k` b') -> ((a :* b) `k` (a :* b'))
   second  =  (id ***)
   lassocP :: (a :* (b :* c)) `k` ((a :* b) :* c)
-  lassocP =  second fst &&& (snd . snd)
+  lassocP =  second exl &&& (exr . exr)
   rassocP :: ((a :* b) :* c) `k` (a :* (b :* c))
-  rassocP =  (fst . fst) &&& first  snd
+  rassocP =  (exl . exl) &&& first  exr
 
 --   ldistribP :: (a, u :* v) `k` ((a,u) :* (a,v))
---   ldistribP =  transPair . first  dup -- second fst &&& second snd
+--   ldistribP =  transPair . first  dup -- second exl &&& second exr
 --   rdistribP :: (u :* v, b) `k` ((u,b) :* (v,b))
---   rdistribP =  transPair . second dup -- first  fst &&& first  snd
+--   rdistribP =  transPair . second dup -- first  exl &&& first  exr
 
 -- | Operate on left-associated form
 inLassocP :: ProductCat k =>
@@ -112,16 +112,16 @@ inRassocPS = inRassocP . second
 
 infixr 2 +++, |||
 
--- | Category with co-product. Minimal definition: 'lft', 'rht', and either
+-- | Category with co-product. Minimal definition: 'inl', 'inr', and either
 -- (a) '(|||)', (b) both '(+++)' and 'jam', or (c) both '(|||)' and '(+++)'.
 -- TODO: Generalize '(:+)' to an associated type. Keep the types fairly pretty.
 class Category k => CoproductCat k where
-  lft       :: a `k` (a :+ b)
-  rht       :: b `k` (a :+ b)
+  inl       :: a `k` (a :+ b)
+  inr       :: b `k` (a :+ b)
   jam       :: (a :+ a) `k` a                  -- dual to dup. standard name?
   jam       =  id ||| id
   (+++)     :: (a `k` c) -> (b `k` d) -> ((a :+ b) `k` (c :+ d))
-  f +++ g   =  lft . f ||| rht . g
+  f +++ g   =  inl . f ||| inr . g
   (|||)     :: (a `k` c) -> (b `k` c) -> ((a :+ b) `k`  c)
   f ||| g   =  jam . (f +++ g)
   left      :: (a `k` a') -> ((a :+ b) `k` (a' :+ b ))
@@ -131,31 +131,31 @@ class Category k => CoproductCat k where
   ldistribS :: (a, u :+ v) `k` ((a,u) :+ (a,v))
   rdistribS :: (u :+ v, b) `k` ((u,b) :+ (v,b))
   swapS     :: (a :+ b) `k` (b :+ a)
-  swapS     =  rht ||| lft
+  swapS     =  inr ||| inl
   lassocS   :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
   rassocS   :: ((a :+ b) :+ c) `k` (a :+ (b :+ c))
-  lassocS   =  lft.lft ||| (lft.rht ||| rht)
-  rassocS   =  (lft ||| rht.lft) ||| rht.rht
+  lassocS   =  inl.inl ||| (inl.inr ||| inr)
+  rassocS   =  (inl ||| inr.inl) ||| inr.inr
 
   -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
 
 instance ProductCat (->) where
-  fst   = P.fst
-  snd   = P.snd
+  exl   = P.fst
+  exr   = P.snd
   (***) = (A.***)
   (&&&) = (A.&&&)
 
 instance CoproductCat (->) where
-  lft              = Left
-  rht              = Right
+  inl              = Left
+  inr              = Right
   (+++)            = (A.+++)
   (|||)            = (A.|||)
   ldistribS (a,uv) = ((a,) +++ (a,)) uv
   rdistribS (uv,b) = ((,b) +++ (,b)) uv
 
 instance Monad m => ProductCat (Kleisli m) where
-  fst   = arr  fst
-  snd   = arr  snd
+  exl   = arr  exl
+  exr   = arr  exr
   dup   = arr  dup
   (***) = inNew2 crossM
 
@@ -163,8 +163,8 @@ crossM :: Monad m => (a -> m c) -> (b -> m d) -> (a :* b -> m (c :* d))
 (f `crossM` g) (a,b) = liftM2 (,) (f a) (g b)
 
 instance Monad m => CoproductCat (Kleisli m) where
-  lft       = arr  lft
-  rht       = arr  rht
+  inl       = arr  inl
+  inr       = arr  inr
   jam       = arr  jam
   ldistribS = arr  ldistribS
   rdistribS = arr  rdistribS
