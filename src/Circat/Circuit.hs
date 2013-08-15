@@ -680,10 +680,10 @@ infixr 2 |||*
           (a :> c) -> (b :> c) -> (a :+ b :> c)
 f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& pureC sumFlag)
 
--- f |||* g = muxC . first toPair . ((f . unsafeExtract &&& g . unsafeExtract) &&& arr sumFlag)
-
 condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
 condC = muxC . first toPair
+
+-- TODO: Reduce muxC to several one-bit muxes.
 
 unsafeExtract :: IsSource (Pins c) => a :+ b :> c
 unsafeExtract = pureC (pinsSource . sumPins)
