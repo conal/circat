@@ -92,7 +92,7 @@ type PinSupply = [Pin]
 
 type MonadPins = M.MonadState PinSupply
 
-newPin :: M.MonadState PinSupply m => m Pin
+newPin :: MonadPins m => m Pin
 newPin = do { (p:ps') <- M.get ; M.put ps' ; return p }
 
 -- runCircuitM :: CircuitM a -> PinSupply -> (a,PinSupply)
