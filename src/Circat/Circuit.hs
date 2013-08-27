@@ -589,6 +589,7 @@ addTBS1 = addBS
     Another pass at ClosedCat
 --------------------------------------------------------------------}
 
+{-
 type family Unpins a
 
 type instance Unpins Pin = Bool
@@ -599,7 +600,7 @@ type instance Unpins ( a :* b ) = Unpins a :* Unpins b
 type instance Unpins (Pair a  ) = Pair (Unpins a)
 type instance Unpins (Vec n a ) = Vec  n (Unpins a)
 type instance Unpins (Tree n a) = Tree n (Unpins a)
-
+-}
 
 distribMF :: Monad m => m (p -> q) -> (p -> m q)
 distribMF u p = liftM ($ p) u
