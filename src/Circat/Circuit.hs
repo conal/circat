@@ -241,7 +241,7 @@ constC = mkC . constM
 -- TODO: Kleisli already defines an ConstCat instance, and it doesn't use
 -- constC. Can it work for (:>)?
 
--- instance Newtype (a :> b) (Source a -> CircuitM (Source b)) where
+-- instance Newtype (a :> b) (Pins a -> CircuitM (Pins b)) where
 --   pack   = C
 --   unpack = unC
 -- 
