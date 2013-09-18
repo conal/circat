@@ -54,8 +54,8 @@ import qualified Data.Sequence as Seq
 import Text.Printf (printf)
 
 -- mtl
-import Control.Monad.State (State,evalState)
-import qualified Control.Monad.State as M
+import Control.Monad.State (State,evalState,MonadState)
+import qualified Control.Monad.State as Mtl
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
 import TypeUnary.Vec hiding (get)
@@ -90,10 +90,10 @@ type CircuitM = WriterT (Seq Comp) (State PinSupply)
 newtype Pin = Pin Int deriving (Eq,Ord,Show,Enum)
 type PinSupply = [Pin]
 
-type MonadPins = M.MonadState PinSupply
+type MonadPins = MonadState PinSupply
 
 newPin :: MonadPins m => m Pin
-newPin = do { (p:ps') <- M.get ; M.put ps' ; return p }
+newPin = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
 
 -- runCircuitM :: CircuitM a -> PinSupply -> (a,PinSupply)
 -- runCircuitM 
@@ -256,9 +256,15 @@ inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
      -> (a :> b -> a' :> b' -> a'' :> b'')
 inC2 = inC <~ unC
 
+
 instance Category (:>) where
   id  = C id
-  (.) = inC2 (.)
+  C g . C f = C (g . f)
+
+
+-- instance Category (:>) where
+--   id  = C id
+--   (.) = inC2 (.)
 
 instance ProductCat (:>) where
   exl   = C exl
@@ -657,9 +663,6 @@ instance IsSource2 a b => IsSource (a :++ b) where
   numPins _ =
     (numPins (undefined :: a) `max` numPins (undefined :: b)) + 1
 
-pinsSource :: IsSource a => Seq Pin -> a
-pinsSource pins = M.evalState genSource (toList pins)
-
 unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
                 Bool -> q :> a :+ b
 unsafeInject flag = mkC $ \ q ->
@@ -679,18 +682,24 @@ inrC = unsafeInject True
 infixr 2 |||*
 (|||*) :: (IsSourceP2 a b, IsSourceP c) =>
           (a :> c) -> (b :> c) -> (a :+ b :> c)
-f |||* g = condC . ((f . unsafeExtract &&& g . unsafeExtract) &&& pureC sumFlag)
+f |||* g = condC . ((f *** g) . extractBoth &&& pureC sumFlag)
 
 condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
 condC = muxC . first toPair
 
 -- TODO: Reduce muxC to several one-bit muxes.
 
-unsafeExtract :: IsSource (Pins c) => a :+ b :> c
-unsafeExtract = pureC (pinsSource . sumPins)
+-- unsafeExtract :: IsSource (Pins c) => a :+ b :> c
+-- unsafeExtract = pureC (pinsSource . sumPins)
+
+extractBoth :: IsSourceP2 a b => a :+ b :> a :* b
+extractBoth = pureC ((pinsSource &&& pinsSource) . sumPins)
+
+pinsSource :: IsSource a => Seq Pin -> a
+pinsSource pins = Mtl.evalState genSource (toList pins)
 
 pureC :: (Pins a -> Pins b) -> (a :> b)
-pureC f = mkC (return . f)
+pureC = C . arr
 
 -- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
 -- move inlC, inrC, (|||*) into a CoproductCat instance. Tricky.
