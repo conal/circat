@@ -181,12 +181,15 @@ type family Pins a
 
 type instance Pins Bool = Pin
 
--- Everything else distributes:
+-- Distribute over product-based structures:
 type instance Pins ()         = ()
-type instance Pins ( a :* b ) = Pins a :* Pins b
+type instance Pins (a :* b)   = Pins a :* Pins b
 type instance Pins (Pair a  ) = Pair (Pins a)
 type instance Pins (Vec n a ) = Vec  n (Pins a)
 type instance Pins (Tree n a) = Tree n (Pins a)
+
+-- Experimental support for functions
+type instance Pins (a :> b)   = a :+> b
 
 {--------------------------------------------------------------------
     Circuit category
@@ -253,18 +256,17 @@ inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
 inC = C <~ unC
 
 inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
-     -> (a :> b -> a' :> b' -> a'' :> b'')
+     -> (a :>  b -> a' :>  b' -> a'' :>  b'')
 inC2 = inC <~ unC
-
-
-instance Category (:>) where
-  id  = C id
-  C g . C f = C (g . f)
 
 
 -- instance Category (:>) where
 --   id  = C id
---   (.) = inC2 (.)
+--   C g . C f = C (g . f)
+
+instance Category (:>) where
+  id  = C id
+  (.) = inC2 (.)
 
 instance ProductCat (:>) where
   exl   = C exl
@@ -281,6 +283,30 @@ instance ProductCat (:>) where
 --   rdistribS = 
 --   (+++)     = 
 --   (|||)     = 
+
+instance ClosedCat (:>) where
+  type Exp (:>) a b = a :> b
+  apply   =   C apply
+  curry   = inC curry
+  uncurry = inC uncurry
+
+{-
+
+Instead of
+
+> type instance Source (a :> b) = a :+> b
+> 
+> type Exp (:>) a b = a :> b
+
+we could define
+
+> type instance Source (a -> b) = a :+> b
+> 
+> type Exp (:>) a b = a -> b
+
+I don't know which to prefer.
+
+-}
 
 instance UnitCat (:>) where
   lunit = C lunit
@@ -606,7 +632,6 @@ type instance Unpins ( a :* b ) = Unpins a :* Unpins b
 type instance Unpins (Pair a  ) = Pair (Unpins a)
 type instance Unpins (Vec n a ) = Vec  n (Unpins a)
 type instance Unpins (Tree n a) = Tree n (Unpins a)
--}
 
 distribMF :: Monad m => m (p -> q) -> (p -> m q)
 distribMF u p = liftM ($ p) u
@@ -629,7 +654,6 @@ distribMF u p = liftM ($ p) u
 --   curry   :: ClosedKon k b => ((a :* b) `k` c) -> (a `k` Exp k b c)
 --   uncurry :: ClosedKon k b => (a `k` Exp k b c) -> (a :* b) `k` c
 
-{-
   apply   :: ClosedKon (:>) a => ((Unpins a :->: b) :* a) :> b
   curry   :: ClosedKon (:>) b => ((a :* b) :> c) -> (a :> (Unpins b :->: c))
   uncurry :: ClosedKon (:>) b => (a :> (Unpins b :->: c)) -> ((a :* b) :> c)
@@ -642,6 +666,8 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 muxC :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
         ((u :->: v) :* u) :> v
 muxC = namedC "mux"
+
+
 
 {--------------------------------------------------------------------
     Coproducts
