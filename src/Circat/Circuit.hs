@@ -314,17 +314,19 @@ type instance Pins (a -> b) = a :> b
 
 instance ClosedCat (:>) where
   type Exp (:>) a b = a -> b
-  apply         = C (apply . first (arr unC))
+  apply   = C (apply . first (arr unC))
   curry   = inC $ \ h -> arr C . curry h
   uncurry = inC $ \ f -> uncurry (arr unC . f)
 
 {- Types:
 
-Consider `Source`- specialized versions of `KC`:
+Abbreviations:
 
 > type KC = Kleisli CircuitM
 > type S = Source
->
+
+Consider `Source`- specialized versions of `KC`:
+
 > apply   :: KC (Exp KC (S a) (S b) :* S a) (S b)
 >         == KC (KC (S a) (S b) :* S a) (S b)
 >         == KC ((a :+> b) :* S a) (S b)
@@ -349,17 +351,15 @@ Consider `Source`- specialized versions of `KC`:
 
 Instead of
 
-> type instance Source (a :> b) = a :+> b
+> type instance Source (a :> b) = a :> b
 > 
 > type Exp (:>) a b = a :> b
 
 we could define
 
-> type instance Source (a -> b) = a :+> b
+> type instance Source (a -> b) = a :> b
 > 
 > type Exp (:>) a b = a -> b
-
-I don't know which to prefer.
 
 TCMs work out better as defined.
 
