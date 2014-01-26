@@ -188,8 +188,7 @@ type instance Pins (Pair a  ) = Pair (Pins a)
 type instance Pins (Vec n a ) = Vec  n (Pins a)
 type instance Pins (Tree n a) = Tree n (Pins a)
 
--- Experimental support for functions
-type instance Pins (a :> b)   = a :+> b
+-- See below for function instance
 
 {--------------------------------------------------------------------
     Circuit category
@@ -285,10 +284,19 @@ instance ProductCat (:>) where
 --   (|||)     = 
 
 instance ClosedCat (:>) where
-  type Exp (:>) a b = a :> b
+  -- type Exp (:>) a b = a :> b
+  type Exp (:>) a b = a -> b
   apply   =   C apply
   curry   = inC curry
   uncurry = inC uncurry
+
+-- Experimental support for functions
+
+-- type instance Pins (a :> b)   = a :+> b
+type instance Pins (a -> b) = a :+> b
+
+-- I need the -> version for cccToCircuit to type-check.
+-- Maybe drop Exp altogether in favor of -> (as before).
 
 {-
 
@@ -300,7 +308,7 @@ Instead of
 
 we could define
 
-> type instance Source (a -> b) = a :+> b
+> 
 > 
 > type Exp (:>) a b = a -> b
 
