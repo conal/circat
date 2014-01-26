@@ -297,22 +297,55 @@ instance ProductCat (:>) where
 --   (+++)     = 
 --   (|||)     = 
 
+{-
+type instance Pins (a :> b)   = a :+> b
+
 instance ClosedCat (:>) where
-  -- type Exp (:>) a b = a :> b
   type Exp (:>) a b = a -> b
   apply   =   C apply
   curry   = inC curry
   uncurry = inC uncurry
+-}
 
--- Experimental support for functions
+type instance Pins (a -> b) = a :> b
 
--- type instance Pins (a :> b)   = a :+> b
-type instance Pins (a -> b) = a :+> b
+-- With this version, the methods are trickier, but the result is more easily
+-- usable, since we export (:>) and not the underlying (:+>) representation.
 
--- I need the -> version for cccToCircuit to type-check.
--- Maybe drop Exp altogether in favor of -> (as before).
+instance ClosedCat (:>) where
+  type Exp (:>) a b = a -> b
+  apply         = C (apply . first (arr unC))
+  curry   = inC $ \ h -> arr C . curry h
+  uncurry = inC $ \ f -> uncurry (arr unC . f)
 
-{-
+{- Types:
+
+Consider `Source`- specialized versions of `KC`:
+
+> type KC = Kleisli CircuitM
+> type S = Source
+>
+> apply   :: KC (Exp KC (S a) (S b) :* S a) (S b)
+>         == KC (KC (S a) (S b) :* S a) (S b)
+>         == KC ((a :+> b) :* S a) (S b)
+>         =~ KC ((a :> b) :* S a) (S b)
+>         == KC (S (a -> b) :* S a) (S b)
+>         == KC (S ((a -> b) :* a)) (S b)
+>         == ((a -> b) :* a) :+> b
+>
+> curry   :: KC (S a :* S b) (S c) -> KC (S a) (Exp KC (S b) (S c))
+>         == KC (S a :* S b) (S c) -> KC (S a) (KC (S b) (S c))
+>         == KC (S a :* S b) (S c) -> KC (S a) (b :+> c)
+>         =~ KC (S a :* S b) (S c) -> KC (S a) (b :> c)
+>         == KC (S (a :* b)) (S c) -> KC (S a) (S (b -> c))
+>         == ((a :* b) :+> c) -> (a :+> (b -> c))
+>
+> uncurry :: KC (S a) (Exp KC (S b) (S c)) -> KC (S a :* S b) (S c)
+>         == KC (S a) (KC (S b) (S c)) -> KC (S a :* S b) (S c)
+>         == KC (S a) (b :+> c) -> KC (S a :* S b) (S c)
+>         =~ KC (S a) (b :> c) -> KC (S a :* S b) (S c)
+>         == KC (S a) (S (b -> c)) -> KC (S (a :* b)) (S c)
+>         == (a :+> Exp (:>) (b -> c)) -> ((a :* b) :+> c)
 
 Instead of
 
@@ -322,11 +355,31 @@ Instead of
 
 we could define
 
-> 
+> type instance Source (a -> b) = a :+> b
 > 
 > type Exp (:>) a b = a -> b
 
 I don't know which to prefer.
+
+TCMs work out better as defined.
+
+-}
+
+{-
+
+Instead of
+
+> type instance Source (a -> b) = a :> b
+> 
+> type Exp (:>) a b = a -> b
+
+we could define
+
+> type instance Source (a :> b) = a :> b
+> 
+> type Exp (:>) a b = a :> b
+
+I need the first version for cccToCircuit to type-check.
 
 -}
 
