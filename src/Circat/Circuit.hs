@@ -24,7 +24,7 @@
 
 module Circat.Circuit 
   ( CircuitM, (:>)
-  , Pin, Pins, IsSourceP, IsSourceP2, namedC, constC
+  , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
   , inlC, inrC, (|||*)
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
@@ -217,6 +217,20 @@ primC = mkC . genComp
 
 namedC :: IsSourceP2 a b => String -> a :> b
 namedC = primC . Prim
+
+-- | Constant circuit from source generator (experimental)
+constSM :: CircuitM (Pins b) -> (a :> b)
+constSM mkB = mkC (const mkB)
+
+-- | Constant circuit from source
+constS :: Pins b -> (a :> b)
+constS b = constSM (return b)
+
+-- constS b = C (const b)
+
+-- TODO: Rename "pins", which doesn't fit with exponentials.
+
+-- TODO: Consolidate forms of constant circuits
 
 -- constC :: (IsSource2 a b, Show b) => b -> a :> b
 -- constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
