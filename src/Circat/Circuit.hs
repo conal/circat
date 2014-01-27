@@ -4,6 +4,7 @@
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
+{-# LANGUAGE CPP #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -25,7 +26,7 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
-  , inlC, inrC, (|||*), muxC
+  , inlC, inrC, (|||*), muxC, pinsAsCirc
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -295,15 +296,23 @@ instance ProductCat (:>) where
 --   (+++)     = 
 --   (|||)     = 
 
-{-
-type instance Pins (a :> b)   = a :+> b
+#define UnwrappedExp
+
+pinsAsCirc :: Pins (a -> b) -> a :> b
+
+#ifdef UnwrappedExp
+
+type instance Pins (a -> b)   = a :+> b
 
 instance ClosedCat (:>) where
   type Exp (:>) a b = a -> b
   apply   =   C apply
   curry   = inC curry
   uncurry = inC uncurry
--}
+
+pinsAsCirc = C
+
+#else
 
 type instance Pins (a -> b) = a :> b
 
@@ -315,6 +324,10 @@ instance ClosedCat (:>) where
   apply   = C (apply . first (arr unC))
   curry   = inC $ \ h -> arr C . curry h
   uncurry = inC $ \ f -> uncurry (arr unC . f)
+
+pinsAsCirc = id
+
+#endif
 
 {- Types:
 
@@ -360,24 +373,6 @@ we could define
 > type Exp (:>) a b = a -> b
 
 TCMs work out better as defined.
-
--}
-
-{-
-
-Instead of
-
-> type instance Source (a -> b) = a :> b
-> 
-> type Exp (:>) a b = a -> b
-
-we could define
-
-> type instance Source (a :> b) = a :> b
-> 
-> type Exp (:>) a b = a :> b
-
-I need the first version for cccToCircuit to type-check.
 
 -}
 
