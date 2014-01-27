@@ -25,7 +25,7 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
-  , inlC, inrC, (|||*)
+  , inlC, inrC, (|||*), muxC
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -67,8 +67,6 @@ import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
-
-
 
 {--------------------------------------------------------------------
     The circuit monad
@@ -561,6 +559,8 @@ type (:->) = StateFun (:>) Bool
 
 {-
 
+-- TODO: Revisit this whole line of thinking now that I have a ClosedCat instance for (:>)
+
 {--------------------------------------------------------------------
     Temporary hack for StateExp
 --------------------------------------------------------------------}
@@ -738,12 +738,6 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 -}
 
-muxC :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
-        ((u :->: v) :* u) :> v
-muxC = namedC "mux"
-
-
-
 {--------------------------------------------------------------------
     Coproducts
 --------------------------------------------------------------------}
@@ -781,12 +775,26 @@ inrC :: IsSourceP2 a b => b :> a :+ b
 inrC = unsafeInject True
 
 infixr 2 |||*
+
+{-
 (|||*) :: (IsSourceP2 a b, IsSourceP c) =>
           (a :> c) -> (b :> c) -> (a :+ b :> c)
-f |||* g = condC . ((f *** g) . extractBoth &&& pureC sumFlag)
+f |||* g = muxC . ((f *** g) . extractBoth &&& pureC sumFlag)
 
 condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
-condC = muxC . first toPair
+condC = muxCT . first toPair
+
+muxCT :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
+         ((u :->: v) :* u) :> v
+muxCT = namedC "mux"
+-}
+
+(|||*) :: (IsSourceP2 a b, IsSourceP c) =>
+          (a :> c) -> (b :> c) -> (a :+ b :> c)
+f |||* g = muxC . (pureC sumFlag &&& (f *** g) . extractBoth)
+
+muxC :: IsSourceP c => Bool :* (c :* c) :> c
+muxC = namedC "mux"
 
 -- TODO: Reduce muxC to several one-bit muxes.
 
