@@ -1,5 +1,5 @@
 Name:               circat
-Version:            0.2.1
+Version:            0.2.3
 Cabal-Version:      >= 1.6
 Synopsis:           A categorical framework for circuit construction
 Category:           circuits, categories
