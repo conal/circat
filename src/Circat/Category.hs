@@ -251,58 +251,37 @@ instance ClosedCat (->) where
   curry       = P.curry
   uncurry     = P.uncurry
 
--- TODO: Would MemoTrie work as well?
+inKleisli :: ((a -> m b) -> (a' -> m' b'))
+          -> Kleisli m a b -> Kleisli m' a' b'
+inKleisli = Kleisli <~ runKleisli
 
--- distribMF :: Monad m => m (p -> q) -> (p -> m q)
--- distribMF u p = liftM ($ p) u
+instance Monad m => ClosedCat (Kleisli m) where
+  type Exp (Kleisli m) a b = Kleisli m a b
+  apply   = Kleisli (apply . first runKleisli)
+  curry   = inKleisli $ \ h -> return . Kleisli . curry h
+  uncurry = inKleisli $ \ f -> \ (a,b) -> f a >>= ($ b) . runKleisli
 
--- TODO: Is there a standard name for distribMF?
--- It's a distribution/transposition.
+{- Types:
 
--- For Kleisli, use tries. Might be too sweeping, in which case, comment out
--- this instance as a suggestion for specific monads or for newtype wrappers
--- around some Klieslis.
+Enhance methods on (->):
 
--- instance Monad m => ClosedCat (Kleisli m) where
---   type ClosedKon (Kleisli m) u = (HasTrie u, Traversable (Trie u))
---   type Exp (Kleisli m) u v = u :->: v
---   apply   = Kleisli (return . uncurry untrie)
---   curry   = inNew $ \ f -> sequence . trie . curry f
---   uncurry = inNew $ \ h -> uncurry (distribMF . liftM untrie . h)
-
-{- 
-
-Derivations:
-
-apply :: ((a +> b) :* a) `k` b
-      :: Kleisli m ((a :->: b) :* a) b
-      =~ (a :->: b) :* a -> m b
-
-return . uncurry untrie :: (a :->: b) :* a -> m b
-Kleisli (return . uncurry untrie) :: Kleisli m ((a :->: b) :* a) b
-
-curry :: ((a :* b) `k` c) -> a `k` (b +> c)
-      :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
-      =~ (a :* b -> m c) -> (a -> m (b :->: c))
-
-f :: a :* b -> m c
-curry f :: a -> b -> m c
-trie . curry f :: a -> (b :->: m c)
-sequenceA . trie . curry f :: a -> m (b :->: c)
-
-inNew (\ f -> sequenceA . trie . curry f)
-  :: Kleisli m (a :* b) c -> Kleisli m a (b :->: c)
-
-uncurry :: a `k` (b +> c) -> ((a :* b) `k` c)
-        :: Kleisli m a (b :->: c) -> Kleisli m (a :* b) c
-        =~ (a -> m (b :->: c)) -> (a :* b -> m c)
-
-h :: a -> m (b :->: c)
-liftM untrie . h :: a -> m (b -> c)
-distribMF . liftM untrie . h :: a -> b -> m c
-uncurry (distribMF . liftM untrie . h) :: a :* b -> m c
-
-inNew (\ h -> uncurry (distribMF . liftM untrie . h))
- :: Kleisli m a (b :->: c) -> Kleisli m (a :* b) c
+> apply :: (a -> m b) :* a -> m b
+> apply . first runKleisli :: Kleisli m a b :* a -> m b
+>                          :: Kleisli m (Kleisli m a b :* a) b
+> 
+> h                                    :: a :* b -> m c
+> curry h                              :: a -> b -> m c
+> Kleisli . curry h                    :: a -> Kleisli m b c
+> return . Kleisli . curry h           :: a -> m (Kleisli m b c)
+> Kleisli (return . Kleisli . curry h) :: Kleisli m a (Kleisli m b c)
+> 
+> f                                       :: a -> m (Kleisli m b c)
+> a                                       :: a
+> b                                       :: b
+> f a                                     :: m (Kleisli m b c)
+> liftM runKleisli (f a)                  :: m (b -> m c)
+> liftM (($ b) . runKleisli) (f a)        :: m (m c)
+> join (liftM (($ b) . runKleisli) (f a)) :: m c
+> f a >>= ($ b) . runKleisli              :: m c
 
 -}
