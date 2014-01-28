@@ -26,7 +26,7 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
-  , inlC, inrC, (|||*), muxC, pinsAsCirc
+  -- , inlC, inrC, (|||*), muxC -- , pinsAsCirc
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -287,7 +287,7 @@ instance ProductCat (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
--- instance CategoryCoproduct (:>) where
+-- instance CoproductCat (:>) where
 --   inl       = 
 --   inr       = 
 --   jam       = 
@@ -296,13 +296,55 @@ instance ProductCat (:>) where
 --   (+++)     = 
 --   (|||)     = 
 
-#define UnwrappedExp
+type instance Pins (a :+ b) = Pins a :+ Pins b
 
-pinsAsCirc :: Pins (a -> b) -> a :> b
+instance CoproductCat (:>) where
+  inl = C inl
+  inr = C inr
+  (|||) = inC2 (|||)
+  ldistribS = C ldistribS
+  rdistribS = C rdistribS
+
+-- TODO: replace C, unC, inC, inC2 by pack, unpack, inNew, inNew2 throughout this module
+
+{- Types:
+
+Abbreviations:
+
+> type KC = Kleisli CircuitM
+> type S = Source
+
+Consider `Source`- specialized versions of `KC`:
+
+> inl :: KC (S a) (S a :+ S b)
+>     == KC (S a) (S (a :+ b))
+>     == a :+> a :+ b
+>
+> inr :: KC (S b) (S a :+ S b)
+>     == KC (S b) (S (a :+ b))
+>     == b :+> a :+ b
+>
+> (|||) :: KC (S a) (S c) -> KC (S b) (S c) -> KC (S a :+ S b) (S c)
+>       == KC (S a) (S c) -> KC (S b) (S c) -> KC (S (a :+ b)) (S c)
+>       == a :+> c -> b :+> c -> (a :+ b) :+> c
+>
+> ldistribS :: KC (S a :* (S u :+ S v)) (S a :* S u :+ S a :* S v)
+>           == KC (S (a :* (u :+ v))) (S (a :* u :+ a :* v))
+>           == (a :* (u :+ v)) :+> (a :* u :+ a :* v)
+>
+> rdistribS :: KC ((S u :+ S v) :* S b) (S u :* S b :+ S v :* S b)
+>           == KC (S ((u :+ v) :* b)) (S (u :* b :+ v :* b))
+>           == ((u :+ v) :* b) :+> (u :* b :+ v :* b)
+
+-}
+
+-- #define UnwrappedExp
+
+-- pinsAsCirc :: Pins (a -> b) -> a :> b
 
 #ifdef UnwrappedExp
 
-type instance Pins (a -> b)   = a :+> b
+type instance Pins (a -> b) = a :+> b
 
 instance ClosedCat (:>) where
   type Exp (:>) a b = a -> b
@@ -310,7 +352,7 @@ instance ClosedCat (:>) where
   curry   = inC curry
   uncurry = inC uncurry
 
-pinsAsCirc = C
+-- pinsAsCirc = C
 
 #else
 
@@ -325,7 +367,7 @@ instance ClosedCat (:>) where
   curry   = inC $ \ h -> arr C . curry h
   uncurry = inC $ \ f -> uncurry (arr unC . f)
 
-pinsAsCirc = id
+-- pinsAsCirc = id
 
 #endif
 
@@ -733,6 +775,8 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 -}
 
+{-
+
 {--------------------------------------------------------------------
     Coproducts
 --------------------------------------------------------------------}
@@ -807,3 +851,5 @@ pureC = C . arr
 
 -- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
 -- move inlC, inrC, (|||*) into a CoproductCat instance. Tricky.
+
+-}
