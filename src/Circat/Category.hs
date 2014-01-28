@@ -30,6 +30,7 @@ module Circat.Category
   , CoproductCat(..)
   , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
   , StrongCat(..), ClosedCat(..), ClosedCatWith
+  , constFun
   , Yes
   ) where
 
@@ -283,3 +284,17 @@ Enhance methods on (->):
 > f a >>= ($ b) . unpack              :: m c
 
 -}
+
+constFun :: (ClosedCat k, ClosedKon k b)
+         => (b `k` c) -> (a `k` (Exp k b c))
+constFun f = curry (f . exr)
+
+-- f :: b `k` c
+-- f . exl :: a :* b `k` c
+-- curry (f . exl) :: a `k` (Exp k b c)
+
+-- Combine with currying:
+
+-- constFun2 :: (ClosedCat k, ClosedKon k b, ClosedKon k c)
+--           => ((b :* c) `k` d) -> (a `k` (Exp k b (Exp k c d)))
+-- constFun2 = constFun . curry
