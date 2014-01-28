@@ -43,9 +43,11 @@ import Control.Monad (liftM2) -- liftM,
 -- import Data.Traversable (Traversable,sequence)
 import GHC.Prim (Constraint)
 
+import Control.Newtype
+
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
-import Circat.Misc ((:*),(:+),(<~),inNew2) -- ,inNew
+import Circat.Misc ((:*),(:+),(<~),inNew,inNew2) -- ,inNew
 
 infixr 3 ***, &&&
 
@@ -154,20 +156,20 @@ instance CoproductCat (->) where
   rdistribS (uv,b) = ((,b) +++ (,b)) uv
 
 instance Monad m => ProductCat (Kleisli m) where
-  exl   = arr  exl
-  exr   = arr  exr
-  dup   = arr  dup
+  exl   = arr exl
+  exr   = arr exr
+  dup   = arr dup
   (***) = inNew2 crossM
 
 crossM :: Monad m => (a -> m c) -> (b -> m d) -> (a :* b -> m (c :* d))
 (f `crossM` g) (a,b) = liftM2 (,) (f a) (g b)
 
 instance Monad m => CoproductCat (Kleisli m) where
-  inl       = arr  inl
-  inr       = arr  inr
-  jam       = arr  jam
-  ldistribS = arr  ldistribS
-  rdistribS = arr  rdistribS
+  inl       = arr inl
+  inr       = arr inr
+  jam       = arr jam
+  ldistribS = arr ldistribS
+  rdistribS = arr rdistribS
   (|||)     = inNew2 (|||)
 
 
@@ -251,37 +253,33 @@ instance ClosedCat (->) where
   curry       = P.curry
   uncurry     = P.uncurry
 
-inKleisli :: ((a -> m b) -> (a' -> m' b'))
-          -> Kleisli m a b -> Kleisli m' a' b'
-inKleisli = Kleisli <~ runKleisli
-
 instance Monad m => ClosedCat (Kleisli m) where
   type Exp (Kleisli m) a b = Kleisli m a b
-  apply   = Kleisli (apply . first runKleisli)
-  curry   = inKleisli $ \ h -> return . Kleisli . curry h
-  uncurry = inKleisli $ \ f -> \ (a,b) -> f a >>= ($ b) . runKleisli
+  apply   = pack (apply . first unpack)
+  curry   = inNew $ \ h -> return . pack . curry h
+  uncurry = inNew $ \ f -> \ (a,b) -> f a >>= ($ b) . unpack
 
 {- Types:
 
 Enhance methods on (->):
 
-> apply :: (a -> m b) :* a -> m b
-> apply . first runKleisli :: Kleisli m a b :* a -> m b
->                          :: Kleisli m (Kleisli m a b :* a) b
+> apply                :: (a -> m b) :* a -> m b
+> apply . first unpack :: Kleisli m a b :* a -> m b
+>                      :: Kleisli m (Kleisli m a b :* a) b
 > 
-> h                                    :: a :* b -> m c
-> curry h                              :: a -> b -> m c
-> Kleisli . curry h                    :: a -> Kleisli m b c
-> return . Kleisli . curry h           :: a -> m (Kleisli m b c)
-> Kleisli (return . Kleisli . curry h) :: Kleisli m a (Kleisli m b c)
+> h                              :: a :* b -> m c
+> curry h                        :: a -> b -> m c
+> pack . curry h                 :: a -> Kleisli m b c
+> return . pack . curry h        :: a -> m (Kleisli m b c)
+> pack (return . pack . curry h) :: Kleisli m a (Kleisli m b c)
 > 
-> f                                       :: a -> m (Kleisli m b c)
-> a                                       :: a
-> b                                       :: b
-> f a                                     :: m (Kleisli m b c)
-> liftM runKleisli (f a)                  :: m (b -> m c)
-> liftM (($ b) . runKleisli) (f a)        :: m (m c)
-> join (liftM (($ b) . runKleisli) (f a)) :: m c
-> f a >>= ($ b) . runKleisli              :: m c
+> f                                   :: a -> m (Kleisli m b c)
+> a                                   :: a
+> b                                   :: b
+> f a                                 :: m (Kleisli m b c)
+> liftM unpack (f a)                  :: m (b -> m c)
+> liftM (($ b) . unpack) (f a)        :: m (m c)
+> join (liftM (($ b) . unpack) (f a)) :: m c
+> f a >>= ($ b) . unpack              :: m c
 
 -}
