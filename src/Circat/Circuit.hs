@@ -6,6 +6,8 @@
 {-# LANGUAGE UndecidableInstances #-} -- see below
 {-# LANGUAGE CPP #-}
 
+{-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-} -- for Church sum experiment
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -215,6 +217,10 @@ mkC = C . Kleisli
 
 unmkC :: (a :> b) -> (Pins a -> CircuitM (Pins b))
 unmkC (C (Kleisli f)) = f
+
+inCK :: ((Pins a -> CircuitM (Pins b)) -> (Pins a' -> CircuitM (Pins b')))
+     -> ((a :> b) -> (a' :> b'))
+inCK = mkC <~ unmkC
 
 primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
 primC = mkC . genComp
@@ -860,3 +866,97 @@ pureC = C . arr
 -- move inlC, inrC, (|||*) into a CoproductCat instance. Tricky.
 
 #endif
+
+
+{--------------------------------------------------------------------
+    Yet another sum experiment: Church encoding
+--------------------------------------------------------------------}
+
+infixr 1 :=>
+type (:=>) = (->)
+
+type Unit = ()
+
+class HasTy a where ty :: Ty a
+
+data Ty :: * -> * where
+  Unit   :: Ty Unit
+  (:*) :: (HasTy a, HasTy b) => Ty (a :* b)
+  (:+) :: (HasTy a, HasTy b) => Ty (a :+ b)
+  (:=>) :: (HasTy a, HasTy b) => Ty (a :=> b)
+
+infixl 6 ::+
+
+-- Placeholder
+data a ::+ b -- = Lft a | Rht b
+
+{-
+type instance Pins (a ::+ b) = PSum a b
+
+newtype PSum a b = PSum { unPSum :: forall c. HasTy c => ((a -> c) :* (b -> c)) :> c }
+
+type PS a b = forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c)
+
+mkPS :: PS a b -> PSum a b
+mkPS h = PSum (mkC (uncurry h))
+
+unPS :: PSum a b -> PS a b
+unPS ps = curry (unmkC (unPSum ps))
+
+inlP :: a :> a ::+ b
+inlP = mkC (\ a -> return (mkPS (\ f _ -> unmkC f a)))
+
+inrP :: b :> a ::+ b
+inrP = mkC (\ b -> return (mkPS (\ _ g -> unmkC g b)))
+
+eitherP :: forall a b c. HasTy c =>
+           (a :> c) -> (b :> c) -> (a ::+ b :> c)
+f `eitherP` g = mkC (\ q -> unPS q f g)
+-}
+
+type instance Pins (a ::+ b) = PSum a b
+
+newtype PSum a b =
+  PSum { unPSum :: forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c) }
+
+inlP :: a :> a ::+ b
+inlP = mkC (\ a -> return (PSum (\ f _ -> unmkC f a)))
+
+inrP :: b :> a ::+ b
+inrP = mkC (\ b -> return (PSum (\ _ g -> unmkC g b)))
+
+eitherP :: forall a b c. HasTy c =>
+           (a :> c) -> (b :> c) -> (a ::+ b :> c)
+f `eitherP` g = mkC (\ q -> unPSum q f g)
+
+ldistribSP :: forall u a b. (u :* (a ::+ b)) :> (u :* a ::+ u :* b)
+ldistribSP = mkC (\ (u,q) -> return (PSum (\ f g -> unPSum q (injl u f) (injl u g))))
+
+{-
+u :: Pins u
+q :: Pins (a ::+ b)
+  == PSum a b
+unPSum q :: forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c)
+
+f :: u :* a :> c
+g :: u :* b :> c
+
+injl u f :: a :> c
+injl u g :: b :> c
+
+unPSum q (injl u f) (injl v f) :: CircuitM (Pins c)
+
+-}
+
+rdistribSP :: forall v a b. ((a ::+ b) :* v) :> (a :* v ::+ b :* v)
+rdistribSP = mkC (\ (q,v) -> return (PSum (\ f g -> unPSum q (injr v f) (injr v g))))
+
+
+injl :: Pins u -> (u :* a :> c) -> (a :> c)
+injl u = inCK (. (u,))
+
+injr :: Pins v -> (a :* v :> c) -> (a :> c)
+injr v = inCK (. (,v))
+
+-- (. (u,)) :: (Pins (u :* a) -> CircuitM (Pins c)) -> (Pins a -> CircuitM (Pins c))
+-- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
