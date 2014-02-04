@@ -30,7 +30,7 @@ module Circat.Category
   , CoproductCat(..)
   , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
   , StrongCat(..), ClosedCat(..), ClosedCatWith
-  , constFun
+  , constFun -- , constFun2
   , Yes
   ) where
 
@@ -131,8 +131,8 @@ class Category k => CoproductCat k where
   left      =  (+++ id)
   right     :: (b `k` b') -> ((a :+ b) `k` (a  :+ b'))
   right     =  (id +++)
-  ldistribS :: (a, u :+ v) `k` ((a,u) :+ (a,v))
-  rdistribS :: (u :+ v, b) `k` ((u,b) :+ (v,b))
+  ldistribS :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
+  rdistribS :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
   swapS     :: (a :+ b) `k` (b :+ a)
   swapS     =  inr ||| inl
   lassocS   :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
