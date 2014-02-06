@@ -11,7 +11,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -26,12 +26,16 @@
 ----------------------------------------------------------------------
 
 -- #define StaticSums
+-- #define TaggedSums
+#define ChurchSums
 
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
-#ifndef StaticSums
+#if defined TaggedSums
   , inlC, inrC, (|||*)
+#elif defined ChurchSums
+  , (|||*), fromBool, toBool
 #endif
   , muxC -- , pinsAsCirc
   , Comp', CompNum, toG, outGWith, outG
@@ -298,6 +302,10 @@ instance ProductCat (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
+-- Terminal arrow
+it :: a :> Unit
+it = mkC (const (return ()))
+
 -- instance CoproductCat (:>) where
 --   inl       = 
 --   inr       = 
@@ -558,6 +566,8 @@ sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
               M.fromList [(b,(nc,np)) | (np,b) <- tagged outs ]
 
+{-
+
 -- Stateful addition via StateFun
 
 outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
@@ -565,6 +575,8 @@ outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
 outSG name = outG name . runState
 
 type (:->) = StateFun (:>) Bool
+
+-}
 
 {-
 
@@ -747,7 +759,7 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 -}
 
-#ifdef StaticSums
+#if defined StaticSums
 
 type instance Pins (a :+ b) = Pins a :+ Pins b
 
@@ -791,7 +803,7 @@ Consider `Source`- specialized versions of `KC`:
 
 -}
 
-#else
+#elif defined TaggedSums
 
 {--------------------------------------------------------------------
     Coproducts
@@ -865,8 +877,7 @@ pureC = C . arr
 -- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
 -- move inlC, inrC, (|||*) into a CoproductCat instance. Tricky.
 
-#endif
-
+#elif defined ChurchSums
 
 {--------------------------------------------------------------------
     Yet another sum experiment: Church encoding
@@ -877,64 +888,46 @@ type (:=>) = (->)
 
 type Unit = ()
 
-class HasTy a where ty :: Ty a
+class HasTy a where typ :: Ty a
+
+type HasTy2 a b = (HasTy a, HasTy b)
 
 data Ty :: * -> * where
-  Unit   :: Ty Unit
-  (:*) :: (HasTy a, HasTy b) => Ty (a :* b)
-  (:+) :: (HasTy a, HasTy b) => Ty (a :+ b)
-  (:=>) :: (HasTy a, HasTy b) => Ty (a :=> b)
+  BoolTy :: Ty Bool
+  UnitTy :: Ty Unit
+  ProdTy :: (HasTy a, HasTy b) => Ty (a :* b)
+  SumTy  :: (HasTy a, HasTy b) => Ty (a :+ b)
+  FunTy  :: (HasTy a, HasTy b) => Ty (a :=> b)
 
-infixl 6 ::+
+instance HasTy Bool where typ = BoolTy
+instance HasTy Unit where typ = UnitTy
+instance HasTy2 a b => HasTy (a :*  b) where typ = ProdTy
+instance HasTy2 a b => HasTy (a :+  b) where typ = SumTy
+instance HasTy2 a b => HasTy (a :=> b) where typ = FunTy
 
--- Placeholder
-data a ::+ b -- = Lft a | Rht b
-
-{-
-type instance Pins (a ::+ b) = PSum a b
-
-newtype PSum a b = PSum { unPSum :: forall c. HasTy c => ((a -> c) :* (b -> c)) :> c }
-
-type PS a b = forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c)
-
-mkPS :: PS a b -> PSum a b
-mkPS h = PSum (mkC (uncurry h))
-
-unPS :: PSum a b -> PS a b
-unPS ps = curry (unmkC (unPSum ps))
-
-inlP :: a :> a ::+ b
-inlP = mkC (\ a -> return (mkPS (\ f _ -> unmkC f a)))
-
-inrP :: b :> a ::+ b
-inrP = mkC (\ b -> return (mkPS (\ _ g -> unmkC g b)))
-
-eitherP :: forall a b c. HasTy c =>
-           (a :> c) -> (b :> c) -> (a ::+ b :> c)
-f `eitherP` g = mkC (\ q -> unPS q f g)
--}
-
-type instance Pins (a ::+ b) = PSum a b
+type instance Pins (a :+ b) = PSum a b
 
 newtype PSum a b =
   PSum { unPSum :: forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c) }
 
-inlP :: a :> a ::+ b
-inlP = mkC (\ a -> return (PSum (\ f _ -> unmkC f a)))
+inlC :: a :> a :+ b
+inlC = mkC (\ a -> return (PSum (\ f _ -> unmkC f a)))
 
-inrP :: b :> a ::+ b
-inrP = mkC (\ b -> return (PSum (\ _ g -> unmkC g b)))
+inrC :: b :> a :+ b
+inrC = mkC (\ b -> return (PSum (\ _ g -> unmkC g b)))
 
-eitherP :: forall a b c. HasTy c =>
-           (a :> c) -> (b :> c) -> (a ::+ b :> c)
-f `eitherP` g = mkC (\ q -> unPSum q f g)
+infixr 2 |||*
 
-ldistribSP :: forall u a b. (u :* (a ::+ b)) :> (u :* a ::+ u :* b)
-ldistribSP = mkC (\ (u,q) -> return (PSum (\ f g -> unPSum q (injl u f) (injl u g))))
+(|||*) :: forall a b c. HasTy c =>
+          (a :> c) -> (b :> c) -> (a :+ b :> c)
+f |||* g = mkC (\ q -> unPSum q f g)
+
+ldistribSC :: forall u a b. (u :* (a :+ b)) :> (u :* a :+ u :* b)
+ldistribSC = mkC (\ (u,q) -> return (PSum (\ f g -> unPSum q (injl u f) (injl u g))))
 
 {-
 u :: Pins u
-q :: Pins (a ::+ b)
+q :: Pins (a :+ b)
   == PSum a b
 unPSum q :: forall c. HasTy c => (a :> c) -> (b :> c) -> CircuitM (Pins c)
 
@@ -948,9 +941,8 @@ unPSum q (injl u f) (injl v f) :: CircuitM (Pins c)
 
 -}
 
-rdistribSP :: forall v a b. ((a ::+ b) :* v) :> (a :* v ::+ b :* v)
-rdistribSP = mkC (\ (q,v) -> return (PSum (\ f g -> unPSum q (injr v f) (injr v g))))
-
+rdistribSC :: forall v a b. ((a :+ b) :* v) :> (a :* v :+ b :* v)
+rdistribSC = mkC (\ (q,v) -> return (PSum (\ f g -> unPSum q (injr v f) (injr v g))))
 
 injl :: Pins u -> (u :* a :> c) -> (a :> c)
 injl u = inCK (. (u,))
@@ -960,3 +952,45 @@ injr v = inCK (. (,v))
 
 -- (. (u,)) :: (Pins (u :* a) -> CircuitM (Pins c)) -> (Pins a -> CircuitM (Pins c))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
+
+condC :: forall c. HasTy c => Bool :* (c :* c) :> c
+condC = case (typ :: Ty c) of 
+          UnitTy -> it
+          BoolTy -> muxC
+          ProdTy -> prodCond
+          SumTy  -> sumCond
+          FunTy  -> funCond
+
+-- Working here. To handle: sums and functions.
+
+prodCond :: (HasTy a, HasTy b) => Bool :* ((a :* b) :* (a :* b)) :> (a :* b)
+prodCond = half exl &&& half exr
+ where
+   half :: HasTy c => (u :> c) -> (Bool :* (u :* u) :> c)
+   half f = condC . second (f *** f)
+
+sumCond :: (HasTy a, HasTy b) => Bool :* ((a :+ b) :* (a :+ b)) :> (a :+ b)
+sumCond = error "sumCond: not yet defined"
+-- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> return (PSum (\ f g -> undefined))
+
+funCond :: (HasTy a, HasTy b) => Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
+funCond = error "funCond: not yet defined"
+
+-- The HasTy constraint in condC as used in 'fromBool' is what leads to HasTy in
+-- PSum and hence breaks (|||). I'm looking for an alternative.
+
+fromBool :: Bool :> Unit :+ Unit
+fromBool = condC . (id &&& (inlC &&& inrC) . it)
+
+toBool :: Unit :+ Unit :> Bool
+toBool = constC False |||* constC True
+
+instance CoproductCat (:>) where
+  inl = inlC
+  inr = inrC
+  -- (|||) = (|||*)
+  (|||) = error "(|||) for (:>): Sorry -- no unconstrained method yet."
+  ldistribS = ldistribSC
+  rdistribS = rdistribSC
+
+#endif
