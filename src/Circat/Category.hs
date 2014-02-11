@@ -26,8 +26,8 @@
 
 module Circat.Category
   ( module Control.Category
-  , ProductCat(..), inLassocP, inRassocP, inLassocPF, inRassocPS
-  , CoproductCat(..)
+  , ProductCat(..), twiceP, inLassocP, inRassocP, inLassocPF, inRassocPS
+  , CoproductCat(..), twiceC
   , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
   , StrongCat(..), ClosedCat(..), ClosedCatWith
   , constFun -- , constFun2
@@ -88,6 +88,10 @@ class Category k => ProductCat k where
 --   rdistribP :: (u :* v, b) `k` ((u,b) :* (v,b))
 --   rdistribP =  transPair . second dup -- first  exl &&& first  exr
 
+-- | Apply to both parts of a product
+twiceP :: ProductCat k => (a `k` c) -> ((a :* a) `k` (c :* c))
+twiceP f = f *** f
+
 -- | Operate on left-associated form
 inLassocP :: ProductCat k =>
              (((a :* b) :* c) `k` ((a' :* b') :* c'))
@@ -141,6 +145,10 @@ class Category k => CoproductCat k where
   rassocS   =  (inl ||| inr.inl) ||| inr.inr
 
   -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
+
+-- | Apply to both parts of a coproduct
+twiceC :: CoproductCat k => (a `k` c) -> ((a :+ a) `k` (c :+ c))
+twiceC f = f +++ f
 
 instance ProductCat (->) where
   exl   = P.fst
