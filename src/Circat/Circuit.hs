@@ -6,12 +6,14 @@
 {-# LANGUAGE UndecidableInstances #-} -- see below
 {-# LANGUAGE CPP #-}
 
-{-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-} -- for Church sum experiment
+-- For Church sum experiment
+{-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes #-}
+{-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -221,7 +223,7 @@ mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
 mkC = C . Kleisli
 
 unmkC :: (a :> b) -> (Pins a -> CircuitM (Pins b))
-unmkC (C (Kleisli f)) = f
+unmkC = runKleisli . unC
 
 inCK :: ((Pins a -> CircuitM (Pins b)) -> (Pins a' -> CircuitM (Pins b')))
      -> ((a :> b) -> (a' :> b'))
@@ -884,44 +886,32 @@ pureC = C . arr
     Yet another sum experiment: Church encoding
 --------------------------------------------------------------------}
 
-{-
-class HasTy a where typ :: Ty a
-
-type HasTy2 a b = (HasTy a, HasTy b)
-
-data Ty :: * -> * where
-  BoolTy :: Ty Bool
-  UnitTy :: Ty Unit
-  ProdTy :: (HasTy a, HasTy b) => Ty (a :* b)
-  SumTy  :: (HasTy a, HasTy b) => Ty (a :+ b)
-  FunTy  :: (HasTy a, HasTy b) => Ty (a :=> b)
-
-instance HasTy Bool where typ = BoolTy
-instance HasTy Unit where typ = UnitTy
-instance HasTy2 a b => HasTy (a :*  b) where typ = ProdTy
-instance HasTy2 a b => HasTy (a :+  b) where typ = SumTy
-instance HasTy2 a b => HasTy (a :=> b) where typ = FunTy
--}
-
 type instance Pins (a :+ b) = PSum a b
 
 newtype PSum a b =
-  PSum { unPSum :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c) }
+  PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
+
+psc :: (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)) -> PSum a b
+psc q = PSum (mkC q)
+
+unPsc :: PSum a b -> (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c))
+unPsc ps = unmkC (unPSum ps)
 
 inlC :: a :> a :+ b
-inlC = mkC (\ a -> return (PSum (\ (f,_) -> unmkC f a)))
+-- inlC = mkC (\ a -> return (PSum (mkC (\ (f,_) -> unmkC f a))))
+inlC = mkC (\ a -> return (psc (\ (f,_) -> unmkC f a)))
 
 inrC :: b :> a :+ b
-inrC = mkC (\ b -> return (PSum (\ (_,g) -> unmkC g b)))
+inrC = mkC (\ b -> return (psc (\ (_,g) -> unmkC g b)))
 
 infixr 2 |||*
 
 (|||*) :: forall a b c. HasCond c =>
           (a :> c) -> (b :> c) -> (a :+ b :> c)
-f |||* g = mkC (\ q -> unPSum q (f,g))
+f |||* g = mkC (\ q -> unPsc q (f,g))
 
 ldistribSC :: forall u a b. (u :* (a :+ b)) :> (u :* a :+ u :* b)
-ldistribSC = mkC (\ (u,q) -> return (PSum (\ (f,g) -> unPSum q (injl u f, injl u g))))
+ldistribSC = mkC (\ (u,q) -> return (psc (\ (f,g) -> unPsc q (injl u f, injl u g))))
 
 {-
 u :: Pins u
@@ -940,7 +930,7 @@ unPSum q (injl u f) (injl v f) :: CircuitM (Pins c)
 -}
 
 rdistribSC :: forall v a b. ((a :+ b) :* v) :> (a :* v :+ b :* v)
-rdistribSC = mkC (\ (q,v) -> return (PSum (\ (f,g) -> unPSum q (injr v f, injr v g))))
+rdistribSC = mkC (\ (q,v) -> return (psc (\ (f,g) -> unPsc q (injr v f, injr v g))))
 
 injl :: Pins u -> (u :* a :> c) -> (a :> c)
 injl u = inCK (. (u,))
@@ -956,44 +946,130 @@ class HasCond a where
 
 type HasCond2 a b = (HasCond a, HasCond b)
 
--- condC :: forall c. HasCond c => Bool :* (c :* c) :> c
--- condC = case (typ :: Ty c) of 
---           UnitTy -> it
---           BoolTy -> muxC
---           ProdTy -> prodCond
---           SumTy  -> sumCond
---           FunTy  -> funCond
-
--- Working here. To handle: sums and functions.
-
 prodCond :: HasCond2 a b => Bool :* ((a :* b) :* (a :* b)) :> (a :* b)
 prodCond = half exl &&& half exr
  where
    half :: HasCond c => (u :> c) -> (Bool :* (u :* u) :> c)
    half f = condC . second (twiceP f)
 
-sumCond :: HasCond2 a b => Bool :* ((a :+ b) :* (a :+ b)) :> (a :+ b)
+-- sumCond :: HasCond2 a b => Bool :* ((a :+ b) :* (a :+ b)) :> (a :+ b)
 
--- -- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> return (PSum (unmkC funCond (p,(mkC u,mkC v))))
--- sumCond = mkC h
---  where
---    h (p, (PSum u, PSum v)) = return (PSum undefined)
---     where
---       _ = unmkC funCond (p,(mkC u,mkC v))
+-- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> return (PSum (unmkC funCond (p,(u,v))))
+
+-- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> do w <- unmkC funCond (p,(u,v))
+--                                               return (PSum w) -- TODO: rewrite via fmap
+
+sumCond :: Bool :* ((a :+ b) :* (a :+ b)) :> (a :+ b)
+
+sumCond = error "sumCond: not yet defined"
 
 #if 0
-p :: Pin
-u, v :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
-mkC u, mkC v :: ((a :=> c) :* (b :=> c) :> c)
 
-funCond :: Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
-unmkC funCond :: Pin :* ((a :> b) :* (a :> b)) -> CircuitM (a :> b)
+sumCond = funToSum . condC . second (twiceP sumToFun)
+
+-- sumCond = mkC h
+--  where
+--    h :: Pin :* (PSum a b :* PSum a b) -> CircuitM (PSum a b)
+--    h (p, (PSum u, PSum v)) = PSum <$> sumCond' (p,(u,v))
+
+sumToFun :: HasCond c => a :+ b :> ((a :=> c) :* (b :=> c) :=> c)
+sumToFun = undefined
+
+funToSum :: HasCond c => ((a :=> c) :* (b :=> c) :=> c) :> a :+ b
+funToSum = undefined
+
+-- Nope. funToSum must take a universal.
 
 #endif
 
--- sumCond (p,(Sum u,Sum v)) = Sum (cond (p,(u,v)))
+sumToFun' :: (t :> a :+ b) -> forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c))
+sumToFun' = (inCK.fmap.fmap) unPSum
 
-sumCond = error "sumCond: not yet defined"
+sumToFun :: forall a b c. HasCond c => (a :+ b :> ((a :=> c) :* (b :=> c) :=> c))
+sumToFun = sumToFun' id
+
+-- sumToFun = (inCK.fmap.fmap) unPSum (id :: a :+ b :> a :+ b)
+
+
+-- t :: Pins t
+-- f :: t :> a :+ b
+-- unmkC f :: Pins t -> CircuitM (PSum a b)
+-- unmkC f t :: CircuitM (PSum a b)
+-- unPSum <$> unmkC f t :: forall c. CircuitM (...)
+
+funToSum' :: (forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c))) -> (t :> a :+ b)
+funToSum' = undefined
+
+funToSum :: (forall c. HasCond c => ((a :=> c) :* (b :=> c) :=> c)) :> (a :+ b)
+funToSum = undefined
+-- funToSum = funToSum' id
+
+sumCond' :: (t :> Bool) -> (t :> a :+ b) -> (t :> a :+ b) -> (t :> a :+ b)
+sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
+
+-- sumCond' p q r = funToSum' (condC . (p &&& (sumToFun' q &&& sumToFun' r)))
+
+condC' :: HasCond a => (t :> Bool) -> (t :> a) -> (t :> a) -> (t :> a)
+condC' p q r = condC . (p &&& (q &&& r))
+
+-- However, I don't know how to define condC via condC'.
+
+-- sumCond2 :: Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
+-- sumCond2 = ???
+
+-- sumCond2 = funToSum . condC . second (sumToFun *** sumToFun) -- doesn't type-check
+
+
+#if 0
+
+second (twice sumToFun) :: forall c c'. (HasCond c, HasCond c') =>
+  Bool :* ((a :+ b) :* (a :+ b)) ~> Bool :* (((a :=> c) :* (b :=> c) :=> c) :* ((a :=> c) :* (b :=> c) :=> c))
+
+condC . second (twice sumToFun) :: ... =>
+  Bool :* ((a :+ b) :* (a :+ b)) ~> ((a :=> c) :* (b :=> c) :=> c)
+ 
+funToSum . condC . second (twice sumToFun) :: ... =>
+  Bool :* ((a :+ b) :* (a :+ b)) ~> (a :+ b)
+
+#endif
+
+
+-- type PSum' a b = forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+
+-- sumCond'' :: Pin :* (PSum a b :* PSum a b) -> CircuitM (PSum a b)
+-- sumCond'' (p,(u,v)) = unmkC funCond (p,(u,v))
+
+-- sumCond' :: forall a b. Pin :* (PSum' a b :* PSum' a b) -> CircuitM (PSum' a b)
+-- sumCond' (p,(u,v)) = return h
+--  where
+-- --    h :: forall c. HasCond c => Pins ((a :=> c) :* (b :=> c)) -> CircuitM c
+--    h :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+-- --    h :: PSum' a b
+--    -- h = condC (p,(unPSum u, unPSum v))
+--    h = undefined
+
+-- cond (p,(f,g)) a = cond (p,(f a,g a))
+
+
+#if 0
+
+newtype PSum a b =
+  PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
+
+p :: Pin
+u, v :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+
+funCond :: Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
+unmkC funCond :: Pins (Bool :* ((a :=> b) :* (a :=> b))) :> Pins (a :=> b)
+              == Pin :* ((a :> b) :* (a :> b)) -> CircuitM (a :> b)
+
+funCond :: Bool :* (((a :=> c) :* (b :=> c) :=> c) :* ((a :=> c) :* (b :=> c) :=> c)) :> ((a :=> c) :* (b :=> c) :=> c)
+unmkC funCond :: Pins (Bool :* (((a :=> c) :* (b :=> c) :> c) :* ((a :=> c) :* (b :=> c) :> c))) -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
+              == Pin :* (((a :=> c) :* (b :=> c) :> c) :* ((a :=> c) :* (b :=> c) :> c)) -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
+
+
+
+#endif
 
 funCond :: HasCond b => Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
 funCond = curry (condC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
