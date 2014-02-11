@@ -32,9 +32,13 @@ type Unop a = a -> a
 
 infixl 7 :*
 infixl 6 :+
+infixr 1 :=>
 
-type (:+) = Either
-type (:*) = (,)
+type Unit  = ()
+
+type (:*)  = (,)
+type (:+)  = Either
+type (:=>) = (->)
 
 inNew :: (Newtype n o, Newtype n' o') =>
          (o -> o') -> (n -> n')
@@ -43,7 +47,6 @@ inNew = pack <~ unpack
 inNew2 :: (Newtype n o, Newtype n' o', Newtype n'' o'') =>
           (o -> o' -> o'') -> (n -> n' -> n'')
 inNew2 = inNew <~ unpack
-
 
 infixl 1 <~
 
