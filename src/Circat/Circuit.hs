@@ -898,7 +898,6 @@ unPsc :: PSum a b -> (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (P
 unPsc ps = unmkC (unPSum ps)
 
 inlC :: a :> a :+ b
--- inlC = mkC (\ a -> return (PSum (mkC (\ (f,_) -> unmkC f a))))
 inlC = mkC (\ a -> return (psc (\ (f,_) -> unmkC f a)))
 
 inrC :: b :> a :+ b
@@ -972,17 +971,18 @@ sumCond = funToSum . condC . second (twiceP sumToFun)
 --    h :: Pin :* (PSum a b :* PSum a b) -> CircuitM (PSum a b)
 --    h (p, (PSum u, PSum v)) = PSum <$> sumCond' (p,(u,v))
 
-sumToFun :: HasCond c => a :+ b :> ((a :=> c) :* (b :=> c) :=> c)
+sumToFun :: a :+ b :> forall c. HasCond c => ((a :=> c) :* (b :=> c) :=> c)
 sumToFun = undefined
 
-funToSum :: HasCond c => ((a :=> c) :* (b :=> c) :=> c) :> a :+ b
+funToSum :: (forall c. HasCond c => ((a :=> c) :* (b :=> c) :=> c)) :> a :+ b
 funToSum = undefined
 
 -- Nope. funToSum must take a universal.
 
 #endif
 
-sumToFun' :: (t :> a :+ b) -> forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c))
+sumToFun' :: (t :> a :+ b)
+          -> forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c))
 sumToFun' = (inCK.fmap.fmap) unPSum
 
 sumToFun :: forall a b c. HasCond c => (a :+ b :> ((a :=> c) :* (b :=> c) :=> c))
@@ -990,19 +990,12 @@ sumToFun = sumToFun' id
 
 -- sumToFun = (inCK.fmap.fmap) unPSum (id :: a :+ b :> a :+ b)
 
-
--- t :: Pins t
--- f :: t :> a :+ b
--- unmkC f :: Pins t -> CircuitM (PSum a b)
--- unmkC f t :: CircuitM (PSum a b)
--- unPSum <$> unmkC f t :: forall c. CircuitM (...)
-
-funToSum' :: (forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c))) -> (t :> a :+ b)
+funToSum' :: (forall c. HasCond c => (t :> ((a :=> c) :* (b :=> c) :=> c)))
+          -> (t :> a :+ b)
 funToSum' = undefined
 
 funToSum :: (forall c. HasCond c => ((a :=> c) :* (b :=> c) :=> c)) :> (a :+ b)
 funToSum = undefined
--- funToSum = funToSum' id
 
 sumCond' :: (t :> Bool) -> (t :> a :+ b) -> (t :> a :+ b) -> (t :> a :+ b)
 sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
@@ -1019,37 +1012,179 @@ condC' p q r = condC . (p &&& (q &&& r))
 
 -- sumCond2 = funToSum . condC . second (sumToFun *** sumToFun) -- doesn't type-check
 
+-- cond (p,(f,g)) a = cond (p,(f a,g a))
 
 #if 0
 
-second (twice sumToFun) :: forall c c'. (HasCond c, HasCond c') =>
-  Bool :* ((a :+ b) :* (a :+ b)) ~> Bool :* (((a :=> c) :* (b :=> c) :=> c) :* ((a :=> c) :* (b :=> c) :=> c))
+sumCond2 :: (t :> Bool) -> (t :> a :+ b) -> (t :> a :+ b) -> (t :> a :+ b)
+sumCond2 (unmkC -> p) (unmkC -> q) (unmkC -> r) =
+  mkC $ \ t -> return (PSum (mkC undefined))
 
-condC . second (twice sumToFun) :: ... =>
-  Bool :* ((a :+ b) :* (a :+ b)) ~> ((a :=> c) :* (b :=> c) :=> c)
- 
-funToSum . condC . second (twice sumToFun) :: ... =>
-  Bool :* ((a :+ b) :* (a :+ b)) ~> (a :+ b)
+t :: Pins t
+p :: Pins t -> Circuit (Pins Bool)
+q, r :: Pins t -> Circuit (Pins (a :+ b))
+
+q t, r t :: Circuit (Pins (a :+ b))
+
+p t :: Circuit (Pins Bool)
+
+want :: forall c. HasCond c => (a :> c) :* (b :> c) -> Circuit (Pins (a :+ b))
+
+#endif
+
+-- Simplify packaging for now
+sumCond3 :: forall a b. Pin :* (PSum a b :* PSum a b) -> CircuitM (PSum a b)
+sumCond3 (p,(q,r)) = return (PSum (mkC want))
+ where
+   want :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+--    want fg = unPsc q fg  -- for now
+
+   want fg = condC4 p q r fg  -- for now
+
+--    want fg = condC3 (p,(unPsc q fg,unPsc r fg))
+
+--    want fg = liftJ2 h cq cr
+--     where
+--       cq, cr :: CircuitM (Pins c)
+--       cq = unPsc q fg
+--       cr = unPsc r fg
+--       h :: Pins c -> Pins c -> CircuitM (Pins c)
+--       h u v = condC3 (p,(u,v))
+
+--    want fg = condC3' (p,(unPsc q fg,unPsc r fg))
+
+condC4 :: forall a b c. HasCond c =>
+          Pin -> PSum a b -> PSum a b -> ((a :> c) :* (b :> c)) -> CircuitM (Pins c)
+condC4 = undefined
+
+-- condC4 p q r fg = do u <- unPsc q fg
+--                      v <- unPsc r fg
+--                      condC3 (p,(u,v))
+
+-- Haven't gotten condC4 to type-check
+
+-- unPsc :: PSum a b -> (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c))
+
+liftJ2 :: Monad m => (a -> b -> m c) -> (m a -> m b -> m c)
+liftJ2 h ma mb = do a <- ma
+                    b <- mb
+                    h a b
+
+--    want fg = liftA2 h (unPsc q fg) (unPsc r fg)
+--     where
+--       h :: Pins c -> Pins c -> CircuitM (Pins c)
+--       h u v = condC3 (p,(u,v))
+
+--    want fg = do u <- unPsc q fg
+--                 v <- unPsc r fg
+--                 condC3 (p,(u,v))
+
+-- condC3 :: HasCond c =>
+--           Pin :* (Pins ((a :=> c) :* (b :=> c)) :* Pins ((a :=> c) :* (b :=> c)))
+--        -> CircuitM (Pins ((a :=> c) :* (b :=> c)))
+
+
+-- Simplify packaging for now
+sumCond4 :: forall a b. Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
+sumCond4 = mkC h
+ where
+   h (p,(q,r)) = return (PSum want)
+    where
+      want :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+--       want = undefined
+      want = mkC $ \ fg ->
+               do u <- unPsc q fg
+                  v <- unPsc r fg
+                  condC5 (undefined :: c) (p,(u,v))
+
+condC5 :: HasCond t => t -> Pin :* (Pins t :* Pins t) -> CircuitM (Pins t)
+condC5 _ = undefined
+-- condC5 _ = unmkC condC
+-- condC5 _ = fst (unmkC' condC)
+
+unmkC' :: (a,b) -> (a :> b) -> (Pins a -> CircuitM (Pins b))
+unmkC' _ = unmkC
+
+-- condC6 :: HasCond t => t -> Pin :* (Pins t :* Pins t) -> CircuitM (Pins t)
+-- condC6 t = unmkC' t condC
+
+-- unmkC' :: (a :> b) -> (Pins a -> CircuitM (Pins b))
+
+
+#if 0
+
+condC :: HasCond t => Bool :* (t :* t) :> t
+
+unmkC condC :: Pin :* (Pins t :* Pins t) -> CircuitM (Pins t)
+
+#endif
+
+#if 0
+
+p :: Pin
+q, r :: PSum a b
+unPSum q, unPSum r :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+
+condC :: Bool :* (((a :=> c) :* (b :=> c) :> c) :* ((a :=> c) :* (b :=> c) :> c))
+         :> ((a :=> c) :* (b :=> c) :> c)
+
+newtype PSum a b =
+  PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
 
 #endif
 
 
--- type PSum' a b = forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
+condC3 :: HasCond t => Pin :* (Pins t :* Pins t) -> CircuitM (Pins t)
+condC3 = undefined
 
--- sumCond'' :: Pin :* (PSum a b :* PSum a b) -> CircuitM (PSum a b)
--- sumCond'' (p,(u,v)) = unmkC funCond (p,(u,v))
+condC3' :: HasCond t => Pin :* (CircuitM (Pins t) :* CircuitM (Pins t)) -> CircuitM (Pins t)
+condC3' = undefined
 
--- sumCond' :: forall a b. Pin :* (PSum' a b :* PSum' a b) -> CircuitM (PSum' a b)
--- sumCond' (p,(u,v)) = return h
---  where
--- --    h :: forall c. HasCond c => Pins ((a :=> c) :* (b :=> c)) -> CircuitM c
---    h :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c
--- --    h :: PSum' a b
---    -- h = condC (p,(unPSum u, unPSum v))
---    h = undefined
+#if 0
 
--- cond (p,(f,g)) a = cond (p,(f a,g a))
+fg :: (a :> c) :* (b :> c)
 
+p :: Pin
+q,r :: PSum a b
+unPSum q, unPSum r :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+
+unPsc q fg, unPsc r fg :: CircuitM (Pins c)
+
+
+want :: (a :> c) :* (b :> c) -> CircuitM (Pins c)
+
+condC3 :: HasCond c =>
+          Pin :* (Pins ((a :=> c) :* (b :=> c)) :* Pins ((a :=> c) :* (b :=> c)))
+       -> CircuitM (Pins ((a :=> c) :* (b :=> c)))
+
+condC3 :: HasCond t => Pin :* (Pins t :* Pins t) -> CircuitM (Pins t)
+condC3 = undefined
+
+newtype PSum a b =
+  PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
+
+#endif
+
+#if 0
+
+-- Church sum
+data CSum a b = Sum { unSum :: forall c. (a -> c) :* (b -> c) -> c }
+
+type instance Pins (CSum a b) = PSum a b -- = Pins (a :+ b)
+
+-- newtype PSum a b =
+--   PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
+
+data FSum a b = FSum (forall c. HasCond c => (a :=> c) :* (b :=> c) :=> c)
+
+type instance Pins (FSum a b) = PSum a b
+
+instance HasCond (FSum a b) where ...
+
+funToCSum :: CSum a b :> a :+ b
+funToCSum = C id
+
+#endif
 
 #if 0
 
@@ -1066,8 +1201,6 @@ unmkC funCond :: Pins (Bool :* ((a :=> b) :* (a :=> b))) :> Pins (a :=> b)
 funCond :: Bool :* (((a :=> c) :* (b :=> c) :=> c) :* ((a :=> c) :* (b :=> c) :=> c)) :> ((a :=> c) :* (b :=> c) :=> c)
 unmkC funCond :: Pins (Bool :* (((a :=> c) :* (b :=> c) :> c) :* ((a :=> c) :* (b :=> c) :> c))) -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
               == Pin :* (((a :=> c) :* (b :=> c) :> c) :* ((a :=> c) :* (b :=> c) :> c)) -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
-
-
 
 #endif
 
