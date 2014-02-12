@@ -28,6 +28,9 @@ import Control.Newtype
 -- | Unary transformation
 type Unop a = a -> a
 
+-- | Binary transformation
+type Binop a = a -> Unop a
+
 -- Sum & product type synonyms
 
 infixl 7 :*
