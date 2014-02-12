@@ -50,7 +50,7 @@ import Control.Newtype
 
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
-import Circat.Misc ((:*),(:+),(<~),inNew,inNew2) -- ,inNew
+import Circat.Misc (Unit,(:*),(:+),(<~),inNew,inNew2) -- ,inNew
 
 infixr 3 ***, &&&
 
@@ -200,16 +200,16 @@ instance Monad m => ConstCat (Kleisli m) where
   const a = arr (const a)
 
 class ProductCat k => TerminalCat k where
-  it :: a `k` ()
+  it :: a `k` Unit
 
 -- Note: the ProductCat superclass is just for convenience of use elsewhere.
 -- TODO: Consider removing.
 
-lunit :: TerminalCat k => a `k` (() :* a)
+lunit :: TerminalCat k => a `k` (Unit :* a)
 lunit = it &&& id
 -- lunit = swapP . runit
 
-runit :: TerminalCat k => a `k` (a :* ())
+runit :: TerminalCat k => a `k` (a :* Unit)
 runit = id &&& it
 -- runit = swapP . lunit
 
