@@ -49,11 +49,11 @@ instance Monad m => PairCat (Kleisli m) where
   toPair = arr toPair
   unPair = arr unPair
 
-instance (UnitCat k, PairCat k) => PairCat (StateFun k s) where
+instance (TerminalCat k, PairCat k) => PairCat (StateFun k s) where
   toPair = pureState toPair
   unPair = pureState unPair
 
-instance (ClosedCatWith k s, UnitCat k, PairCat k)
+instance (ClosedCatWith k s, TerminalCat k, PairCat k)
       => PairCat (StateExp k s) where
   toPair = pureState toPair
   unPair = pureState unPair

@@ -80,13 +80,13 @@ instance Monad m => TreeCat (Kleisli m) where
   toB = arr toB
   unB = arr unB
 
-instance (UnitCat k, TreeCat k) => TreeCat (StateFun k s) where
+instance (TerminalCat k, TreeCat k) => TreeCat (StateFun k s) where
   toL = pureState toL
   unL = pureState unL
   toB = pureState toB
   unB = pureState unB
 
-instance (ClosedCatWith k s, UnitCat k, TreeCat k)
+instance (ClosedCatWith k s, TerminalCat k, TreeCat k)
       => TreeCat (StateExp k s) where
   toL = pureState toL
   unL = pureState unL

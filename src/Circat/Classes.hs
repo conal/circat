@@ -33,7 +33,7 @@ import GHC.Prim (Constraint)
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
 import Circat.Misc ((:*),(<~))
-import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
+import Circat.Category
 import Circat.Pair
 import Circat.State -- (StateCat(..),pureState,StateFun)
 
@@ -63,7 +63,7 @@ instance EqCat (->) where
   eq  = P.uncurry (==)
   neq = P.uncurry (/=)
 
-class (UnitCat k, ProductCat k) => VecCat k where
+class (TerminalCat k, ProductCat k) => VecCat k where
   toVecZ :: () `k` Vec Z a
   unVecZ :: Vec Z a `k` ()
   toVecS :: (a :* Vec n a) `k` Vec (S n) a
@@ -211,7 +211,7 @@ traverse h . lstrength . rconst idTrie :: a `k` t c
 
 -- trieCurry :: ( HasTrie b, StrongCat k (Trie b)
 --              , CTraversableWith (Trie b) k
---              , UnitCat k, ConstUCat k (b :->: b) ) =>
+--              , TerminalCat k, ConstUCat k (b :->: b) ) =>
 --              ((a :* b) `k` c) -> (a `k` (b :->: c))
 -- trieCurry = traverseCurry idTrie
 

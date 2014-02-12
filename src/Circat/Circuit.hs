@@ -76,7 +76,7 @@ import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import TypeUnary.Vec hiding (get)
 import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
-import Circat.Misc (Unit,(:*),(:+),(:=>),(<~),Unop,inNew)
+import Circat.Misc (Unit,(:*),(:+),(:=>),(<~),Unop,Binop,inNew)
 import Circat.Category
 import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
@@ -305,10 +305,6 @@ instance ProductCat (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
--- Terminal arrow
-it :: a :> Unit
-it = mkC (const (return ()))
-
 -- instance CoproductCat (:>) where
 --   inl       = 
 --   inr       = 
@@ -401,9 +397,8 @@ TCMs work out better as defined.
 muxC :: IsSourceP c => Bool :* (c :* c) :> c
 muxC = namedC "mux"
 
-instance UnitCat (:>) where
-  lunit = C lunit
-  runit = C runit
+instance TerminalCat (:>) where
+  it = C it
 
 instance ConstCat (:>) where
   type ConstKon (:>) a b = (Show b, IsSourceP2 a b)
@@ -945,24 +940,40 @@ class HasCond a where
 
 type HasCond2 a b = (HasCond a, HasCond b)
 
+instance                 HasCond Unit where condC = it
+instance                 HasCond Bool where condC = muxC
+instance HasCond2 a b => HasCond (a :*  b) where condC = prodCond
+instance HasCond    b => HasCond (a :=> b) where condC = funCond
+instance                 HasCond (a :+  b) where condC = sumCond
+
 prodCond :: HasCond2 a b => Bool :* ((a :* b) :* (a :* b)) :> (a :* b)
 prodCond = half exl &&& half exr
  where
    half :: HasCond c => (u :> c) -> (Bool :* (u :* u) :> c)
    half f = condC . second (twiceP f)
 
--- sumCond :: HasCond2 a b => Bool :* ((a :+ b) :* (a :+ b)) :> (a :+ b)
+#if 0
+funCond = \ (p,(f,g)) a -> cond (p,(f a,g a))
+        = curry \ ((p,(f,g)),a) -> cond (p,(f a,g a))
 
--- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> return (PSum (unmkC funCond (p,(u,v))))
+funCond' p q r = \ t -> cond' p (q t) (r t)
+               = ...
 
--- sumCond = mkC $ \ (p, (PSum u, PSum v)) -> do w <- unmkC funCond (p,(u,v))
---                                               return (PSum w) -- TODO: rewrite via fmap
+funCond' p q r = funCond . (p &&& (q &&& r))
 
-sumCond :: Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
+condC' :: HasCond a => (t :> Bool) -> Binop (t :> a)
+condC' p q r = condC . (p &&& (q &&& r))
 
--- sumCond = funToSum . condC . second (twiceP sumToFun)
+condC'' :: HasCond a => Bool :* (a :* a) :> a
+condC'' = condC' exl (exl . exr) (exr . exr)
 
-sumCond = error "sumCond: not yet defined"
+#endif
+
+funCond' :: HasCond b => (t :> Bool) -> Binop (t :> (a :=> b))
+funCond' = undefined
+
+funCond :: HasCond b => Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
+funCond = curry (condC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
 
 sumToFun' :: (t :> a :+ b)
           -> forall c. HasCond c => t :> ((a :=> c) :* (b :=> c) :=> c)
@@ -1001,30 +1012,39 @@ unmkC h fg :: CircuitM (Pins c)
 
 #endif
 
-sumCond' :: (t :> Bool) -> (t :> a :+ b) -> (t :> a :+ b) -> (t :> a :+ b)
-sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
+type CondArr a = Bool :* (a :* a) :> a
+type CondFun a = forall t. (t :> Bool) -> Binop (t :> a)
 
-condC' :: HasCond a => (t :> Bool) -> (t :> a) -> (t :> a) -> (t :> a)
-condC' p q r = condC . (p &&& (q &&& r))
+condArrToFun :: CondArr a -> CondFun a
+condArrToFun condArr p q r = condArr . (p &&& (q &&& r))
 
-condC'' :: HasCond a => Bool :* (a :* a) :> a
-condC'' = condC' exl (exl . exr) (exr . exr)
+condFunToArr :: CondFun a -> CondArr a
+condFunToArr condFun = condFun exl (exl . exr) (exr . exr)
 
-funCond :: HasCond b => Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
-funCond = curry (condC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+condC' :: HasCond a => CondFun a
+condC' = condArrToFun condC
+-- condC' p q r = condC . (p &&& (q &&& r))
 
-instance HasCond Unit where condC = it
-instance HasCond Bool where condC = muxC
+condC'' :: HasCond a => CondArr a
+condC'' = condFunToArr condC'
+-- condC'' = condC' exl (exl . exr) (exr . exr)
 
-instance HasCond2 a b => HasCond (a :*  b) where condC = prodCond
-instance HasCond2 a b => HasCond (a :+  b) where condC = sumCond
-instance HasCond    b => HasCond (a :=> b) where condC = funCond
+sumCond' :: (t :> Bool) -> Binop (t :> a :+ b)
+-- sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
+-- sumCond' p q r = funToSum' (condArrToFun condC p (sumToFun' q) (sumToFun' r))
+sumCond' p q r = funToSum' (condC . (p &&& (sumToFun' q &&& sumToFun' r)))
+
+sumCond :: Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
+-- sumCond = sumCond' exl (exl . exr) (exr . exr)
+-- sumCond = condFunToArr sumCond'
+-- sumCond = sumCond' exl (exl . exr) (exr . exr)
+sumCond = funToSum' (condC . (exl &&& (sumToFun' (exl . exr) &&& sumToFun' (exr . exr))))
 
 -- The HasCond constraint in condC as used in 'fromBool' is what leads to HasCond in
 -- PSum and hence breaks (|||). I'm looking for an alternative.
 
 fromBool :: Bool :> Unit :+ Unit
-fromBool = condC . (id &&& (inlC &&& inrC) . it)
+fromBool = condC . (id &&& (inl &&& inr) . it)
 
 toBool :: Unit :+ Unit :> Bool
 toBool = constC False |||* constC True

@@ -39,7 +39,7 @@ import Circat.Category
 --------------------------------------------------------------------}
 
 -- | State interface. Minimal definition: 'state' and 'runState'
-class UnitCat (StateBase sk) => StateCat sk where
+class TerminalCat (StateBase sk) => StateCat sk where
   type StateKon sk :: Constraint
   type StateKon sk = ()
   type StateBase sk :: * -> * -> *
@@ -65,7 +65,7 @@ type StateCatWith sk k s = (StateCat sk, StateParts sk k s)
 
 -- Alternative naming style:
 
--- class UnitCat (StateBase k) => StateCat k where
+-- class TerminalCat (StateBase k) => StateCat k where
 --   type StateT k :: *
 --   type StateBase k :: * -> * -> *
 --   state    :: StateParts k (.`k`) s =>  -- ^ Make a stateful computation
@@ -105,11 +105,11 @@ instance Newtype (StateFun k s a b) ((s :* a) `k` (b :* s)) where
   pack f = StateFun f
   unpack (StateFun f) = f
 
-instance UnitCat k => Category (StateFun k s) where
+instance TerminalCat k => Category (StateFun k s) where
   id  = pack swapP
   (.) = inState2 $ \ g f -> g . swapP . f
 
-instance UnitCat k => ProductCat (StateFun k s) where
+instance TerminalCat k => ProductCat (StateFun k s) where
   exl   = pureState exl
   exr   = pureState exr
   dup   = pureState dup
@@ -129,11 +129,10 @@ lassocP  ::             `k` (c * d) * s
 
 -}
 
-instance UnitCat k => UnitCat (StateFun k s) where
-  lunit = pureState lunit
-  runit = pureState runit
+instance TerminalCat k => TerminalCat (StateFun k s) where
+  it = pureState it
 
-instance UnitCat k => StateCat (StateFun k s) where
+instance TerminalCat k => StateCat (StateFun k s) where
   type StateKon  (StateFun k s) = ()
   type StateBase (StateFun k s) = k
   type StateT    (StateFun k s) = s
@@ -170,7 +169,7 @@ restateF = inState id
 newtype StateExp k s a b =
   StateExp { unStateExp :: a `k` Exp k s (b :* s) }
 
-type ClosedCatU k s = (ClosedCatWith k s, UnitCat k)
+type ClosedCatU k s = (ClosedCatWith k s, TerminalCat k)
 
 instance ClosedCatU k s => StateCat (StateExp k s) where
   type StateKon  (StateExp k s) = ClosedKon k s
@@ -209,6 +208,5 @@ instance ClosedCatU k s => ProductCat (StateExp k s) where
   dup   = pureState dup
   (***) = asStateFun2 (***)
 
-instance ClosedCatU k s => UnitCat (StateExp k s) where
-  lunit = pureState lunit
-  runit = pureState runit
+instance ClosedCatU k s => TerminalCat (StateExp k s) where
+  it = pureState it

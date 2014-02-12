@@ -28,7 +28,9 @@ module Circat.Category
   ( module Control.Category
   , ProductCat(..), twiceP, inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..), twiceC
-  , ConstCat(..), ConstCatWith, ConstUCat, UnitCat(..), lconst, rconst
+  , ConstCat(..), ConstCatWith, ConstUCat
+  , TerminalCat(..), lunit, runit
+  , lconst, rconst
   , StrongCat(..), ClosedCat(..), ClosedCatWith
   , constFun -- , constFun2
   , Yes
@@ -181,7 +183,6 @@ instance Monad m => CoproductCat (Kleisli m) where
   rdistribS = arr rdistribS
   (|||)     = inNew2 (|||)
 
-
 -- | Category with constant morphisms
 class Category k => ConstCat k where
   type ConstKon k a b :: Constraint
@@ -198,16 +199,28 @@ instance Monad m => ConstCat (Kleisli m) where
   type ConstKon (Kleisli m) a b = ()  -- why necessary?
   const a = arr (const a)
 
--- | Category with unit injection. Minimal definition: 'lunit' or 'runit'.
-class ProductCat k => UnitCat k where
-  type UnitKon k a :: Constraint
-  type UnitKon k a = Yes a
-  lunit :: a `k` (() :* a)
-  lunit = swapP . runit
-  runit :: a `k` (a :* ())
-  runit = swapP . lunit
+class ProductCat k => TerminalCat k where
+  it :: a `k` ()
 
-type ConstUCat k b = (UnitCat k, ConstCatWith k () b)
+-- Note: the ProductCat superclass is just for convenience of use elsewhere.
+-- TODO: Consider removing.
+
+lunit :: TerminalCat k => a `k` (() :* a)
+lunit = it &&& id
+-- lunit = swapP . runit
+
+runit :: TerminalCat k => a `k` (a :* ())
+runit = id &&& it
+-- runit = swapP . lunit
+
+
+instance TerminalCat (->) where
+  it = const ()
+
+instance Monad m => TerminalCat (Kleisli m) where
+  it = arr it
+
+type ConstUCat k b = (TerminalCat k, ConstCatWith k () b)
 
 -- | Inject a constant on the left
 lconst :: ConstUCat k a => a -> (b `k` (a :* b))
@@ -216,14 +229,6 @@ lconst a = first  (const a) . lunit
 -- | Inject a constant on the right
 rconst :: ConstUCat k b => b -> (a `k` (a :* b))
 rconst b = second (const b) . runit
-
-instance UnitCat (->) where
-  lunit = ((),)
-  runit = (,())
-
-instance Monad m => UnitCat (Kleisli m) where
-  lunit = arr lunit
-  runit = arr runit
 
 class ProductCat k => StrongCat k f where
   type StrongKon k f a b :: Constraint
