@@ -207,12 +207,9 @@ class ProductCat k => TerminalCat k where
 
 lunit :: TerminalCat k => a `k` (Unit :* a)
 lunit = it &&& id
--- lunit = swapP . runit
 
 runit :: TerminalCat k => a `k` (a :* Unit)
 runit = id &&& it
--- runit = swapP . lunit
-
 
 instance TerminalCat (->) where
   it = const ()
