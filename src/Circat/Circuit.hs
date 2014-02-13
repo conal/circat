@@ -12,7 +12,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -40,7 +40,9 @@ module Circat.Circuit
   , (|||*), fromBool, toBool
 #endif
   , muxC -- , pinsAsCirc
+#ifdef ChurchSums
   , HasCond(..)
+#endif
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -50,11 +52,11 @@ import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
-import Control.Applicative (pure,liftA2)
-import Control.Monad (liftM,liftM2,join)
-import Control.Arrow (arr,(^<<),Kleisli(..))
+-- import Control.Applicative (pure,liftA2)
+import Control.Monad (liftM,liftM2)
+import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
-import Data.Traversable (Traversable(..))
+-- import Data.Traversable (Traversable(..))
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -65,7 +67,9 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq,singleton)
+#ifdef TaggedSums
 import qualified Data.Sequence as Seq
+#endif
 import Text.Printf (printf)
 
 -- mtl
@@ -74,11 +78,11 @@ import qualified Control.Monad.State as Mtl
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
 import TypeUnary.Vec hiding (get)
-import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
+-- import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
-import Circat.Misc (Unit,(:*),(:+),(:=>),(<~),Unop,Binop,inNew)
+import Circat.Misc
 import Circat.Category
-import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
+-- import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
@@ -122,7 +126,9 @@ sourcePins s = toList (toPins s)
 class Show a => IsSource a where
   toPins    :: a -> Seq Pin
   genSource :: MonadPins m => m a
+#ifdef TaggedSums
   numPins   :: a -> Int
+#endif
 
 -- Instantiate a 'Prim'
 genComp :: forall a b. IsSource2 a b =>
@@ -146,24 +152,32 @@ type IsSource2 a b = (IsSource a, IsSource b)
 instance IsSource () where
   toPins () = mempty
   genSource = return ()
+#ifdef TaggedSums
   numPins _ = 0
+#endif
 
 instance IsSource Pin where
   toPins p  = singleton p
   genSource = newPin
+#ifdef TaggedSums
   numPins _ = 1
+#endif
 
 instance IsSource2 a b => IsSource (a :* b) where
   toPins (sa,sb) = toPins sa <> toPins sb
   genSource      = liftM2 (,) genSource genSource
+#ifdef TaggedSums
   numPins ~(a,b) = numPins a + numPins b
+#endif
 
 -- instance IsSource (a :+ b) where ... ???
 
 instance (IsNat n, IsSource a) => IsSource (Vec n a) where
   toPins    = foldMap toPins
   genSource = genSourceV nat
+#ifdef TaggedSums
   numPins _ = natToZ (nat :: Nat n) * numPins (undefined :: a)
+#endif
 
 genSourceV :: (MonadPins m, IsSource a) => Nat n -> m (Vec n a)
 genSourceV Zero     = return ZVec
@@ -172,12 +186,16 @@ genSourceV (Succ n) = liftM2 (:<) genSource (genSourceV n)
 instance IsSource a => IsSource (Pair a) where
   toPins    = foldMap toPins
   genSource = liftM toPair genSource
+#ifdef TaggedSums
   numPins _ = 2 * numPins (undefined :: a)
+#endif
 
 instance (IsNat n, IsSource a) => IsSource (Tree n a) where
   toPins    = foldMap toPins
   genSource = genSourceT nat
+#ifdef TaggedSums
   numPins _ = 2 ^ (natToZ (nat :: Nat n) :: Int) * numPins (undefined :: a)
+#endif
 
 genSourceT :: (MonadPins m, IsSource a) => Nat n -> m (Tree n a)
 genSourceT Zero     = liftM L genSource
@@ -450,11 +468,11 @@ evalWS w s = evalState (runWriterT w) s
 runC :: IsSourceP2 a b => (a :> b) -> [Comp]
 runC = runU . unitize
 
-runU :: (() :> ()) -> [Comp]
+runU :: (Unit :> Unit) -> [Comp]
 runU cir = toList (exr (evalWS (unmkC cir ()) (Pin <$> [0 ..])))
 
 -- Wrap a circuit with fake input and output
-unitize :: IsSourceP2 a b => (a :> b) -> (() :> ())
+unitize :: IsSourceP2 a b => (a :> b) -> (Unit :> Unit)
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -1025,20 +1043,19 @@ condC' :: HasCond a => CondFun a
 condC' = condArrToFun condC
 -- condC' p q r = condC . (p &&& (q &&& r))
 
-condC'' :: HasCond a => CondArr a
-condC'' = condFunToArr condC'
--- condC'' = condC' exl (exl . exr) (exr . exr)
+-- condC'' :: HasCond a => CondArr a
+-- condC'' = condFunToArr condC'
+-- -- condC'' = condC' exl (exl . exr) (exr . exr)
 
 sumCond' :: (t :> Bool) -> Binop (t :> a :+ b)
--- sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
+sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
 -- sumCond' p q r = funToSum' (condArrToFun condC p (sumToFun' q) (sumToFun' r))
-sumCond' p q r = funToSum' (condC . (p &&& (sumToFun' q &&& sumToFun' r)))
+-- sumCond' p q r = funToSum' (condC . (p &&& (sumToFun' q &&& sumToFun' r)))
 
 sumCond :: Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
+sumCond = condFunToArr sumCond'
 -- sumCond = sumCond' exl (exl . exr) (exr . exr)
--- sumCond = condFunToArr sumCond'
--- sumCond = sumCond' exl (exl . exr) (exr . exr)
-sumCond = funToSum' (condC . (exl &&& (sumToFun' (exl . exr) &&& sumToFun' (exr . exr))))
+-- sumCond = funToSum' (condC . (exl &&& (sumToFun' (exl . exr) &&& sumToFun' (exr . exr))))
 
 -- The HasCond constraint in condC as used in 'fromBool' is what leads to HasCond in
 -- PSum and hence breaks (|||). I'm looking for an alternative.
