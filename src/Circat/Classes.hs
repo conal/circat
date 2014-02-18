@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs, CPP #-}
 {-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
@@ -35,7 +35,7 @@ import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 import Circat.Misc ((:*),(<~))
 import Circat.Category
 import Circat.Pair
-import Circat.State -- (StateCat(..),pureState,StateFun)
+import Circat.State
 
 -- | Category with boolean operations.
 class ProductCat k => BoolCat k where
@@ -95,7 +95,7 @@ instance VecCat k => VecCat (StateFun k s) where
   toVecS = pureState toVecS
   unVecS = pureState unVecS
 
-instance (ClosedCatWith k s, VecCat k) => VecCat (StateExp k s) where
+instance (ClosedCat k, VecCat k) => VecCat (StateExp k s) where
   toVecZ = pureState toVecZ
   unVecZ = pureState unVecZ
   toVecS = pureState toVecS
@@ -217,7 +217,7 @@ traverse h . lstrength . rconst idTrie :: a `k` t c
 
 -- TODO: Move CTraversable and trieCurry to Category.
 
-
+#if 0
 {--------------------------------------------------------------------
     Addition via state and traversal
 --------------------------------------------------------------------}
@@ -240,3 +240,4 @@ addS :: (AddState sk, CTraversableWith f sk, b ~ Bool) =>
 addS = traverseC fullAddS
 
 -- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.
+#endif

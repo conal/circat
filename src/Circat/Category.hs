@@ -31,7 +31,7 @@ module Circat.Category
   , ConstCat(..), ConstCatWith, ConstUCat
   , TerminalCat(..), lunit, runit
   , lconst, rconst
-  , StrongCat(..), ClosedCat(..), ClosedCatWith
+  , StrongCat(..), ClosedCat(..)
   , constFun -- , constFun2
   , Yes
   ) where
@@ -248,18 +248,13 @@ instance (Monad m, Functor f) => StrongCat (Kleisli m) f where
 -- package:
 
 class ProductCat k => ClosedCat k where
-  type ClosedKon k u :: Constraint  -- On the 'Exp' domain
-  type ClosedKon k u = ()
   type Exp k u v
-  apply   :: ClosedKon k a => (Exp k a b :* a) `k` b
-  curry   :: ClosedKon k b => ((a :* b) `k` c) -> (a `k` Exp k b c)
-  uncurry :: ClosedKon k b => (a `k` Exp k b c) -> ((a :* b) `k` c)
-
-type ClosedCatWith k u = (ClosedCat k, ClosedKon k u)
+  apply   :: (Exp k a b :* a) `k` b
+  curry   :: ((a :* b) `k` c) -> (a `k` Exp k b c)
+  uncurry :: (a `k` Exp k b c) -> ((a :* b) `k` c)
 
 instance ClosedCat (->) where
   type Exp (->) u v = u -> v
-  type ClosedKon (->) u = ()
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
@@ -295,8 +290,7 @@ Enhance methods on (->):
 
 -}
 
-constFun :: (ClosedCat k, ClosedKon k b)
-         => (b `k` c) -> (a `k` (Exp k b c))
+constFun :: ClosedCat k => (b `k` c) -> (a `k` (Exp k b c))
 constFun f = curry (f . exr)
 
 -- f :: b `k` c

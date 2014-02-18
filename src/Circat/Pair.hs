@@ -1,6 +1,5 @@
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
-{-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -53,13 +52,9 @@ instance (TerminalCat k, PairCat k) => PairCat (StateFun k s) where
   toPair = pureState toPair
   unPair = pureState unPair
 
-instance (ClosedCatWith k s, TerminalCat k, PairCat k)
-      => PairCat (StateExp k s) where
+instance (ClosedCat k, TerminalCat k, PairCat k) => PairCat (StateExp k s) where
   toPair = pureState toPair
   unPair = pureState unPair
-
---     Illegal irreducible constraint ClosedKon k s
---     in superclass/instance head context (Use -XUndecidableInstances to permit this)
 
 inPair :: PairCat k =>
           ((a :* a) `k` (b :* b)) -> (Pair a `k` Pair b)

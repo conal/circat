@@ -27,7 +27,6 @@ import Prelude hiding (id,(.),const,curry,uncurry)
 import qualified Prelude as P
 
 import Control.Category
-import GHC.Prim (Constraint)
 
 import Control.Newtype
 
@@ -40,8 +39,6 @@ import Circat.Category
 
 -- | State interface. Minimal definition: 'state' and 'runState'
 class TerminalCat (StateBase sk) => StateCat sk where
-  type StateKon sk :: Constraint
-  type StateKon sk = ()
   type StateBase sk :: * -> * -> *
   type StateT    sk :: *
   -- | Make a stateful computation
@@ -57,8 +54,7 @@ class TerminalCat (StateBase sk) => StateCat sk where
   put :: StateParts sk k s => s `sk` ()
   put = state (lunit . exr)
 
-type StateParts sk k s =
-  (k ~ StateBase sk, s ~ StateT sk, StateKon sk)
+type StateParts sk k s = (k ~ StateBase sk, s ~ StateT sk)
 
 type StateCatWith sk k s = (StateCat sk, StateParts sk k s)
 
@@ -133,7 +129,6 @@ instance TerminalCat k => TerminalCat (StateFun k s) where
   it = pureState it
 
 instance TerminalCat k => StateCat (StateFun k s) where
-  type StateKon  (StateFun k s) = ()
   type StateBase (StateFun k s) = k
   type StateT    (StateFun k s) = s
   state    = StateFun
@@ -169,10 +164,11 @@ restateF = inState id
 newtype StateExp k s a b =
   StateExp { unStateExp :: a `k` Exp k s (b :* s) }
 
-type ClosedCatU k s = (ClosedCatWith k s, TerminalCat k)
+-- TODO: Move s out of StateExp
 
-instance ClosedCatU k s => StateCat (StateExp k s) where
-  type StateKon  (StateExp k s) = ClosedKon k s
+type ClosedCatU k = (ClosedCat k, TerminalCat k)
+
+instance ClosedCatU k => StateCat (StateExp k s) where
   type StateBase (StateExp k s) = k
   type StateT    (StateExp k s) = s
   state    f  = StateExp (curry (f . swapP))
@@ -195,18 +191,18 @@ Then invert for runState.
 
 -- For the other class instances, use pureState and defer to StateFun:
 
-instance ClosedCatU k s => Category (StateExp k s) where
+instance ClosedCatU k => Category (StateExp k s) where
   id  = restateF id
   (.) = asStateFun2 (.)
 
 --     Illegal irreducible constraint ClosedKon k s in superclass/instance
 --     head context (Use -XUndecidableInstances to permit this)
 
-instance ClosedCatU k s => ProductCat (StateExp k s) where
+instance ClosedCatU k => ProductCat (StateExp k s) where
   exl   = pureState exl  -- or restateF exl
   exr   = pureState exr
   dup   = pureState dup
   (***) = asStateFun2 (***)
 
-instance ClosedCatU k s => TerminalCat (StateExp k s) where
+instance ClosedCatU k => TerminalCat (StateExp k s) where
   it = pureState it

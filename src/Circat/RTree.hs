@@ -1,10 +1,9 @@
-{-# LANGUAGE GADTs, KindSignatures #-}
+{-# LANGUAGE GADTs, KindSignatures, CPP #-}
 {-# LANGUAGE ScopedTypeVariables, Rank2Types #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -86,8 +85,7 @@ instance (TerminalCat k, TreeCat k) => TreeCat (StateFun k s) where
   toB = pureState toB
   unB = pureState unB
 
-instance (ClosedCatWith k s, TerminalCat k, TreeCat k)
-      => TreeCat (StateExp k s) where
+instance (ClosedCat k, TerminalCat k, TreeCat k) => TreeCat (StateExp k s) where
   toL = pureState toL
   unL = pureState unL
   toB = pureState toB
