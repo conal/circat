@@ -899,6 +899,9 @@ pureC = C . arr
     Yet another sum experiment: Church encoding
 --------------------------------------------------------------------}
 
+class HasCond a where
+  condC :: Bool :* (a :* a) :> a
+
 type instance Pins (a :+ b) = PSum a b
 
 newtype PSum a b =
@@ -952,9 +955,6 @@ injr v = inCK (. (,v))
 
 -- (. (u,)) :: (Pins (u :* a) -> CircuitM (Pins c)) -> (Pins a -> CircuitM (Pins c))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
-
-class HasCond a where
-  condC :: Bool :* (a :* a) :> a
 
 type HasCond2 a b = (HasCond a, HasCond b)
 

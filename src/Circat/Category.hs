@@ -139,6 +139,7 @@ class Category k => CoproductCat k where
   right     =  (id +++)
   ldistribS :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
   rdistribS :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
+  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
   swapS     :: (a :+ b) `k` (b :+ a)
   swapS     =  inr ||| inl
   lassocS   :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
@@ -146,7 +147,6 @@ class Category k => CoproductCat k where
   lassocS   =  inl.inl ||| (inl.inr ||| inr)
   rassocS   =  (inl ||| inr.inl) ||| inr.inr
 
-  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
 
 -- | Apply to both parts of a coproduct
 twiceC :: CoproductCat k => (a `k` c) -> ((a :+ a) `k` (c :+ c))
