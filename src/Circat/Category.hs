@@ -1,9 +1,10 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, TupleSections, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE CPP #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -32,7 +33,10 @@ module Circat.Category
   , TerminalCat(..), lunit, runit
   , lconst, rconst
   , StrongCat(..), ClosedCat(..)
+  , applyK, curryK, uncurryK 
   , constFun -- , constFun2
+  , BiCCC
+  , HasConstArrow(..), BiCCCC  -- in progress
   , Yes
   ) where
 
@@ -50,7 +54,7 @@ import Control.Newtype
 
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
-import Circat.Misc (Unit,(:*),(:+),(<~),inNew,inNew2) -- ,inNew
+import Circat.Misc (Unit,(:*),(:+),(:=>),(<~),inNew,inNew2) -- ,inNew
 
 infixr 3 ***, &&&
 
@@ -244,40 +248,36 @@ instance (Monad m, Functor f) => StrongCat (Kleisli m) f where
   lstrength = arr lstrength
   rstrength = arr rstrength
 
--- Based on Ed K's CCC from Control.Category.Cartesian.Closed in the categories
--- package:
-
 class ProductCat k => ClosedCat k where
-  type Exp k u v
-  apply   :: (Exp k a b :* a) `k` b
-  curry   :: ((a :* b) `k` c) -> (a `k` Exp k b c)
-  uncurry :: (a `k` Exp k b c) -> ((a :* b) `k` c)
+  apply   :: ((a :=> b) :* a) `k` b
+  curry   :: ((a :* b) `k` c) -> (a `k` (b :=> c))
+  uncurry :: (a `k` (b :=> c)) -> ((a :* b) `k` c)
 
 instance ClosedCat (->) where
-  type Exp (->) u v = u -> v
   apply (f,a) = f a
   curry       = P.curry
   uncurry     = P.uncurry
 
-instance Monad m => ClosedCat (Kleisli m) where
-  type Exp (Kleisli m) a b = Kleisli m a b
-  apply   = pack (apply . first unpack)
-  curry   = inNew $ \ h -> return . pack . curry h
-  uncurry = inNew $ \ f -> \ (a,b) -> f a >>= ($ b) . unpack
+applyK   :: Monad m => Kleisli m (Kleisli m a b :* a) b
+curryK   :: Monad m => Kleisli m (a :* b) c -> Kleisli m a (Kleisli m b c)
+uncurryK :: Monad m => Kleisli m a (Kleisli m b c) -> Kleisli m (a :* b) c
+
+applyK   = pack (apply . first unpack)
+curryK   = inNew $ \ h -> return . pack . curry h
+uncurryK = inNew $ \ f -> \ (a,b) -> f a >>= ($ b) . unpack
 
 {- Types:
 
 Enhance methods on (->):
 
-> apply                :: (a -> m b) :* a -> m b
-> apply . first unpack :: Kleisli m a b :* a -> m b
->                      :: Kleisli m (Kleisli m a b :* a) b
+> apply                       :: (a -> m b) :* a -> m b
+> apply . first unpack        :: Kleisli m a b :* a -> m b
+> pack (apply . first unpack) :: Kleisli m (Kleisli m a b :* a) b
 > 
 > h                              :: a :* b -> m c
 > curry h                        :: a -> b -> m c
 > pack . curry h                 :: a -> Kleisli m b c
 > return . pack . curry h        :: a -> m (Kleisli m b c)
-> pack (return . pack . curry h) :: Kleisli m a (Kleisli m b c)
 > 
 > f                                   :: a -> m (Kleisli m b c)
 > a                                   :: a
@@ -290,7 +290,13 @@ Enhance methods on (->):
 
 -}
 
-constFun :: ClosedCat k => (b `k` c) -> (a `k` (Exp k b c))
+-- instance Monad m => ClosedCat (Kleisli m) where
+--   type Exp (Kleisli m) a b = Kleisli m a b
+--   apply   = applyK
+--   curry   = curryK
+--   uncurry = uncurryK
+
+constFun :: ClosedCat k => (b `k` c) -> (a `k` (b :=> c))
 constFun f = curry (f . exr)
 
 -- f :: b `k` c
@@ -299,6 +305,15 @@ constFun f = curry (f . exr)
 
 -- Combine with currying:
 
--- constFun2 :: (ClosedCat k, ClosedKon k b, ClosedKon k c)
+-- constFun2 :: ClosedCat k
 --           => ((b :* c) `k` d) -> (a `k` (Exp k b (Exp k c d)))
 -- constFun2 = constFun . curry
+
+type BiCCC k = (ClosedCat k, CoproductCat k)
+
+class HasConstArrow k p where
+  constArrow :: p b -> a `k` b
+
+-- TODO: Maybe replace with HasUnitArrow, and use 'it' from TerminalCat.
+
+type BiCCCC k p = (BiCCC k, HasConstArrow k p)

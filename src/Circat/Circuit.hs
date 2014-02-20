@@ -307,11 +307,6 @@ inC2 :: (a :+> b -> a' :+> b' -> a'' :+> b'')
      -> (a :>  b -> a' :>  b' -> a'' :>  b'')
 inC2 = inC <~ unC
 
-
--- instance Category (:>) where
---   id  = C id
---   C g . C f = C (g . f)
-
 instance Category (:>) where
   id  = C id
   (.) = inC2 (.)
@@ -323,15 +318,6 @@ instance ProductCat (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
--- instance CoproductCat (:>) where
---   inl       = 
---   inr       = 
---   jam       = 
---   ldistribS = 
---   rdistribS = 
---   (+++)     = 
---   (|||)     = 
-
 -- #define UnwrappedExp
 
 -- pinsAsCirc :: Pins (a -> b) -> a :> b
@@ -341,10 +327,9 @@ instance ProductCat (:>) where
 type instance Pins (a -> b) = a :+> b
 
 instance ClosedCat (:>) where
-  type Exp (:>) a b = a -> b
-  apply   =   C apply
-  curry   = inC curry
-  uncurry = inC uncurry
+  apply   =   C applyK
+  curry   = inC curryK
+  uncurry = inC uncurryK
 
 -- pinsAsCirc = C
 
@@ -356,10 +341,9 @@ type instance Pins (a -> b) = a :> b
 -- usable, since we export (:>) and not the underlying (:+>) representation.
 
 instance ClosedCat (:>) where
-  type Exp (:>) a b = a -> b
-  apply   = C (apply . first (arr unC))
-  curry   = inC $ \ h -> arr C . curry h
-  uncurry = inC $ \ f -> uncurry (arr unC . f)
+  apply   = C (applyK . first (arr unC))
+  curry   = inC $ \ h -> arr C . curryK h
+  uncurry = inC $ \ f -> uncurryK (arr unC . f)
 
 -- pinsAsCirc = id
 
@@ -374,41 +358,27 @@ Abbreviations:
 
 Consider `Source`- specialized versions of `KC`:
 
-> apply   :: KC (Exp KC (S a) (S b) :* S a) (S b)
->         == KC (KC (S a) (S b) :* S a) (S b)
->         == KC ((a :+> b) :* S a) (S b)
->         =~ KC ((a :> b) :* S a) (S b)
->         == KC (S (a -> b) :* S a) (S b)
->         == KC (S ((a -> b) :* a)) (S b)
->         == ((a -> b) :* a) :+> b
+> applyK   :: KC (Exp KC (S a) (S b) :* S a) (S b)
+>          == KC (KC (S a) (S b) :* S a) (S b)
+>          == KC ((a :+> b) :* S a) (S b)
+>          =~ KC ((a :> b) :* S a) (S b)
+>          == KC (S (a -> b) :* S a) (S b)
+>          == KC (S ((a -> b) :* a)) (S b)
+>          == ((a -> b) :* a) :+> b
 >
-> curry   :: KC (S a :* S b) (S c) -> KC (S a) (Exp KC (S b) (S c))
->         == KC (S a :* S b) (S c) -> KC (S a) (KC (S b) (S c))
->         == KC (S a :* S b) (S c) -> KC (S a) (b :+> c)
->         =~ KC (S a :* S b) (S c) -> KC (S a) (b :> c)
->         == KC (S (a :* b)) (S c) -> KC (S a) (S (b -> c))
->         == ((a :* b) :+> c) -> (a :+> (b -> c))
+> curryK   :: KC (S a :* S b) (S c) -> KC (S a) (Exp KC (S b) (S c))
+>          == KC (S a :* S b) (S c) -> KC (S a) (KC (S b) (S c))
+>          == KC (S a :* S b) (S c) -> KC (S a) (b :+> c)
+>          =~ KC (S a :* S b) (S c) -> KC (S a) (b :> c)
+>          == KC (S (a :* b)) (S c) -> KC (S a) (S (b -> c))
+>          == ((a :* b) :+> c) -> (a :+> (b -> c))
 >
-> uncurry :: KC (S a) (Exp KC (S b) (S c)) -> KC (S a :* S b) (S c)
->         == KC (S a) (KC (S b) (S c)) -> KC (S a :* S b) (S c)
->         == KC (S a) (b :+> c) -> KC (S a :* S b) (S c)
->         =~ KC (S a) (b :> c) -> KC (S a :* S b) (S c)
->         == KC (S a) (S (b -> c)) -> KC (S (a :* b)) (S c)
->         == (a :+> Exp (:>) (b -> c)) -> ((a :* b) :+> c)
-
-Instead of
-
-> type instance Source (a :> b) = a :> b
-> 
-> type Exp (:>) a b = a :> b
-
-we could define
-
-> type instance Source (a -> b) = a :> b
-> 
-> type Exp (:>) a b = a -> b
-
-TCMs work out better as defined.
+> uncurryK :: KC (S a) (Exp KC (S b) (S c)) -> KC (S a :* S b) (S c)
+>          == KC (S a) (KC (S b) (S c)) -> KC (S a :* S b) (S c)
+>          == KC (S a) (b :+> c) -> KC (S a :* S b) (S c)
+>          =~ KC (S a) (b :> c) -> KC (S a :* S b) (S c)
+>          == KC (S a) (S (b -> c)) -> KC (S (a :* b)) (S c)
+>          == (a :+> Exp (:>) (b -> c)) -> ((a :* b) :+> c)
 
 -}
 
@@ -780,13 +750,11 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 type instance Pins (a :+ b) = Pins a :+ Pins b
 
 instance CoproductCat (:>) where
-  inl = C inl
-  inr = C inr
-  (|||) = inC2 (|||)
+  inl       = C inl
+  inr       = C inr
+  (|||)     = inC2 (|||)
   ldistribS = C ldistribS
   rdistribS = C rdistribS
-
--- TODO: replace C, unC, inC, inC2 by pack, unpack, inNew, inNew2 throughout this module
 
 {- Types:
 

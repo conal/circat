@@ -30,7 +30,7 @@ import Control.Category
 
 import Control.Newtype
 
-import Circat.Misc ((:*),(<~))
+import Circat.Misc ((:*),(:=>),(<~))
 import Circat.Category
 
 {--------------------------------------------------------------------
@@ -161,8 +161,7 @@ restateF = inState id
 
 -- | State via exponentials. For (->), isomorphic to 'StateFun'. Can lead to
 -- memoization for other categories.
-newtype StateExp k s a b =
-  StateExp { unStateExp :: a `k` Exp k s (b :* s) }
+newtype StateExp k s a b = StateExp { unStateExp :: a `k` (s :=> b :* s) }
 
 -- TODO: Move s out of StateExp
 
