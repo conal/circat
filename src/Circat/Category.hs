@@ -309,11 +309,14 @@ constFun f = curry (f . exr)
 --           => ((b :* c) `k` d) -> (a `k` (Exp k b (Exp k c d)))
 -- constFun2 = constFun . curry
 
+-- | Bi-cartesion (cartesian & co-cartesian) closed categories.
 type BiCCC k = (ClosedCat k, CoproductCat k)
 
 class HasConstArrow k p where
   constArrow :: p b -> a `k` b
 
--- TODO: Maybe replace with HasUnitArrow, and use 'it' from TerminalCat.
+-- TODO: Maybe replace with HasUnitArrow, and define constArrow via 'it' from
+-- TerminalCat.
 
+-- | 'BiCCC' with constant arrows
 type BiCCCC k p = (BiCCC k, HasConstArrow k p)
