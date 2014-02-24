@@ -40,9 +40,6 @@ module Circat.Circuit
   , (|||*), fromBool, toBool
 #endif
   , muxC -- , pinsAsCirc
-#ifdef ChurchSums
-  , HasCond(..)
-#endif
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
@@ -832,8 +829,8 @@ infixr 2 |||*
           (a :> c) -> (b :> c) -> (a :+ b :> c)
 f |||* g = muxC . ((f *** g) . extractBoth &&& pureC sumFlag)
 
-condC :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
-condC = muxCT . first toPair
+cond :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
+cond = muxCT . first toPair
 
 muxCT :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
          ((u :->: v) :* u) :> v
@@ -867,18 +864,15 @@ pureC = C . arr
     Yet another sum experiment: Church encoding
 --------------------------------------------------------------------}
 
-class HasCond a where
-  condC :: Bool :* (a :* a) :> a
-
 type instance Pins (a :+ b) = PSum a b
 
 newtype PSum a b =
-  PSum { unPSum :: forall c. HasCond c => (a :=> c) :* (b :=> c) :> c }
+  PSum { unPSum :: forall c. CondCat (:>) c => (a :=> c) :* (b :=> c) :> c }
 
-psc :: (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)) -> PSum a b
+psc :: (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)) -> PSum a b
 psc q = PSum (mkC q)
 
-unPsc :: PSum a b -> (forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c))
+unPsc :: PSum a b -> (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c))
 unPsc ps = unmkC (unPSum ps)
 
 inlC :: a :> a :+ b
@@ -889,7 +883,7 @@ inrC = mkC (\ b -> return (psc (\ (_,g) -> unmkC g b)))
 
 infixr 2 |||*
 
-(|||*) :: forall a b c. HasCond c =>
+(|||*) :: forall a b c. CondCat (:>) c =>
           (a :> c) -> (b :> c) -> (a :+ b :> c)
 f |||* g = mkC (\ q -> unPsc q (f,g))
 
@@ -900,7 +894,7 @@ ldistribSC = mkC (\ (u,q) -> return (psc (\ (f,g) -> unPsc q (injl u f, injl u g
 u :: Pins u
 q :: Pins (a :+ b)
   == PSum a b
-unPSum q :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+unPSum q :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
 
 f :: u :* a :> c
 g :: u :* b :> c
@@ -924,74 +918,43 @@ injr v = inCK (. (,v))
 -- (. (u,)) :: (Pins (u :* a) -> CircuitM (Pins c)) -> (Pins a -> CircuitM (Pins c))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
 
-type HasCond2 a b = (HasCond a, HasCond b)
-
-instance                 HasCond Unit where condC = it
-instance                 HasCond Bool where condC = muxC
-instance HasCond2 a b => HasCond (a :*  b) where condC = prodCond
-instance HasCond    b => HasCond (a :=> b) where condC = funCond
-instance                 HasCond (a :+  b) where condC = sumCond
-
-prodCond :: HasCond2 a b => Bool :* ((a :* b) :* (a :* b)) :> (a :* b)
-prodCond = half exl &&& half exr
- where
-   half :: HasCond c => (u :> c) -> (Bool :* (u :* u) :> c)
-   half f = condC . second (twiceP f)
-
-#if 0
-funCond = \ (p,(f,g)) a -> cond (p,(f a,g a))
-        = curry \ ((p,(f,g)),a) -> cond (p,(f a,g a))
-
-funCond' p q r = \ t -> cond' p (q t) (r t)
-               = ...
-
-funCond' p q r = funCond . (p &&& (q &&& r))
-
-condC' :: HasCond a => (t :> Bool) -> Binop (t :> a)
-condC' p q r = condC . (p &&& (q &&& r))
-
-condC'' :: HasCond a => Bool :* (a :* a) :> a
-condC'' = condC' exl (exl . exr) (exr . exr)
-
-#endif
-
-funCond' :: HasCond b => (t :> Bool) -> Binop (t :> (a :=> b))
-funCond' = undefined
-
-funCond :: HasCond b => Bool :* ((a :=> b) :* (a :=> b)) :> (a :=> b)
-funCond = curry (condC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+instance                        CondCat (:>) Unit      where cond = it
+instance                        CondCat (:>) Bool      where cond = muxC
+instance (CondCat2 (:>) a b) => CondCat (:>) (a :*  b) where cond = prodCond
+instance (CondCat (:>) b)    => CondCat (:>) (a :=> b) where cond = funCond
+instance CondCat (:>) (a :+ b)                         where cond = sumCond
 
 sumToFun' :: (t :> a :+ b)
-          -> forall c. HasCond c => t :> ((a :=> c) :* (b :=> c) :=> c)
+          -> forall c. CondCat (:>) c => t :> ((a :=> c) :* (b :=> c) :=> c)
 sumToFun' = (inCK.fmap.fmap) unPSum
 
-sumToFun :: forall a b c. HasCond c => (a :+ b :> ((a :=> c) :* (b :=> c) :=> c))
+sumToFun :: forall a b c. CondCat (:>) c => (a :+ b :> ((a :=> c) :* (b :=> c) :=> c))
 sumToFun = sumToFun' id
 
 -- sumToFun = (inCK.fmap.fmap) unPSum (id :: a :+ b :> a :+ b)
 
 funToSum' :: forall t a b.
-             (forall c. HasCond c => t :> ((a :=> c) :* (b :=> c) :=> c))
+             (forall c. CondCat (:>) c => t :> ((a :=> c) :* (b :=> c) :=> c))
           -> (t :> a :+ b)
 funToSum' q = mkC (return . foo)
  where
    foo :: Pins t -> Pins (a :+ b)
    foo t = PSum (mkC r)
     where
-      r :: forall c. HasCond c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+      r :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
       r fg = do h <- unmkC q t
                 unmkC h fg
 
 #if 0
 
-q :: forall c. HasCond c => t :> ((a :=> c) :* (b :=> c) :=> c)
+q :: forall c. CondCat (:>) c => t :> ((a :=> c) :* (b :=> c) :=> c)
 
-unmkC q :: forall c. HasCond c => Pins t -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
-        :: forall c. HasCond c => Pins t -> CircuitM ((a :=> c) :* (b :=> c) :> c)
+unmkC q :: forall c. CondCat (:>) c => Pins t -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
+        :: forall c. CondCat (:>) c => Pins t -> CircuitM ((a :=> c) :* (b :=> c) :> c)
 
 fg :: (a :> c) :* (b :> c)
 
-unmkC q t :: forall c. HasCond c => CircuitM ((a :=> c) :* (b :=> c) :> c)
+unmkC q t :: forall c. CondCat (:>) c => CircuitM ((a :=> c) :* (b :=> c) :> c)
 h :: (a :=> c) :* (b :=> c) :> c
 unmkC h :: (a :> b) :* (b :> c) -> CircuitM (Pins c)
 unmkC h fg :: CircuitM (Pins c)
@@ -1007,29 +970,29 @@ condArrToFun condArr p q r = condArr . (p &&& (q &&& r))
 condFunToArr :: CondFun a -> CondArr a
 condFunToArr condFun = condFun exl (exl . exr) (exr . exr)
 
-condC' :: HasCond a => CondFun a
-condC' = condArrToFun condC
--- condC' p q r = condC . (p &&& (q &&& r))
+cond' :: CondCat (:>) a => CondFun a
+cond' = condArrToFun cond
+-- cond' p q r = cond . (p &&& (q &&& r))
 
--- condC'' :: HasCond a => CondArr a
--- condC'' = condFunToArr condC'
--- -- condC'' = condC' exl (exl . exr) (exr . exr)
+-- cond'' :: CondCat a => CondArr a
+-- cond'' = condFunToArr cond'
+-- -- cond'' = cond' exl (exl . exr) (exr . exr)
 
 sumCond' :: (t :> Bool) -> Binop (t :> a :+ b)
-sumCond' p q r = funToSum' (condC' p (sumToFun' q) (sumToFun' r))
--- sumCond' p q r = funToSum' (condArrToFun condC p (sumToFun' q) (sumToFun' r))
--- sumCond' p q r = funToSum' (condC . (p &&& (sumToFun' q &&& sumToFun' r)))
+sumCond' p q r = funToSum' (cond' p (sumToFun' q) (sumToFun' r))
+-- sumCond' p q r = funToSum' (condArrToFun cond p (sumToFun' q) (sumToFun' r))
+-- sumCond' p q r = funToSum' (cond . (p &&& (sumToFun' q &&& sumToFun' r)))
 
 sumCond :: Bool :* ((a :+ b) :* (a :+ b)) :> a :+ b
 sumCond = condFunToArr sumCond'
 -- sumCond = sumCond' exl (exl . exr) (exr . exr)
--- sumCond = funToSum' (condC . (exl &&& (sumToFun' (exl . exr) &&& sumToFun' (exr . exr))))
+-- sumCond = funToSum' (cond . (exl &&& (sumToFun' (exl . exr) &&& sumToFun' (exr . exr))))
 
--- The HasCond constraint in condC as used in 'fromBool' is what leads to HasCond in
+-- The CondCat (:>) constraint in cond as used in 'fromBool' is what leads to CondCat in
 -- PSum and hence breaks (|||). I'm looking for an alternative.
 
 fromBool :: Bool :> Unit :+ Unit
-fromBool = condC . (id &&& (inl &&& inr) . it)
+fromBool = cond . (id &&& (inl &&& inr) . it)
 
 toBool :: Unit :+ Unit :> Bool
 toBool = constC False |||* constC True

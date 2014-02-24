@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, TupleSections, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE Rank2Types, ScopedTypeVariables, CPP #-}
+{-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -36,7 +37,8 @@ module Circat.Category
   , applyK, curryK, uncurryK 
   , constFun -- , constFun2
   , BiCCC
-  , HasConstArrow(..), BiCCCC  -- in progress
+  , HasUnitArrow(..), BiCCCC  -- in progress
+  , CondCat(..),CondCat2, prodCond, funCond
   , Yes
   ) where
 
@@ -310,13 +312,70 @@ constFun f = curry (f . exr)
 -- constFun2 = constFun . curry
 
 -- | Bi-cartesion (cartesian & co-cartesian) closed categories.
-type BiCCC k = (ClosedCat k, CoproductCat k)
+type BiCCC k = (ClosedCat k, TerminalCat k, CoproductCat k)
 
-class HasConstArrow k p where
-  constArrow :: p b -> a `k` b
-
--- TODO: Maybe replace with HasUnitArrow, and define constArrow via 'it' from
--- TerminalCat.
+class HasUnitArrow k p where
+  unitArrow :: p b -> Unit `k` b
 
 -- | 'BiCCC' with constant arrows
-type BiCCCC k p = (BiCCC k, HasConstArrow k p)
+type BiCCCC k p = (BiCCC k, HasUnitArrow k p)
+
+{--------------------------------------------------------------------
+    Experimental
+--------------------------------------------------------------------}
+
+-- | Conditional, taking (condition,(else,then)).
+-- Note the unusual order, which aligns with tries.
+class CondCat k a where
+  cond :: (Bool :* (a :* a)) `k` a
+
+-- Overlaps with Unit, product, and function instances.
+
+instance CondCat (->) a where
+  cond (i,(e,t)) = if i then t else e
+
+instance Monad m => CondCat (Kleisli m) a where
+  cond = arr cond
+
+type CondCat2 k a b = (CondCat k a, CondCat k b)
+
+#if 0
+
+-- Templates for instances. Overlaps with (->) in all cases and non-optimal in
+-- others.
+
+instance TerminalCat k => CondCat k Unit where cond = it
+
+instance (ProductCat k, CondCat2 k a b)
+      => CondCat k (a :*  b) where cond = prodCond
+
+--     Variable `k' occurs more often than in the instance head
+--       in the constraint: CondCat2 k a b
+--     (Use -XUndecidableInstances to permit this)
+
+instance (ClosedCat k, CondCat k b)
+      => CondCat k (a :=> b) where cond = funCond
+
+#endif
+
+prodCond :: forall k a b. (ProductCat k, CondCat2 k a b) =>
+            (Bool :* ((a :* b) :* (a :* b))) `k` (a :* b)
+prodCond = half exl &&& half exr
+ where
+   half :: CondCat k c => (u `k` c) -> ((Bool :* (u :* u)) `k` c)
+   half f = cond . second (twiceP f)
+
+-- funCond = \ (p,(f,g)) a -> cond (p,(f a,g a))
+--         = curry \ ((p,(f,g)),a) -> cond (p,(f a,g a))
+
+funCond :: (ClosedCat k, CondCat k b) =>
+           (Bool :* ((a :=> b) :* (a :=> b))) `k` (a :=> b)
+funCond = curry (cond . (exl . exl &&& (half exl &&& half exr)))
+ where
+   half ex = apply . first (ex . exr)
+
+-- funCond = curry (cond . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+
+-- instance                 CondCat (a :+  b) where cond = sumCond
+
+-- instance                 CondCat Bool where cond = muxC
