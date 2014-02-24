@@ -35,7 +35,7 @@ module Circat.Category
   , lconst, rconst
   , StrongCat(..), ClosedCat(..)
   , applyK, curryK, uncurryK 
-  , unitFun -- , constFun -- , constFun2
+  , unitFun, unUnitFun -- , constFun -- , constFun2
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
   , CondCat(..),CondCat2, prodCond, funCond
@@ -313,6 +313,10 @@ constFun f = curry (f . exr)
 
 unitFun :: ClosedCat k => (b `k` c) -> (Unit `k` (b :=> c))
 unitFun = constFun
+
+unUnitFun :: (ClosedCat k, TerminalCat k) =>
+             (Unit `k` (a :=> b)) -> (a `k` b)
+unUnitFun g = uncurry g . (it &&& id)
 
 -- | Bi-cartesion (cartesian & co-cartesian) closed categories.
 type BiCCC k = (ClosedCat k, TerminalCat k, CoproductCat k)
