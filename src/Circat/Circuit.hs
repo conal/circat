@@ -747,11 +747,11 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 type instance Pins (a :+ b) = Pins a :+ Pins b
 
 instance CoproductCat (:>) where
-  inl       = C inl
-  inr       = C inr
-  (|||)     = inC2 (|||)
-  ldistribS = C ldistribS
-  rdistribS = C rdistribS
+  inl   = C inl
+  inr   = C inr
+  (|||) = inC2 (|||)
+  distl = C distl
+  distr = C distr
 
 {- Types:
 
@@ -774,13 +774,13 @@ Consider `Source`- specialized versions of `KC`:
 >       == KC (S a) (S c) -> KC (S b) (S c) -> KC (S (a :+ b)) (S c)
 >       == a :+> c -> b :+> c -> (a :+ b) :+> c
 >
-> ldistribS :: KC (S a :* (S u :+ S v)) (S a :* S u :+ S a :* S v)
->           == KC (S (a :* (u :+ v))) (S (a :* u :+ a :* v))
->           == (a :* (u :+ v)) :+> (a :* u :+ a :* v)
+> distl :: KC (S a :* (S u :+ S v)) (S a :* S u :+ S a :* S v)
+>       == KC (S (a :* (u :+ v))) (S (a :* u :+ a :* v))
+>       == (a :* (u :+ v)) :+> (a :* u :+ a :* v)
 >
-> rdistribS :: KC ((S u :+ S v) :* S b) (S u :* S b :+ S v :* S b)
->           == KC (S ((u :+ v) :* b)) (S (u :* b :+ v :* b))
->           == ((u :+ v) :* b) :+> (u :* b :+ v :* b)
+> distr :: KC ((S u :+ S v) :* S b) (S u :* S b :+ S v :* S b)
+>       == KC (S ((u :+ v) :* b)) (S (u :* b :+ v :* b))
+>       == ((u :+ v) :* b) :+> (u :* b :+ v :* b)
 
 -}
 
@@ -887,8 +887,8 @@ infixr 2 |||*
           (a :> c) -> (b :> c) -> (a :+ b :> c)
 f |||* g = mkC (\ q -> unPsc q (f,g))
 
-ldistribSC :: forall u a b. (u :* (a :+ b)) :> (u :* a :+ u :* b)
-ldistribSC = mkC (\ (u,q) -> return (psc (\ (f,g) -> unPsc q (injl u f, injl u g))))
+distlC :: forall u a b. (u :* (a :+ b)) :> (u :* a :+ u :* b)
+distlC = mkC (\ (u,q) -> return (psc (\ (f,g) -> unPsc q (injl u f, injl u g))))
 
 {-
 u :: Pins u
@@ -906,8 +906,8 @@ unPSum q (injl u f) (injl v f) :: CircuitM (Pins c)
 
 -}
 
-rdistribSC :: forall v a b. ((a :+ b) :* v) :> (a :* v :+ b :* v)
-rdistribSC = mkC (\ (q,v) -> return (psc (\ (f,g) -> unPsc q (injr v f, injr v g))))
+distrC :: forall v a b. ((a :+ b) :* v) :> (a :* v :+ b :* v)
+distrC = mkC (\ (q,v) -> return (psc (\ (f,g) -> unPsc q (injr v f, injr v g))))
 
 injl :: Pins u -> (u :* a :> c) -> (a :> c)
 injl u = inCK (. (u,))
@@ -998,11 +998,10 @@ toBool :: Unit :+ Unit :> Bool
 toBool = constC False |||* constC True
 
 instance CoproductCat (:>) where
-  inl = inlC
-  inr = inrC
-  -- (|||) = (|||*)
+  inl   = inlC
+  inr   = inrC
   (|||) = error "(|||) for (:>): Sorry -- no unconstrained method yet. Use (|||*)"
-  ldistribS = ldistribSC
-  rdistribS = rdistribSC
+  distl = distlC
+  distr = distrC
 
 #endif

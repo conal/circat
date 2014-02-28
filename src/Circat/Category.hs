@@ -91,11 +91,6 @@ class Category k => ProductCat k where
   rassocP :: ((a :* b) :* c) `k` (a :* (b :* c))
   rassocP =  (exl . exl) &&& first  exr
 
---   ldistribP :: (a, u :* v) `k` ((a,u) :* (a,v))
---   ldistribP =  transPair . first  dup -- second exl &&& second exr
---   rdistribP :: (u :* v, b) `k` ((u,b) :* (v,b))
---   rdistribP =  transPair . second dup -- first  exl &&& first  exr
-
 -- | Apply to both parts of a product
 twiceP :: ProductCat k => (a `k` c) -> ((a :* a) `k` (c :* c))
 twiceP f = f *** f
@@ -131,28 +126,27 @@ infixr 2 +++, |||
 -- (a) '(|||)', (b) both '(+++)' and 'jam', or (c) both '(|||)' and '(+++)'.
 -- TODO: Generalize '(:+)' to an associated type. Keep the types fairly pretty.
 class Category k => CoproductCat k where
-  inl       :: a `k` (a :+ b)
-  inr       :: b `k` (a :+ b)
-  jam       :: (a :+ a) `k` a                  -- dual to dup. standard name?
-  jam       =  id ||| id
-  (+++)     :: (a `k` c) -> (b `k` d) -> ((a :+ b) `k` (c :+ d))
-  f +++ g   =  inl . f ||| inr . g
-  (|||)     :: (a `k` c) -> (b `k` c) -> ((a :+ b) `k`  c)
-  f ||| g   =  jam . (f +++ g)
-  left      :: (a `k` a') -> ((a :+ b) `k` (a' :+ b ))
-  left      =  (+++ id)
-  right     :: (b `k` b') -> ((a :+ b) `k` (a  :+ b'))
-  right     =  (id +++)
-  ldistribS :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
-  rdistribS :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
-  -- rdistribS = (swapP +++ swapP) . ldistribS . swapP -- Needs ProductCat k
-  swapS     :: (a :+ b) `k` (b :+ a)
-  swapS     =  inr ||| inl
-  lassocS   :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
-  rassocS   :: ((a :+ b) :+ c) `k` (a :+ (b :+ c))
-  lassocS   =  inl.inl ||| (inl.inr ||| inr)
-  rassocS   =  (inl ||| inr.inl) ||| inr.inr
-
+  inl     :: a `k` (a :+ b)
+  inr     :: b `k` (a :+ b)
+  jam     :: (a :+ a) `k` a                  -- dual to dup. standard name?
+  jam     =  id ||| id
+  (+++)   :: (a `k` c) -> (b `k` d) -> ((a :+ b) `k` (c :+ d))
+  f +++ g =  inl . f ||| inr . g
+  (|||)   :: (a `k` c) -> (b `k` c) -> ((a :+ b) `k`  c)
+  f ||| g =  jam . (f +++ g)
+  left    :: (a `k` a') -> ((a :+ b) `k` (a' :+ b ))
+  left    =  (+++ id)
+  right   :: (b `k` b') -> ((a :+ b) `k` (a  :+ b'))
+  right   =  (id +++)
+  distl   :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
+  distr   :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
+  swapS   :: (a :+ b) `k` (b :+ a)
+  swapS   =  inr ||| inl
+  lassocS :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
+  rassocS :: ((a :+ b) :+ c) `k` (a :+ (b :+ c))
+  lassocS =  inl.inl ||| (inl.inr ||| inr)
+  rassocS =  (inl ||| inr.inl) ||| inr.inr
+  -- distr = (swapP +++ swapP) . distl . swapP -- Needs ProductCat k
 
 -- | Apply to both parts of a coproduct
 twiceC :: CoproductCat k => (a `k` c) -> ((a :+ a) `k` (c :+ c))
@@ -165,12 +159,12 @@ instance ProductCat (->) where
   (&&&) = (A.&&&)
 
 instance CoproductCat (->) where
-  inl              = Left
-  inr              = Right
-  (+++)            = (A.+++)
-  (|||)            = (A.|||)
-  ldistribS (a,uv) = ((a,) +++ (a,)) uv
-  rdistribS (uv,b) = ((,b) +++ (,b)) uv
+  inl          = Left
+  inr          = Right
+  (+++)        = (A.+++)
+  (|||)        = (A.|||)
+  distl (a,uv) = ((a,) +++ (a,)) uv
+  distr (uv,b) = ((,b) +++ (,b)) uv
 
 instance Monad m => ProductCat (Kleisli m) where
   exl   = arr exl
@@ -182,12 +176,12 @@ crossM :: Monad m => (a -> m c) -> (b -> m d) -> (a :* b -> m (c :* d))
 (f `crossM` g) (a,b) = liftM2 (,) (f a) (g b)
 
 instance Monad m => CoproductCat (Kleisli m) where
-  inl       = arr inl
-  inr       = arr inr
-  jam       = arr jam
-  ldistribS = arr ldistribS
-  rdistribS = arr rdistribS
-  (|||)     = inNew2 (|||)
+  inl   = arr inl
+  inr   = arr inr
+  jam   = arr jam
+  distl = arr distl
+  distr = arr distr
+  (|||) = inNew2 (|||)
 
 -- | Category with constant morphisms
 class Category k => ConstCat k where
