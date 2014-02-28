@@ -1001,6 +1001,8 @@ instance CoproductCat (:>) where
   inl   = inlC
   inr   = inrC
   (|||) = error "(|||) for (:>): Sorry -- no unconstrained method yet. Use (|||*)"
+
+instance DistribCat (:>) where
   distl = distlC
   distr = distrC
 

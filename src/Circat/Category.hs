@@ -30,6 +30,7 @@ module Circat.Category
   ( module Control.Category
   , ProductCat(..), twiceP, inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..), twiceC
+  , DistribCat(..)
   , ConstCat(..), ConstCatWith, ConstUCat
   , TerminalCat(..), lunit, runit
   , lconst, rconst
@@ -138,19 +139,21 @@ class Category k => CoproductCat k where
   left    =  (+++ id)
   right   :: (b `k` b') -> ((a :+ b) `k` (a  :+ b'))
   right   =  (id +++)
-  distl   :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
-  distr   :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
   swapS   :: (a :+ b) `k` (b :+ a)
   swapS   =  inr ||| inl
   lassocS :: (a :+ (b :+ c)) `k` ((a :+ b) :+ c)
   rassocS :: ((a :+ b) :+ c) `k` (a :+ (b :+ c))
   lassocS =  inl.inl ||| (inl.inr ||| inr)
   rassocS =  (inl ||| inr.inl) ||| inr.inr
-  -- distr = (swapP +++ swapP) . distl . swapP -- Needs ProductCat k
 
 -- | Apply to both parts of a coproduct
 twiceC :: CoproductCat k => (a `k` c) -> ((a :+ a) `k` (c :+ c))
 twiceC f = f +++ f
+
+class DistribCat k where
+  distl :: (a :* (u :+ v)) `k` (a :* u :+ a :* v)
+  distr :: ((u :+ v) :* b) `k` (u :* b :+ v :* b)
+  -- distr = (swapP +++ swapP) . distl . swapP -- Needs ProductCat k
 
 instance ProductCat (->) where
   exl   = P.fst
@@ -163,6 +166,8 @@ instance CoproductCat (->) where
   inr          = Right
   (+++)        = (A.+++)
   (|||)        = (A.|||)
+
+instance DistribCat (->) where
   distl (a,uv) = ((a,) +++ (a,)) uv
   distr (uv,b) = ((,b) +++ (,b)) uv
 
@@ -179,9 +184,11 @@ instance Monad m => CoproductCat (Kleisli m) where
   inl   = arr inl
   inr   = arr inr
   jam   = arr jam
+  (|||) = inNew2 (|||)
+
+instance Monad m => DistribCat (Kleisli m) where
   distl = arr distl
   distr = arr distr
-  (|||) = inNew2 (|||)
 
 -- | Category with constant morphisms
 class Category k => ConstCat k where
@@ -313,12 +320,13 @@ unUnitFun :: (ClosedCat k, TerminalCat k) =>
 unUnitFun g = uncurry g . (it &&& id)
 
 -- | Bi-cartesion (cartesian & co-cartesian) closed categories.
-type BiCCC k = (ClosedCat k, TerminalCat k, CoproductCat k)
+-- Also lumps in terminal and distributive, though should probably be moved out.
+type BiCCC k = (ClosedCat k, CoproductCat k, TerminalCat k, DistribCat k)
 
 class HasUnitArrow k p where
   unitArrow :: p b -> Unit `k` b
 
--- | 'BiCCC' with constant arrows
+-- | 'BiCCC' with constant arrows.
 type BiCCCC k p = (BiCCC k, HasUnitArrow k p)
 
 {--------------------------------------------------------------------
