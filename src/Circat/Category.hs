@@ -39,7 +39,8 @@ module Circat.Category
   , unitFun, unUnitFun -- , constFun -- , constFun2
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
-  , CondCat(..),CondCat2, prodCond, funCond
+  , CondCat(..),CondCat2, prodCond, funCond  -- experimental
+  , guard, if_then_else  -- experimental
   , Yes
   ) where
 
@@ -388,3 +389,17 @@ funCond = curry (cond . (exl . exl &&& (half exl &&& half exr)))
 -- instance                 CondCat (a :+  b) where cond = sumCond
 
 -- instance                 CondCat Bool where cond = muxC
+
+{--------------------------------------------------------------------
+    Conditionals
+--------------------------------------------------------------------}
+
+type BoolUU = Unit :+ Unit
+
+guard :: (ProductCat k, CoproductCat k, DistribCat k) =>
+         (a `k` BoolUU) -> (a `k` (a :+ a))
+guard p = (exl +++ exl) . distl . (id &&& p)
+
+if_then_else :: (ProductCat k, CoproductCat k, DistribCat k) =>
+                (a `k` BoolUU) -> (a `k` b) -> (a `k` b) -> (a `k` b)
+if_then_else p f g = (f ||| g) . guard p
