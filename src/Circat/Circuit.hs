@@ -77,6 +77,8 @@ import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import TypeUnary.Vec hiding (get)
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
+import TypeEncode.Encode (EncodeCat(..))
+
 import Circat.Misc
 import Circat.Category
 -- import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
@@ -408,6 +410,17 @@ instance AddCat (:>) where
   -- TODO: Try with and without these non-defaults
 --   fullAdd = namedC "fullAdd"
 --   halfAdd = namedC "halfAdd"
+
+-- instance EncodeCat (:>) where
+--   encode = namedC "encode"
+--   decode = namedC "decode"
+
+-- Would need IsSourceP2
+
+-- Placeholder
+instance EncodeCat (:>) where
+  encode = error "encode for (:>): still noodling"
+  decode = error "decode for (:>): still noodling"
 
 instance VecCat (:>) where
   toVecZ = C toVecZ
