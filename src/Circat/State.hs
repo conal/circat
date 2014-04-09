@@ -24,7 +24,6 @@ module Circat.State
   ) where
 
 import Prelude hiding (id,(.),const,curry,uncurry)
-import qualified Prelude as P
 
 import Control.Category
 
