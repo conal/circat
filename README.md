@@ -6,4 +6,5 @@ For instance, run `outSimples` to construct some simple circuits, render them to
 
 Dependencies:
 
-*   [Anshul Malvi's branch](https://github.com/anshulmalvi/netlist) of the KU netlist packages
+*   The KU [netlist packages](https://github.com/ku-fpg/netlist)
+
