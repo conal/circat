@@ -167,7 +167,7 @@ first toVecS     ::               `k` Rs (S n) :* C
 -- Try, and rename "CTraversable" to "TraversableCat". The Kon becomes superclass constraints.
 
 class CTraversable t where
-  type CTraversableKon t k :: Constraint
+  type CTraversableKon t (k :: * -> * -> *) :: Constraint
   type CTraversableKon t k = () ~ () -- or just (), if it works
   traverseC :: CTraversableKon t k => (a `k` b) -> (t a `k` t b)
 
