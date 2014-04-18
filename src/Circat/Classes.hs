@@ -124,6 +124,10 @@ second or               :: S * (C * C) -> S * C
 
 instance AddCat (->)  -- use defaults
 
+-- HACK: generalize/replace/...
+class AddCat' k a where
+  add :: (a :* a) `k` a
+
 -- Structure addition with carry in & out
 
 type Adds k f = 
@@ -241,3 +245,14 @@ addS = traverseC fullAddS
 
 -- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.
 #endif
+
+{--------------------------------------------------------------------
+    Misc
+--------------------------------------------------------------------}
+
+-- | One-bit mux
+class MuxCat k where
+  mux :: (Bool :* (Bool :* Bool)) `k` Bool
+
+instance MuxCat (->) where
+  mux (i,(e,t)) = (i && t) || (not i && e)
