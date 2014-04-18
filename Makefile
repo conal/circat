@@ -1,2 +1,2 @@
 install:
-	cabal install --force-reinstalls --disable-documentation
+	cabal install --force-reinstalls -j1 --disable-documentation
