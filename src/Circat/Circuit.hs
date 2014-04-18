@@ -11,6 +11,7 @@
 {-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-}
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -fcontext-stack=35 #-} -- for add
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -39,13 +40,12 @@ module Circat.Circuit
 #elif defined ChurchSums
   , (|||*), fromBool, toBool
 #endif
-  , muxC -- , pinsAsCirc
   , Comp', CompNum, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
 
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
-import qualified Prelude as P
+-- import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
@@ -218,6 +218,10 @@ type instance Pins (Pair a  ) = Pair (Pins a)
 type instance Pins (Vec n a ) = Vec  n (Pins a)
 type instance Pins (Tree n a) = Tree n (Pins a)
 
+type N32 = N16 :+: N16
+
+type instance Pins Int        = Pins (Vec N32 Bool)
+
 -- See below for function instance
 
 {--------------------------------------------------------------------
@@ -381,8 +385,11 @@ Consider `Source`- specialized versions of `KC`:
 
 -}
 
-muxC :: IsSourceP c => Bool :* (c :* c) :> c
-muxC = namedC "mux"
+-- muxC :: IsSourceP c => Bool :* (c :* c) :> c
+-- muxC = namedC "mux"
+
+instance MuxCat (:>) where
+  mux = namedC "mux"
 
 instance TerminalCat (:>) where
   it = C it
@@ -433,6 +440,10 @@ instance TreeCat (:>) where
   unL = C unL
   toB = C toB
   unB = C unB
+
+instance            AddCat' (:>) Int           where add = namedC "add"
+instance IsNat n => AddCat' (:>) (Vec n Bool)  where add = namedC "add"
+instance IsNat d => AddCat' (:>) (Tree d Bool) where add = namedC "add"
 
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
@@ -932,7 +943,7 @@ injr v = inCK (. (,v))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
 
 instance                        CondCat (:>) Unit      where cond = it
-instance                        CondCat (:>) Bool      where cond = muxC
+instance                        CondCat (:>) Bool      where cond = mux
 instance (CondCat2 (:>) a b) => CondCat (:>) (a :*  b) where cond = prodCond
 instance (CondCat (:>) b)    => CondCat (:>) (a :=> b) where cond = funCond
 instance CondCat (:>) (a :+ b)                         where cond = sumCond
