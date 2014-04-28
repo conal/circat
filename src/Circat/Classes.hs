@@ -30,6 +30,9 @@ import Control.Arrow (arr,Kleisli)
 
 import GHC.Prim (Constraint)
 
+-- import Control.Newtype (Newtype)
+-- import qualified Control.Newtype as N
+
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
 
 import Circat.Misc ((:*),(<~))
@@ -256,3 +259,11 @@ class MuxCat k where
 
 instance MuxCat (->) where
   mux (i,(e,t)) = (i && t) || (not i && e)
+
+-- class NewtypeCat k where
+--   pack   :: Newtype n o => o `k` n
+--   unpack :: Newtype n o => n `k` o
+
+-- instance NewtypeCat (->) where
+--   pack = N.pack
+--   unpack = N.unpack

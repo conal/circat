@@ -7,5 +7,4 @@ For instance, run `outSimples` to construct some simple circuits, render them to
 Dependencies:
 
 *   The KU [netlist packages](https://github.com/ku-fpg/netlist)
-*   [type-encode](https://github.com/conal/type-encode)
 

@@ -35,6 +35,7 @@
 module Circat.Circuit 
   ( CircuitM, (:>)
   , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
+  , NewtypeCon, NewtypeCat(..)
 #if defined TaggedSums
   , inlC, inrC, (|||*)
 #elif defined ChurchSums
@@ -54,6 +55,8 @@ import Control.Monad (liftM,liftM2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 -- import Data.Traversable (Traversable(..))
+
+import qualified Control.Newtype as N
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -77,7 +80,7 @@ import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 import TypeUnary.Vec hiding (get)
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
 
-import TypeEncode.Encode (EncodeCat(..))
+-- import TypeEncode.Encode (EncodeCat(..))
 
 import Circat.Misc
 import Circat.Category
@@ -422,12 +425,27 @@ instance AddCat (:>) where
 --   encode = namedC "encode"
 --   decode = namedC "decode"
 
--- Would need IsSourceP2
+type NewtypeCon n o = (N.Newtype n o, IsSourceP n, IsSourceP o)
 
--- Placeholder
-instance EncodeCat (:>) where
-  encode = error "encode for (:>): still noodling"
-  decode = error "decode for (:>): still noodling"
+class NewtypeCat k where
+  pack   :: NewtypeCon n o => o `k` n
+  unpack :: NewtypeCon n o => n `k` o
+
+instance NewtypeCat (->) where
+  pack   = N.pack
+  unpack = N.unpack
+
+instance NewtypeCat (:>) where
+  pack   = namedC "pack"
+  unpack = namedC "unpack"
+
+-- TODO: Somehow generalize NewtypeCat away from Circuit specifics while still
+-- enabling a circuit instance.
+
+-- -- Placeholder
+-- instance EncodeCat (:>) where
+--   encode = error "encode for (:>): still noodling"
+--   decode = error "decode for (:>): still noodling"
 
 instance VecCat (:>) where
   toVecZ = C toVecZ
