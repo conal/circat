@@ -259,11 +259,3 @@ class MuxCat k where
 
 instance MuxCat (->) where
   mux (i,(e,t)) = (i && t) || (not i && e)
-
--- class NewtypeCat k where
---   pack   :: Newtype n o => o `k` n
---   unpack :: Newtype n o => n `k` o
-
--- instance NewtypeCat (->) where
---   pack = N.pack
---   unpack = N.unpack
