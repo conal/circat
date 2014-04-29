@@ -22,7 +22,7 @@ Library
   hs-Source-Dirs:   src
   Include-Dirs:     src
   Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
-                  , type-unary>=0.2.15
+                  , type-unary>=0.2.16
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1, netlist-to-vhdl >= 0.3.1
 --                  , type-encode
