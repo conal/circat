@@ -128,8 +128,8 @@ second or               :: S * (C * C) -> S * C
 instance AddCat (->)  -- use defaults
 
 -- HACK: generalize/replace/...
-class AddCat' k a where
-  add :: (a :* a) `k` a
+class NumCat k a where
+  add, mul :: (a :* a) `k` a
 
 -- Structure addition with carry in & out
 

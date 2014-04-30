@@ -437,9 +437,10 @@ instance TreeCat (:>) where
   toB = C toB
   unB = C unB
 
-instance            AddCat' (:>) Int           where add = namedC "add"
-instance IsNat n => AddCat' (:>) (Vec n Bool)  where add = namedC "add"
-instance IsNat d => AddCat' (:>) (Tree d Bool) where add = namedC "add"
+instance NumCat (:>) Int where { add = namedC "add" ; mul = namedC "mul" }
+
+-- instance IsNat n => NumCat (:>) (Vec n Bool)  where { add = namedC "add" ; mul = namedC "mul" }
+-- instance IsNat d => NumCat (:>) (Tree d Bool) where { add = namedC "add" ; mul = namedC "mul" }
 
 instance IsSourceP2 a b => Show (a :> b) where
   show = show . runC
