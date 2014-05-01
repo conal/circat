@@ -262,9 +262,13 @@ foldT l b = foldT'
 
 -- Fold for trees. How does it relate to the Foldable instance? We can easily
 -- define fold or foldMap via foldT. What about conversely?
-foldT :: forall a b n. (a -> b) -> (Pair b -> b) -> (Tree n a -> b)
-foldT l _ (L a)  = l a
-foldT l b (B ts) = b (fmap (foldT l b) ts)
+foldT' :: forall a b n. (a -> b) -> (Pair b -> b) -> (Tree n a -> b)
+foldT' l _ (L a)  = l a
+foldT' l b (B ts) = b (fmap (foldT' l b) ts)
+{-# INLINE foldT' #-}
+
+foldT :: forall a b n. (a -> b) -> (b -> b -> b) -> (Tree n a -> b)
+foldT l b = foldT' l (uncurryP b)
 
 -- foldT l b = tree l (b . fmap (foldT l b))
 
