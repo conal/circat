@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts #-}
+{-# LANGUAGE ParallelListComp #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -122,9 +123,15 @@ moduleAssign p2w (_,("Out",ps,[])) =
   map (\(n,p) -> NetAssign (outPortName n) (expVar p p2w)) (tagged ps)
   where
      outPortName = portName "Out" ps
-     
-moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
-                           ++ " not supported."
+
+-- HACK: multi-bit add & mult
+moduleAssign p2w (_,(name,is,os)) = 
+  [InstDecl name "inst" [] (port "i" is) (port "o" os)]
+  where
+    port s pins = [(s ++ show i, expVar p p2w) | p <- pins | i <- [0::Int ..]]
+
+-- moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
+--                            ++ " not supported."
 
 expVar :: Pin -> Map Pin String -> Expr
 expVar p p2w = ExprVar (lw p p2w)
