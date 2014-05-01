@@ -68,6 +68,7 @@ import Data.Sequence (Seq,singleton)
 import qualified Data.Sequence as Seq
 #endif
 import Text.Printf (printf)
+-- import Control.Newtype (Newtype(..))
 
 -- mtl
 import Control.Monad.State (State,evalState,MonadState)
@@ -227,7 +228,8 @@ type instance Pins (Tree n a) = Tree n (Pins a)
 
 type N32 = N16 :+: N16
 
-type instance Pins Int        = Pins (Vec N32 Bool)
+-- type instance Pins Int        = Pins (Vec N32 Bool)
+type instance Pins Int        = Pins (Vec N4 Bool)  -- HACK: for simpler graphs
 
 -- See below for function instance
 
@@ -437,7 +439,29 @@ instance TreeCat (:>) where
   toB = C toB
   unB = C unB
 
-instance NumCat (:>) Int where { add = namedC "add" ; mul = namedC "mul" }
+#if 0
+-- Fake Int as Bool for now. HACK.
+newtype Int1 = Int1 Bool
+
+type instance Pins Int1       = Pins Bool
+
+instance Newtype Int1 Bool where { pack b = Int1 b ; unpack (Int1 b) = b }
+
+instance Num Int1 where
+  (+)         = inNew2 (||)
+  (*)         = inNew2 (&&)
+  negate      = inNew not
+  abs         = noInt1 "abs"
+  signum      = noInt1 "signum"
+  fromInteger = noInt1 "fromInteger"
+
+noInt1 :: String -> a
+noInt1 op = error $ "Int1 operator missing: " ++ op
+
+instance NumCat (:>) Int1 where { add = namedC "add" ; mul = namedC "mul" }
+#endif
+
+instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
 -- instance IsNat n => NumCat (:>) (Vec n Bool)  where { add = namedC "add" ; mul = namedC "mul" }
 -- instance IsNat d => NumCat (:>) (Tree d Bool) where { add = namedC "add" ; mul = namedC "mul" }
