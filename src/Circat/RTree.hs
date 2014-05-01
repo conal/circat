@@ -128,17 +128,32 @@ instance Functor (Tree n) where
 
 instance IsNat n => Applicative (Tree n) where
   pure a = a <$ units nat
-  (<*>)  = ap' nat
-   where
-     ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
-     ap' Zero     = inL2 ($)
-     ap' (Succ n) = inB2 (liftA2 (ap' n))
+
+--   (<*>)  = ap' nat
+--    where
+--      ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
+--      ap' Zero     = inL2 ($)
+--      ap' (Succ n) = inB2 (liftA2 (ap' n))
+--      {-# INLINE ap' #-}
+
+--   L f  <*> L x  = L (f x)
+--   B fs <*> B xs = B (liftA2 (<*>) fs xs)
+
+  (<*>)  = ap
+
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
+
+ap :: Tree n (a -> b) -> Tree n a -> Tree n b
+L f  `ap` L x  = L (f x)
+B fs `ap` B xs = B (liftA2 ap fs xs)
+_    `ap` _    = error "(<*>) on Tree n: impossible case"
+{-# INLINE ap #-}
 
 units :: Nat n -> Tree n ()
 units Zero     = L ()
 units (Succ n) = B (pure (units n))
+{-# INLINE units #-}
 
 instance Foldable (Tree n) where
   foldMap f (L  a) = f a
@@ -270,13 +285,8 @@ foldT' l b (B ts) = b (fmap (foldT' l b) ts)
 foldT :: forall a b n. (a -> b) -> (b -> b -> b) -> (Tree n a -> b)
 foldT l b = foldT' l (uncurryP b)
 
--- foldT l b = tree l (b . fmap (foldT l b))
-
--- foldT l b = foldT'
---  where
---    foldT' :: Tree m a -> b
---    foldT' (L a) = l a
---    foldT' (B p) = b (foldT' <$> p)
+-- TODO: Eliminate foldT in favor of plain old fold or foldMap and helpers like
+-- sum and product from Data.Foldable.
 
 #if 0
 retree :: (a -> b)
