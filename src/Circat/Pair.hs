@@ -18,9 +18,12 @@
 -- Pair functor
 ----------------------------------------------------------------------
 
-module Circat.Pair (Pair(..),PairCat(..),inPair) where
+module Circat.Pair
+  ( Pair(..),PairCat(..),inPair
+  , curryP, uncurryP, toP, fromP
+  ) where
 
--- TODO: consider using standard names like fst, snd & curry.
+import Prelude hiding (id,(.),curry,uncurry)
 
 import Data.Monoid (Monoid(..))
 import Control.Arrow (arr,Kleisli)
@@ -31,10 +34,10 @@ import Control.Applicative (Applicative(..),liftA2)
 import Data.Typeable (Typeable)
 import Data.Data (Data)
 
--- import FunctorCombo.Pair (Pair(..))
+-- More in FunctorCombo.Pair
 
 import Circat.Misc ((:*),(<~))
-import Circat.Category -- (ProductCat(..))
+import Circat.Category  -- (ProductCat(..))
 import Circat.State (pureState,StateFun,StateExp)
 
 {--------------------------------------------------------------------
@@ -74,9 +77,17 @@ instance Traversable Pair where
   traverse h (fa :# fb) = liftA2 (:#) (h fa) (h fb)
   -- sequenceA (fa :# fb) = liftA2 (:#) fa fb
 
-{--------------------------------------------------------------------
-    
---------------------------------------------------------------------}
+curryP :: (Pair a -> b) -> (a -> a -> b)
+curryP g = curry (g . toP)
+
+uncurryP :: (a -> a -> b) -> (Pair a -> b)
+uncurryP f = uncurry f . fromP
+
+toP :: (a,a) -> Pair a
+toP (a,b) = a :# b
+
+fromP :: Pair a -> (a,a)
+fromP (a :# b) = (a,b)
 
 
 class ProductCat k => PairCat k where
