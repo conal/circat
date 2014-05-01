@@ -36,7 +36,7 @@ import Control.Arrow (arr,Kleisli)
 
 import TypeUnary.Nat hiding ((:*:))
 
-import Circat.Misc (Unop,(<~),(:*))
+import Circat.Misc ((<~)) -- Unop,(:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -47,7 +47,7 @@ import Circat.State (pureState,StateFun,StateExp)
 
 data Tree :: * -> * -> * where
   L :: a -> Tree Z a
-  B :: IsNat n => Pair (Tree n a) -> Tree (S n) a
+  B :: Pair (Tree n a) -> Tree (S n) a
 
 deriving instance Eq a => Eq (Tree n a)
 
@@ -58,14 +58,14 @@ instance Show a => Show (Tree n a) where
 class PairCat k => TreeCat k where
   toL :: a `k` Tree Z a
   unL :: Tree Z a `k` a
-  toB :: IsNat n => Pair (Tree n a) `k` Tree (S n) a
-  unB :: IsNat n => Tree (S n) a `k` Pair (Tree n a)
+  toB :: Pair (Tree n a) `k` Tree (S n) a
+  unB :: Tree (S n) a `k` Pair (Tree n a)
 
-toB' :: (TreeCat k, IsNat n) => (Tree n a :* Tree n a) `k` Tree (S n) a
-toB' = toB . toPair
+-- toB' :: (TreeCat k) => (Tree n a :* Tree n a) `k` Tree (S n) a
+-- toB' = toB . toPair
 
-unB' :: (TreeCat k, IsNat n) => Tree (S n) a `k` (Tree n a :* Tree n a)
-unB' = unPair . unB
+-- unB' :: (TreeCat k, IsNat n) => Tree (S n) a `k` (Tree n a :* Tree n a)
+-- unB' = unPair . unB
 
 instance TreeCat (->) where
   toL a     = L a
@@ -118,7 +118,7 @@ inB2 = inB <~ unB
 --      fmap' (Succ n) = inB . fmap . fmap' n
 --   {-# INLINE fmap #-}
 
-instance IsNat n => Functor (Tree n) where
+instance Functor (Tree n) where
   fmap f (L a)  = L (f a)
   fmap f (B ts) = B ((fmap.fmap) f ts)
   {-# INLINE fmap #-}
@@ -145,7 +145,7 @@ instance Foldable (Tree n) where
   foldMap f (B uv) = (foldMap . foldMap) f uv
   {-# INLINE foldMap #-}
 
-instance IsNat n => Traversable (Tree n) where
+instance Traversable (Tree n) where
   traverse f (L a ) = L <$> f a
   traverse f (B uv) = B <$> (traverse.traverse) f uv
   {-# INLINE traverse #-}
@@ -206,6 +206,8 @@ instance (IsNat n, CTraversable (Tree n)) => CTraversable (Tree (S n)) where
     Addition
 --------------------------------------------------------------------}
 
+#if 0
+
 instance (ConstCat k, AddCat k, TreeCat k, IsNat n)
       => AddsCat k (Tree n) where
   adds = addTN nat
@@ -235,10 +237,13 @@ first toB'       ::              `k` Rs (S n) * C
 
 -}
 
+#endif
+
 {--------------------------------------------------------------------
     Miscellany. May remove later, or might prove useful.
 --------------------------------------------------------------------}
 
+#if 0
 tree :: (a -> b)
      -> (forall m. (IsNat m, S m ~ n) => Pair (Tree m a) -> b)
      -> (Tree n a -> b)
@@ -253,7 +258,13 @@ foldT l b = foldT'
    foldT' :: forall m. Tree m a -> b
    foldT' = tree l (b . fmap foldT')
 {-# INLINE foldT #-}
+#endif
 
+-- Fold for trees. How does it relate to the Foldable instance? We can easily
+-- define fold or foldMap via foldT. What about conversely?
+foldT :: forall a b n. (a -> b) -> (Pair b -> b) -> (Tree n a -> b)
+foldT l _ (L a)  = l a
+foldT l b (B ts) = b (fmap (foldT l b) ts)
 
 -- foldT l b = tree l (b . fmap (foldT l b))
 
@@ -263,6 +274,7 @@ foldT l b = foldT'
 --    foldT' (L a) = l a
 --    foldT' (B p) = b (foldT' <$> p)
 
+#if 0
 retree :: (a -> b)
        -> (forall m. (IsNat m, S m ~ n) => Pair (Tree m a) -> Pair (Tree m b))
        -> (Tree n a -> Tree n b)
@@ -277,6 +289,8 @@ retree _ b (B u) = (B . b) u
 -- | Reverse a tree. Transform away later
 reverseT :: Unop (Tree n a)
 reverseT = retree id (inPair swapP . fmap reverseT)
+
+#endif
 
 -- Or
 -- reverseT = retree id (fmap reverseT . swapP)

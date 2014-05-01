@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds, FlexibleContexts #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -22,7 +23,7 @@ import Circat.Circuit
 import Circat.Misc ((:*),Unop)
 import Circat.Category
 import Circat.Classes
-import Circat.RTree
+-- import Circat.RTree
 
 import Circat.Netlist (outV)
 
@@ -145,6 +146,8 @@ outVecs = do
 
 -- Trees (identical results)
 
+#if 0
+
 addT1 :: AddTP N0
 addT1 = adds
 
@@ -167,6 +170,8 @@ outTrees = do
   outGV "addT4"  addT4
   outGV "addT8"  addT8
   outGV "addT16" addT16
+
+#endif
 
 ----
 
@@ -236,4 +241,4 @@ addVS16 = addS
 ----
 
 outAll :: IO ()
-outAll = do outSimples ; outVecs ; outTrees
+outAll = do outSimples ; outVecs -- ; outTrees
