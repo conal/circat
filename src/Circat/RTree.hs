@@ -110,12 +110,19 @@ inB2 = inB <~ unB
 -- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
 -- etc. What would become of TreeCat and VecCat?
 
+-- instance IsNat n => Functor (Tree n) where
+--   fmap = fmap' nat
+--    where
+--      fmap' :: Nat m -> (a -> b) -> (Tree m a -> Tree m b)
+--      fmap' Zero     = inL
+--      fmap' (Succ n) = inB . fmap . fmap' n
+--   {-# INLINE fmap #-}
+
 instance IsNat n => Functor (Tree n) where
-  fmap = fmap' nat
-   where
-     fmap' :: Nat m -> (a -> b) -> (Tree m a -> Tree m b)
-     fmap' Zero     = inL
-     fmap' (Succ n) = inB . fmap . fmap' n
+  fmap f (L a)  = L (f a)
+  fmap f (B ts) = B ((fmap.fmap) f ts)
+  {-# INLINE fmap #-}
+
 
 -- TODO: Categorical generalization (easy)
 
@@ -126,6 +133,8 @@ instance IsNat n => Applicative (Tree n) where
      ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
      ap' Zero     = inL2 ($)
      ap' (Succ n) = inB2 (liftA2 (ap' n))
+  {-# INLINE pure #-}
+  {-# INLINE (<*>) #-}
 
 units :: Nat n -> Tree n ()
 units Zero     = L ()
@@ -134,18 +143,25 @@ units (Succ n) = B (pure (units n))
 instance Foldable (Tree n) where
   foldMap f (L  a) = f a
   foldMap f (B uv) = (foldMap . foldMap) f uv
+  {-# INLINE foldMap #-}
 
 instance IsNat n => Traversable (Tree n) where
   traverse f (L a ) = L <$> f a
   traverse f (B uv) = B <$> (traverse.traverse) f uv
+  {-# INLINE traverse #-}
 
 instance IsNat n => Monad (Tree n) where
   return = pure
   m >>= f = joinT (fmap f m)
+  {-# INLINE return #-}
+  {-# INLINE (>>=) #-}
 
 joinT :: Tree n (Tree n a) -> Tree n a
 joinT (L t)  = t
 joinT (B uv) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ uv
+
+{-# INLINE joinT #-}
+
 
 {-
 
@@ -236,6 +252,8 @@ foldT l b = foldT'
  where
    foldT' :: forall m. Tree m a -> b
    foldT' = tree l (b . fmap foldT')
+{-# INLINE foldT #-}
+
 
 -- foldT l b = tree l (b . fmap (foldT l b))
 
