@@ -24,7 +24,7 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const,not,and,or)
+import Prelude hiding (id,(.),const,not,and,or,curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
 
@@ -130,6 +130,14 @@ instance AddCat (->)  -- use defaults
 -- HACK: generalize/replace/...
 class NumCat k a where
   add, mul :: (a :* a) `k` a
+
+instance Num a => NumCat (->) a where
+  add = uncurry (+)
+  mul = uncurry (*)
+
+instance (Monad m, Num a) => NumCat (Kleisli m) a where
+  add = arr add
+  mul = arr mul
 
 -- Structure addition with carry in & out
 
