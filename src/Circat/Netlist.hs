@@ -48,7 +48,7 @@ outV cirName cir =
      writeFile filePath (toV cirName cir)
   where
     outDir   = "out"
-    filePath = outDir ++ "/" ++ cirName ++ ".v"
+    filePath = outDir ++ "/" ++ cirName ++ ".v.txt"
 
 toV :: IsSourceP2 a b => String -> (a :> b) -> String
 toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
