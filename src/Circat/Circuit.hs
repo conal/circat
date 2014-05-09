@@ -13,7 +13,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fcontext-stack=35 #-} -- for add
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -34,13 +34,10 @@
 
 module Circat.Circuit 
   ( CircuitM, (:>)
-  , Pin, Pins, IsSourceP, IsSourceP2, namedC, constS, constC
-#if defined TaggedSums
-  , inlC, inrC, (|||*)
-#elif defined ChurchSums
-  , (|||*), fromBool, toBool
-#endif
-  , Comp', CompNum, toG, outGWith, outG
+  , Pin, Bus(..), BBus(..), busWidth
+  , IsSourceP, IsSourceP2, namedC, constS, constC
+  -- , (|||*), fromBool, toBool
+  , Comp', CompNum, Width, toG, outGWith, outG
   , simpleComp, runC, tagged
   ) where
 
@@ -49,11 +46,9 @@ import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 
 import Data.Monoid (mempty,(<>))
 import Data.Functor ((<$>))
--- import Control.Applicative (pure,liftA2)
 import Control.Monad (liftM,liftM2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
--- import Data.Traversable (Traversable(..))
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -64,11 +59,7 @@ import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq,singleton)
-#ifdef TaggedSums
-import qualified Data.Sequence as Seq
-#endif
 import Text.Printf (printf)
--- import Control.Newtype (Newtype(..))
 
 -- mtl
 import Control.Monad.State (State,evalState,MonadState)
@@ -76,13 +67,9 @@ import qualified Control.Monad.State as Mtl
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
 import TypeUnary.Vec hiding (get)
--- import FunctorCombo.StrictMemo (HasTrie(..),(:->:),idTrie)
-
--- import TypeEncode.Encode (EncodeCat(..))
 
 import Circat.Misc
 import Circat.Category
--- import Circat.State (StateCat(..),StateCatWith,StateFun,StateExp)
 import Circat.Classes
 import Circat.Pair
 import Circat.RTree
@@ -107,28 +94,43 @@ type CircuitM = WriterT (Seq Comp) (State PinSupply)
 newtype Pin = Pin Int deriving (Eq,Ord,Show,Enum)
 type PinSupply = [Pin]
 
+-- | Data bus: pin id and width
+data Bus n = IsNat n => Bus Pin
+
+deriving instance Eq (Bus n)
+deriving instance Show (Bus n)
+
+data BBus = forall n. IsNat n => BBus (Bus n)
+
+type Width = Int
+
+busWidth :: forall n. Bus n -> Int
+busWidth (Bus _) = natToZ (nat :: Nat n)
+
+instance Show BBus where
+  show (BBus b@(Bus p)) = show p ++ ":" ++ show (busWidth b)
+
+-- TODO: Do I want IsNat in both Bus and BBus?
+
 type MonadPins = MonadState PinSupply
 
 newPin :: MonadPins m => m Pin
 newPin = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
 
--- runCircuitM :: CircuitM a -> PinSupply -> (a,PinSupply)
--- runCircuitM 
+newBus :: MonadPins m => IsNat n => m (Bus n)
+newBus = Bus `liftM` newPin
 
 {--------------------------------------------------------------------
     Pins
 --------------------------------------------------------------------}
 
-sourcePins :: forall a. IsSource a => a -> [Pin]
-sourcePins s = toList (toPins s)
+sourceBuses :: forall a. IsSource a => a -> [BBus]
+sourceBuses s = toList (toBuses s)
 
 -- | Give a representation for a type in terms of structures of pins.
 class Show a => IsSource a where
-  toPins    :: a -> Seq Pin
+  toBuses   :: a -> Seq BBus
   genSource :: MonadPins m => m a
-#ifdef TaggedSums
-  numPins   :: a -> Int
-#endif
 
 -- Instantiate a 'Prim'
 genComp :: forall a b. IsSource2 a b =>
@@ -150,59 +152,32 @@ constM q = constComp (show q)
 type IsSource2 a b = (IsSource a, IsSource b)
 
 instance IsSource () where
-  toPins () = mempty
-  genSource = return ()
-#ifdef TaggedSums
-  numPins _ = 0
-#endif
+  toBuses () = mempty
+  genSource  = return ()
 
-instance IsSource Pin where
-  toPins p  = singleton p
-  genSource = newPin
-#ifdef TaggedSums
-  numPins _ = 1
-#endif
+instance IsNat n => IsSource (Bus n) where
+  toBuses   = singleton . BBus
+  genSource = newBus
 
 instance IsSource2 a b => IsSource (a :* b) where
-  toPins (sa,sb) = toPins sa <> toPins sb
-  genSource      = liftM2 (,) genSource genSource
-#ifdef TaggedSums
-  numPins ~(a,b) = numPins a + numPins b
-#endif
-
--- instance IsSource (a :+ b) where ... ???
-
--- instance IsSource (Vec Z a) where
---   toPins ZVec = mempty
---   genSource = return ZVec
--- #ifdef TaggedSums
---   numPins _ = 0
--- #endif
+  toBuses (sa,sb) = toBuses sa <> toBuses sb
+  genSource       = liftM2 (,) genSource genSource
 
 instance (IsNat n, IsSource a) => IsSource (Vec n a) where
-  toPins    = foldMap toPins
+  toBuses   = foldMap toBuses
   genSource = genSourceV nat
-#ifdef TaggedSums
-  numPins _ = natToZ (nat :: Nat n) * numPins (undefined :: a)
-#endif
 
 genSourceV :: (MonadPins m, IsSource a) => Nat n -> m (Vec n a)
 genSourceV Zero     = return ZVec
 genSourceV (Succ n) = liftM2 (:<) genSource (genSourceV n)
 
 instance IsSource a => IsSource (Pair a) where
-  toPins    = foldMap toPins
+  toBuses   = foldMap toBuses
   genSource = liftM toPair genSource
-#ifdef TaggedSums
-  numPins _ = 2 * numPins (undefined :: a)
-#endif
 
 instance (IsNat n, IsSource a) => IsSource (Tree n a) where
-  toPins    = foldMap toPins
+  toBuses   = foldMap toBuses
   genSource = genSourceT nat
-#ifdef TaggedSums
-  numPins _ = 2 ^ (natToZ (nat :: Nat n) :: Int) * numPins (undefined :: a)
-#endif
 
 genSourceT :: (MonadPins m, IsSource a) => Nat n -> m (Tree n a)
 genSourceT Zero     = liftM L genSource
@@ -212,24 +187,23 @@ genSourceT (Succ _) = liftM B genSource
 -- Perhaps rewrite, using the Succ argument.
 
 {--------------------------------------------------------------------
-    Pins representing a given type
+    Buses representing a given type
 --------------------------------------------------------------------}
 
-type family Pins a
+type family Buses a
 
-type instance Pins Bool = Pin
+type instance Buses Bool = Bus N1
 
 -- Distribute over product-based structures:
-type instance Pins ()         = ()
-type instance Pins (a :* b)   = Pins a :* Pins b
-type instance Pins (Pair a  ) = Pair (Pins a)
-type instance Pins (Vec n a ) = Vec  n (Pins a)
-type instance Pins (Tree n a) = Tree n (Pins a)
+type instance Buses ()         = ()
+type instance Buses (a :* b)   = Buses a :* Buses b
+type instance Buses (Pair a  ) = Pair (Buses a)
+type instance Buses (Vec n a ) = Vec  n (Buses a)
+type instance Buses (Tree n a) = Tree n (Buses a)
 
 type N32 = N16 :+: N16
 
--- type instance Pins Int        = Pins (Vec N32 Bool)
-type instance Pins Int        = Pins (Vec N4 Bool)  -- HACK: for simpler graphs
+type instance Buses Int        = Bus N32
 
 -- See below for function instance
 
@@ -240,77 +214,41 @@ type instance Pins Int        = Pins (Vec N4 Bool)  -- HACK: for simpler graphs
 infixl 1 :>, :+>
 
 -- | Internal representation for '(:>)'.
-type a :+> b = Kleisli CircuitM (Pins a) (Pins b)
+type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
 
 -- | Circuit category
 newtype a :> b = C { unC :: a :+> b }
 
-type IsSourceP a = IsSource (Pins a)
+type IsSourceP a = IsSource (Buses a)
 
 type IsSourceP2 a b = (IsSourceP a, IsSourceP b)
 
-mkC :: (Pins a -> CircuitM (Pins b)) -> (a :> b)
+mkC :: (Buses a -> CircuitM (Buses b)) -> (a :> b)
 mkC = C . Kleisli
 
-unmkC :: (a :> b) -> (Pins a -> CircuitM (Pins b))
+unmkC :: (a :> b) -> (Buses a -> CircuitM (Buses b))
 unmkC = runKleisli . unC
 
-inCK :: ((Pins a -> CircuitM (Pins b)) -> (Pins a' -> CircuitM (Pins b')))
+inCK :: ((Buses a -> CircuitM (Buses b)) -> (Buses a' -> CircuitM (Buses b')))
      -> ((a :> b) -> (a' :> b'))
 inCK = mkC <~ unmkC
 
-primC :: IsSourceP2 a b => Prim (Pins a) (Pins b) -> a :> b
+primC :: IsSourceP2 a b => Prim (Buses a) (Buses b) -> a :> b
 primC = mkC . genComp
 
 namedC :: IsSourceP2 a b => String -> a :> b
 namedC = primC . Prim
 
 -- | Constant circuit from source generator (experimental)
-constSM :: CircuitM (Pins b) -> (a :> b)
+constSM :: CircuitM (Buses b) -> (a :> b)
 constSM mkB = mkC (const mkB)
 
 -- | Constant circuit from source
-constS :: Pins b -> (a :> b)
+constS :: Buses b -> (a :> b)
 constS b = constSM (return b)
-
--- constS b = C (const b)
-
--- TODO: Rename "pins", which doesn't fit with exponentials.
-
--- TODO: Consolidate forms of constant circuits
-
--- constC :: (IsSource2 a b, Show b) => b -> a :> b
--- constC :: (IsSource2 a (Pins b), Show b) => b -> a :> Pins b
--- constC b = namedC (show b)
 
 constC :: (IsSourceP b, Show b) => b -> a :> b
 constC = mkC . constM
--- constC b = mkC (constComp (show b))
-
--- General mux. Later specialize to simple muxes and make more of them.
-
--- muxC :: (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
---         ((k :->: v) :* k) :> v
--- muxC = namedC "mux"
-
--- muxC :: -- (IsSource2 ((k :->: v) :* k) v, HasTrie k) =>
---         ((k :->: v) :* k) :> v
--- muxC = error "muxC: not implemented"
-
--- instance ConstCat (:>) where
---   type ConstKon (:>) a b = () -- (IsSource2 a b, Show b)
---   const = constC
-
--- TODO: Kleisli already defines an ConstCat instance, and it doesn't use
--- constC. Can it work for (:>)?
-
--- instance Newtype (a :> b) (Pins a -> CircuitM (Pins b)) where
---   pack   = C
---   unpack = unC
--- 
---     Illegal type synonym family application in instance.
---
--- So define manually:
 
 inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
 inC = C <~ unC
@@ -330,24 +268,7 @@ instance ProductCat (:>) where
   (***) = inC2 (***)
   (&&&) = inC2 (&&&)
 
--- #define UnwrappedExp
-
--- pinsAsCirc :: Pins (a -> b) -> a :> b
-
-#ifdef UnwrappedExp
-
-type instance Pins (a -> b) = a :+> b
-
-instance ClosedCat (:>) where
-  apply   =   C applyK
-  curry   = inC curryK
-  uncurry = inC uncurryK
-
--- pinsAsCirc = C
-
-#else
-
-type instance Pins (a -> b) = a :> b
+type instance Buses (a -> b) = a :> b
 
 -- With this version, the methods are trickier, but the result is more easily
 -- usable, since we export (:>) and not the underlying (:+>) representation.
@@ -356,10 +277,6 @@ instance ClosedCat (:>) where
   apply   = C (applyK . first (arr unC))
   curry   = inC $ \ h -> arr C . curryK h
   uncurry = inC $ \ f -> uncurryK (arr unC . f)
-
--- pinsAsCirc = id
-
-#endif
 
 {- Types:
 
@@ -418,7 +335,7 @@ instance BoolCat (:>) where
   xor = namedC "xor"
 
 instance EqCat (:>) where
-  type EqKon (:>) a = IsSource (Pins a)
+  type EqKon (:>) a = IsSource (Buses a)
   eq  = namedC "eq"
   neq = namedC "neq"
 
@@ -438,28 +355,6 @@ instance TreeCat (:>) where
   unL = C unL
   toB = C toB
   unB = C unB
-
-#if 0
--- Fake Int as Bool for now. HACK.
-newtype Int1 = Int1 Bool
-
-type instance Pins Int1       = Pins Bool
-
-instance Newtype Int1 Bool where { pack b = Int1 b ; unpack (Int1 b) = b }
-
-instance Num Int1 where
-  (+)         = inNew2 (||)
-  (*)         = inNew2 (&&)
-  negate      = inNew not
-  abs         = noInt1 "abs"
-  signum      = noInt1 "signum"
-  fromInteger = noInt1 "fromInteger"
-
-noInt1 :: String -> a
-noInt1 op = error $ "Int1 operator missing: " ++ op
-
-instance NumCat (:>) Int1 where { add = namedC "add" ; mul = namedC "mul" }
-#endif
 
 instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
@@ -542,13 +437,13 @@ toG cir = printf "digraph {\n%s}\n"
 
 type Statement = String
 
-type Inputs  = [Pin]
-type Outputs = [Pin]
+type Inputs  = [BBus]
+type Outputs = [BBus]
 
 type Comp' = (String,Inputs,Outputs)
 
 simpleComp :: Comp -> Comp'
-simpleComp (Comp prim a b) = (show prim, sourcePins a, sourcePins b)
+simpleComp (Comp prim a b) = (show prim, sourceBuses a, sourceBuses b)
 
 data Dir = In | Out deriving Show
 type PortNum = Int
@@ -564,13 +459,16 @@ recordDots comps = nodes ++ edges
    ncomps = tagged comps
    nodes = node <$> ncomps
     where
+      node :: (CompNum,Comp') -> String
+      -- drop if no ins or outs
+      node (_,(prim,[],[])) = "// removed disconnected " ++ prim
       node (nc,(prim,ins,outs)) =
         printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
-         labs dir bs = intercalate "|" (portSticker . exl <$> tagged bs)
+         labs dir bs = intercalate "|" (portSticker . fst <$> tagged bs)
           where
             -- portSticker = bracket . portLab dir
             portSticker p = bracket (portLab dir p) {- ++ show p -} -- show p for port # debugging
@@ -582,17 +480,19 @@ recordDots comps = nodes ++ edges
     where
       compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
        where
-         edge (ni,i) = printf "%s -> %s" (port Out (srcMap M.! i)) (port In (snkComp,ni))
-   port :: Dir -> (CompNum,PortNum) -> String
-   port dir (nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
+         edge (ni,BBus b@(Bus i)) =
+           printf "%s -> %s" (port Out (srcMap M.! i)) (port In (busWidth b,snkComp,ni))
+   port :: Dir -> (Width,CompNum,PortNum) -> String
+   -- TODO: Use the width, perhaps to label the arrows
+   port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
 
--- Map each pin to its source component and output port numbers
-type SourceMap = Map Pin (CompNum,PortNum)
+-- Map each pin to its width, source component and output port numbers
+type SourceMap = Map Pin (Width,CompNum,PortNum)
 
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
-              M.fromList [(b,(nc,np)) | (np,b) <- tagged outs ]
+              M.fromList [(p,(busWidth b,nc,np)) | (np,BBus b@(Bus p)) <- tagged outs ]
 
 {-
 
@@ -623,13 +523,13 @@ type (:->) = StateFun (:>) Bool
 --   curry = undefined
 --   uncurry = undefined
 
---     Could not deduce (IsSource (Pins b),
---                       IsSource (Pins a),
---                       IsSource (Pins (Trie a b)))
+--     Could not deduce (IsSource (Buses b),
+--                       IsSource (Buses a),
+--                       IsSource (Buses (Trie a b)))
 --       arising from a use of `muxC'
 
 {-
-newtype a :> b = Circ (Kleisli CircuitM (Pins a) (Pins b))
+newtype a :> b = Circ (Kleisli CircuitM (Buses a) (Buses b))
 
 type CircuitM = WriterT (Seq Comp) (State PinSupply)
 
@@ -789,7 +689,7 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 #if defined StaticSums
 
-type instance Pins (a :+ b) = Pins a :+ Pins b
+type instance Buses (a :+ b) = Buses a :+ Buses b
 
 instance CoproductCat (:>) where
   inl   = C inl
@@ -839,27 +739,27 @@ Consider `Source`- specialized versions of `KC`:
 
 infixl 6 :++
 
-data a :++ b = UP { sumPins :: Seq Pin, sumFlag :: Pin } deriving Show
+data a :++ b = UP { sumBuses :: Seq Pin, sumFlag :: Pin } deriving Show
 
-type instance Pins (a :+ b) = Pins a :++ Pins b
+type instance Buses (a :+ b) = Buses a :++ Buses b
 
 instance IsSource2 a b => IsSource (a :++ b) where
-  toPins (UP ps f) = ps <> singleton f
+  toBuses (UP ps f) = ps <> singleton f
   genSource =
-    liftM2 UP (Seq.replicateM (numPins (undefined :: (a :++ b)) - 1) newPin)
+    liftM2 UP (Seq.replicateM (numBuses (undefined :: (a :++ b)) - 1) newPin)
               newPin
-  numPins _ =
-    (numPins (undefined :: a) `max` numPins (undefined :: b)) + 1
+  numBuses _ =
+    (numBuses (undefined :: a) `max` numBuses (undefined :: b)) + 1
 
 unsafeInject :: forall q a b. (IsSourceP q, IsSourceP2 a b) =>
                 Bool -> q :> a :+ b
 unsafeInject flag = mkC $ \ q ->
   do x <- constM flag q
-     let nq  = numPins (undefined :: Pins q)
-         na  = numPins (undefined :: Pins a)
-         nb  = numPins (undefined :: Pins b)
+     let nq  = numBuses (undefined :: Buses q)
+         na  = numBuses (undefined :: Buses a)
+         nb  = numBuses (undefined :: Buses b)
          pad = Seq.replicate (max na nb - nq) x
-     return (UP (toPins q <> pad) x)
+     return (UP (toBuses q <> pad) x)
 
 inlC :: IsSourceP2 a b => a :> a :+ b
 inlC = unsafeInject False
@@ -874,7 +774,7 @@ infixr 2 |||*
           (a :> c) -> (b :> c) -> (a :+ b :> c)
 f |||* g = muxC . ((f *** g) . extractBoth &&& pureC sumFlag)
 
-cond :: IsSource (Pins c) => ((c :* c) :* Bool) :> c
+cond :: IsSource (Buses c) => ((c :* c) :* Bool) :> c
 cond = muxCT . first toPair
 
 muxCT :: (IsSourceP2 ((u :->: v) :* u) v, HasTrie u) =>
@@ -888,16 +788,16 @@ f |||* g = muxC . (pureC sumFlag &&& (f *** g) . extractBoth)
 
 -- TODO: Reduce muxC to several one-bit muxes.
 
--- unsafeExtract :: IsSource (Pins c) => a :+ b :> c
--- unsafeExtract = pureC (pinsSource . sumPins)
+-- unsafeExtract :: IsSource (Buses c) => a :+ b :> c
+-- unsafeExtract = pureC (pinsSource . sumBuses)
 
 extractBoth :: IsSourceP2 a b => a :+ b :> a :* b
-extractBoth = pureC ((pinsSource &&& pinsSource) . sumPins)
+extractBoth = pureC ((pinsSource &&& pinsSource) . sumBuses)
 
 pinsSource :: IsSource a => Seq Pin -> a
 pinsSource pins = Mtl.evalState genSource (toList pins)
 
-pureC :: (Pins a -> Pins b) -> (a :> b)
+pureC :: (Buses a -> Buses b) -> (a :> b)
 pureC = C . arr
 
 -- TODO: Generalize CoproductCat to accept constraints like IsSourceP, and then
@@ -909,15 +809,15 @@ pureC = C . arr
     Yet another sum experiment: Church encoding
 --------------------------------------------------------------------}
 
-type instance Pins (a :+ b) = PSum a b
+type instance Buses (a :+ b) = PSum a b
 
 newtype PSum a b =
   PSum { unPSum :: forall c. CondCat (:>) c => (a :=> c) :* (b :=> c) :> c }
 
-psc :: (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)) -> PSum a b
+psc :: (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Buses c)) -> PSum a b
 psc q = PSum (mkC q)
 
-unPsc :: PSum a b -> (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c))
+unPsc :: PSum a b -> (forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Buses c))
 unPsc ps = unmkC (unPSum ps)
 
 inlC :: a :> a :+ b
@@ -936,10 +836,10 @@ distlC :: forall u a b. (u :* (a :+ b)) :> (u :* a :+ u :* b)
 distlC = mkC (\ (u,q) -> return (psc (\ (f,g) -> unPsc q (injl u f, injl u g))))
 
 {-
-u :: Pins u
-q :: Pins (a :+ b)
+u :: Buses u
+q :: Buses (a :+ b)
   == PSum a b
-unPSum q :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+unPSum q :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Buses c)
 
 f :: u :* a :> c
 g :: u :* b :> c
@@ -947,20 +847,20 @@ g :: u :* b :> c
 injl u f :: a :> c
 injl u g :: b :> c
 
-unPSum q (injl u f) (injl v f) :: CircuitM (Pins c)
+unPSum q (injl u f) (injl v f) :: CircuitM (Buses c)
 
 -}
 
 distrC :: forall v a b. ((a :+ b) :* v) :> (a :* v :+ b :* v)
 distrC = mkC (\ (q,v) -> return (psc (\ (f,g) -> unPsc q (injr v f, injr v g))))
 
-injl :: Pins u -> (u :* a :> c) -> (a :> c)
+injl :: Buses u -> (u :* a :> c) -> (a :> c)
 injl u = inCK (. (u,))
 
-injr :: Pins v -> (a :* v :> c) -> (a :> c)
+injr :: Buses v -> (a :* v :> c) -> (a :> c)
 injr v = inCK (. (,v))
 
--- (. (u,)) :: (Pins (u :* a) -> CircuitM (Pins c)) -> (Pins a -> CircuitM (Pins c))
+-- (. (u,)) :: (Buses (u :* a) -> CircuitM (Buses c)) -> (Buses a -> CircuitM (Buses c))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
 
 instance                        CondCat (:>) Unit      where cond = it
@@ -983,10 +883,10 @@ funToSum' :: forall t a b.
           -> (t :> a :+ b)
 funToSum' q = mkC (return . foo)
  where
-   foo :: Pins t -> Pins (a :+ b)
+   foo :: Buses t -> Buses (a :+ b)
    foo t = PSum (mkC r)
     where
-      r :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Pins c)
+      r :: forall c. CondCat (:>) c => (a :> c) :* (b :> c) -> CircuitM (Buses c)
       r fg = do h <- unmkC q t
                 unmkC h fg
 
@@ -994,15 +894,15 @@ funToSum' q = mkC (return . foo)
 
 q :: forall c. CondCat (:>) c => t :> ((a :=> c) :* (b :=> c) :=> c)
 
-unmkC q :: forall c. CondCat (:>) c => Pins t -> CircuitM (Pins ((a :=> c) :* (b :=> c) :=> c))
-        :: forall c. CondCat (:>) c => Pins t -> CircuitM ((a :=> c) :* (b :=> c) :> c)
+unmkC q :: forall c. CondCat (:>) c => Buses t -> CircuitM (Buses ((a :=> c) :* (b :=> c) :=> c))
+        :: forall c. CondCat (:>) c => Buses t -> CircuitM ((a :=> c) :* (b :=> c) :> c)
 
 fg :: (a :> c) :* (b :> c)
 
 unmkC q t :: forall c. CondCat (:>) c => CircuitM ((a :=> c) :* (b :=> c) :> c)
 h :: (a :=> c) :* (b :=> c) :> c
-unmkC h :: (a :> b) :* (b :> c) -> CircuitM (Pins c)
-unmkC h fg :: CircuitM (Pins c)
+unmkC h :: (a :> b) :* (b :> c) -> CircuitM (Buses c)
+unmkC h fg :: CircuitM (Buses c)
 
 #endif
 

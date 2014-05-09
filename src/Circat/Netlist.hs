@@ -30,17 +30,21 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ((:>), IsSourceP2, Comp', simpleComp, runC , tagged, CompNum, Pin)
+  ( (:>), IsSourceP2, Comp', simpleComp, runC, tagged
+  , Width, CompNum, Pin, Bus(..), BBus(..), busWidth )
 
 import Language.Netlist.AST
-  ( Module(..), Decl(..), Expr(..), ExprLit (..)
+  ( Module(..), Decl(..), Expr(..), ExprLit (..), Range(..)
   , Bit (..), BinaryOp(..), UnaryOp(..), Ident, Range )
 
 import Language.Netlist.GenVHDL(genVHDL)
 import Language.Netlist.GenVerilog(mk_module)
 import qualified Language.Verilog as V
 
-type PinToWireName   = (Pin,String) 
+-- Pin description: width & name
+type PinDesc = (Width,String)
+
+type PinToWireDesc = (Pin,PinDesc) 
 
 outV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
 outV cirName cir = 
@@ -58,28 +62,30 @@ toNetlist :: IsSourceP2 a b => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
   where comps  = simpleComp <$> runC cir
         ncomps      = tagged comps
-        (p2wM,ins)  = modulePorts (portComp "In" comps)
+        (p2wM,ins)  = modulePorts (portComp "In"  comps)
         (_,outs)    = modulePorts (portComp "Out" comps)
         (p2wI,nets) = moduleNets ncomps
         p2w         = M.fromList (p2wM ++ p2wI)
         assigns     = moduleAssigns p2w ncomps 
 
+type PinMap = Map Pin PinDesc
+
 -- | Produces the assign statements for every Comp except "In"
 -- Assign statements bind the result of a function (and,or,add etc.)
 -- to a variable name which is a wire in verilog parlance
 -- eg. w_xor_I1 = In_0 ^ In_1 // (`^` is xor)
-moduleAssigns :: Map Pin String -> [(CompNum,Comp')] -> [Decl]
+moduleAssigns :: PinMap -> [(CompNum,Comp')] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
-moduleAssign :: Map Pin String -> (CompNum,Comp') -> [Decl]
+moduleAssign :: PinMap -> (CompNum,Comp') -> [Decl]
 -- "In" comps are never assigned
 moduleAssign _ (_,("In",_,_)) = [] 
 -- binary operations
 moduleAssign p2w (_,(name,[i0,i1],[o])) = 
-  [NetAssign (lw o p2w) (ExprBinary binOp i0E i1E)]
+  [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
   where
-    i0E = expVar i0 p2w
-    i1E = expVar i1 p2w
+    i0E = expVar p2w i0
+    i1E = expVar p2w i1
     binOp = 
       case name of
         "and"  -> And
@@ -93,14 +99,14 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
 moduleAssign p2w (_,("mux",[a,b,c],[o])) =
-  [NetAssign (lw o p2w)
-    (ExprCond (expVar a p2w) (expVar b p2w) (expVar c p2w))]
+  [NetAssign (busName p2w o)
+    (ExprCond (expVar p2w a) (expVar p2w b) (expVar p2w c))]
 
 -- unary operations                                                  
 moduleAssign p2w c@(_,(name,[i],[o])) = 
-  [NetAssign (lw o p2w) (ExprUnary unaryOp iE)]
+  [NetAssign (busName p2w o) (ExprUnary unaryOp iE)]
   where
-    iE = expVar i p2w
+    iE = expVar p2w i
     unaryOp = case name of
                 "not"   -> Neg
                 "False" -> Neg
@@ -110,7 +116,7 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
 
 -- constant sources
 moduleAssign p2w (_,(name,[],[o])) = 
-  [NetAssign (lw o p2w) (ExprLit Nothing (ExprBit bit))] 
+  [NetAssign (busName p2w o) (ExprLit Nothing (ExprBit bit))] 
   where 
     bit = case name of 
             "True"  -> T
@@ -120,7 +126,7 @@ moduleAssign p2w (_,(name,[],[o])) =
 
 -- output assignments
 moduleAssign p2w (_,("Out",ps,[])) =
-  map (\(n,p) -> NetAssign (outPortName n) (expVar p p2w)) (tagged ps)
+  map (\(n,p) -> NetAssign (outPortName n) (expVar p2w p)) (tagged ps)
   where
      outPortName = portName "Out" ps
 
@@ -128,46 +134,53 @@ moduleAssign p2w (_,("Out",ps,[])) =
 moduleAssign p2w (_,(name,is,os)) = 
   [InstDecl name "inst" [] (port "i" is) (port "o" os)]
   where
-    port s pins = [(s ++ show i, expVar p p2w) | p <- pins | i <- [0::Int ..]]
+    port s pins = [(s ++ show i, expVar p2w p) | p <- pins | i <- [0::Int ..]]
 
 -- moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
 --                            ++ " not supported."
 
-expVar :: Pin -> Map Pin String -> Expr
-expVar p p2w = ExprVar (lw p p2w)
+-- TODO: Swap arguments in expVar, lw, lookupWireDesc
 
-lw :: Pin -> Map Pin String -> String
-lw = lookupWireName
+expVar :: PinMap -> BBus -> Expr
+expVar p2w b = ExprVar (busName p2w b)
 
-lookupWireName :: Pin -> Map Pin String -> String
-lookupWireName pin p2w = fromMaybe err (M.lookup pin p2w)
+lw :: PinMap -> Pin -> PinDesc
+lw = lookupWireDesc
+
+lookupWireDesc :: PinMap -> Pin -> PinDesc
+lookupWireDesc p2w pin = fromMaybe err (M.lookup pin p2w)
   where
-    err = error $ "Circat.Netlist.lookupWireName: Pin " ++ show pin
-                  ++ " does not have a wire name."
-    
+    err = error $ "Circat.Netlist.lookupWireDesc: Pin " ++ show pin
+                  ++ " does not have an entry."
+
+busName :: PinMap -> BBus -> String
+busName p2w (BBus (Bus p)) = snd (lw p2w p)
+
 -- | Generates a wire declaration for all Comp outputs along with 
 -- a map from Pin to wire name
-moduleNets :: [(CompNum,Comp')] -> ([PinToWireName],[Decl])
+moduleNets :: [(CompNum,Comp')] -> ([PinToWireDesc],[Decl])
 moduleNets = unzip . concatMap moduleNet
 
-moduleNet :: (CompNum,Comp') -> [(PinToWireName,Decl)]
+moduleNet :: (CompNum,Comp') -> [(PinToWireDesc,Decl)]
 moduleNet (_,("In",_,_))      = []
 moduleNet (_,("Out",_,_))     = []
 moduleNet c@(_,(_,_,outs)) = 
-  [((outs!!i,wireName i), NetDecl (wireName i) Nothing Nothing) | i <- [0..length outs-1]]
+  [ ((o,(busWidth b, wireName i)), NetDecl (wireName i) (Just (busRange b)) Nothing)
+  | (i,BBus b@(Bus o)) <- tagged outs ]
   where
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
--- TODO: Wherever we see !!, we're doing a linear-time operation that could be
--- done in log time instead. Consider changing the representation to from [] to
--- IntMap.
+busRange :: Bus n -> Range
+busRange b = Range (lit 0) (lit (busWidth b - 1))
+ where
+   lit = ExprLit Nothing . ExprNum . fromIntegral
 
 instName :: (CompNum,Comp') -> String
 instName (num,(name,_,_)) = name ++"_I"++show num
 
 -- | Generates a bit-blasted list of primary inputs of
 -- the module.
-modulePorts :: Comp' -> ([PinToWireName],[(Ident, Maybe Range)])
+modulePorts :: Comp' -> ([PinToWireDesc],[(Ident, Maybe Range)])
 modulePorts comp' = 
   case comp' of 
     ("In", [], outs) -> unzip (ports "In" outs)
@@ -176,12 +189,14 @@ modulePorts comp' =
       error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
                ++ " not recognized." 
   where
-    ports dir ps =  
-      [ let name = portName dir ps i in ((ps!!i,name),(name,Nothing)) 
-      | i <- [0..length ps-1]
+    ports :: String -> [BBus] -> [(PinToWireDesc,(Ident, Maybe Range))]
+    ports dir ps =
+      [ let name = portName dir ps i in
+          ((p,(busWidth b,name)),(name,Just (busRange b))) -- TODO: redesign
+      | (i,BBus b@(Bus p)) <- tagged ps
       ]
 
-portName :: (Show b) => String -> [a] -> b  -> String
+portName :: Show b => String -> [a] -> b  -> String
 portName dir ps i = 
   dir++if length ps == 1 then "" else "_" ++ show i
 
