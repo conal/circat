@@ -95,6 +95,8 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         "xnor" -> Xnor
         "eq"   -> Equals
         "neq"  -> NotEquals
+        "add"  -> Plus
+        "mul"  -> Times
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
@@ -130,7 +132,7 @@ moduleAssign p2w (_,("Out",ps,[])) =
   where
      outPortName = portName "Out" ps
 
--- HACK: multi-bit add & mult
+-- HACK: Catch-all
 moduleAssign p2w (_,(name,is,os)) = 
   [InstDecl name "inst" [] (port "i" is) (port "o" os)]
   where
