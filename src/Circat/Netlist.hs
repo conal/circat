@@ -118,7 +118,7 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
 
 -- constant sources
 moduleAssign p2w (_,(name,[],[o])) = 
-  [NetAssign (busName p2w o) (ExprLit Nothing (ExprBit bit))] 
+  [NetAssign (busName p2w o) (ExprLit Nothing (ExprBit bit))]
   where 
     bit = case name of 
             "True"  -> T
