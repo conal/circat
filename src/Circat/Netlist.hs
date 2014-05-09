@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts #-}
-{-# LANGUAGE ParallelListComp #-}
+{-# LANGUAGE ViewPatterns, ParallelListComp #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -31,7 +31,7 @@ import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
   ( (:>), IsSourceP2, Comp', simpleComp, runC, tagged
-  , Width, CompNum, Pin, Bus(..), BBus(..), busWidth )
+  , Width, CompNum, Pin, Bus(..), BBus(..), unBBus )
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Range(..)
@@ -167,13 +167,13 @@ moduleNet :: (CompNum,Comp') -> [(PinToWireDesc,Decl)]
 moduleNet (_,("In",_,_))      = []
 moduleNet (_,("Out",_,_))     = []
 moduleNet c@(_,(_,_,outs)) = 
-  [ ((o,(busWidth b, wireName i)), NetDecl (wireName i) (Just (busRange b)) Nothing)
-  | (i,BBus b@(Bus o)) <- tagged outs ]
+  [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
+  | (i,unBBus -> (o,wid)) <- tagged outs ]
   where
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
-busRange :: Bus n -> Range
-busRange b = Range (lit 0) (lit (busWidth b - 1))
+busRange :: Width -> Range
+busRange wid = Range (lit 0) (lit (wid - 1))
  where
    lit = ExprLit Nothing . ExprNum . fromIntegral
 
@@ -194,8 +194,8 @@ modulePorts comp' =
     ports :: String -> [BBus] -> [(PinToWireDesc,(Ident, Maybe Range))]
     ports dir ps =
       [ let name = portName dir ps i in
-          ((p,(busWidth b,name)),(name,Just (busRange b))) -- TODO: redesign
-      | (i,BBus b@(Bus p)) <- tagged ps
+          ((p,(wid,name)),(name,Just (busRange wid))) -- TODO: redesign
+      | (i,unBBus -> (p,wid)) <- tagged ps
       ]
 
 portName :: Show b => String -> [a] -> b  -> String

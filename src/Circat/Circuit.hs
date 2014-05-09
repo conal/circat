@@ -34,7 +34,7 @@
 
 module Circat.Circuit 
   ( CircuitM, (:>)
-  , Pin, Bus(..), BBus(..), busWidth
+  , Pin, Bus(..), BBus(..), unBBus
   , IsSourceP, IsSourceP2, namedC, constS, constC
   -- , (|||*), fromBool, toBool
   , Comp', CompNum, Width, toG, outGWith, outG
@@ -95,7 +95,7 @@ newtype Pin = Pin Int deriving (Eq,Ord,Show,Enum)
 type PinSupply = [Pin]
 
 -- | Data bus: pin id and width
-data Bus n = IsNat n => Bus Pin
+data Bus n = Bus Pin
 
 deriving instance Eq (Bus n)
 deriving instance Show (Bus n)
@@ -104,13 +104,13 @@ data BBus = forall n. IsNat n => BBus (Bus n)
 
 type Width = Int
 
-busWidth :: forall n. Bus n -> Int
-busWidth (Bus _) = natToZ (nat :: Nat n)
+unBBus :: BBus -> (Pin,Width)
+unBBus (BBus (Bus p :: Bus n)) = (p,natToZ (nat :: Nat n))
 
 instance Show BBus where
-  show (BBus b@(Bus p)) = show p ++ ":" ++ show (busWidth b)
-
--- TODO: Do I want IsNat in both Bus and BBus?
+  show b = show p ++ ":" ++ show w
+   where
+     (p,w) = unBBus b
 
 type MonadPins = MonadState PinSupply
 
@@ -480,11 +480,10 @@ recordDots comps = nodes ++ edges
     where
       compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
        where
-         edge (ni,BBus b@(Bus i)) =
+         edge (ni, unBBus -> (i,width)) =
            printf "%s -> %s %s"
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
-            width = busWidth b
             label 1 = ""
             label n = printf "[label=\"%d\"]" n
    port :: Dir -> (Width,CompNum,PortNum) -> String
@@ -497,7 +496,7 @@ type SourceMap = Map Pin (Width,CompNum,PortNum)
 
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
-              M.fromList [(p,(busWidth b,nc,np)) | (np,BBus b@(Bus p)) <- tagged outs ]
+              M.fromList [(p,(wid,nc,np)) | (np,unBBus -> (p,wid)) <- tagged outs ]
 
 {-
 
