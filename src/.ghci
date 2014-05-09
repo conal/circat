@@ -1,0 +1,2 @@
+-- So ghci can find ApplicativeNumeric-inc.hs
+:set -package applicative-numbers
