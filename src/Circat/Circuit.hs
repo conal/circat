@@ -481,7 +481,12 @@ recordDots comps = nodes ++ edges
       compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
        where
          edge (ni,BBus b@(Bus i)) =
-           printf "%s -> %s" (port Out (srcMap M.! i)) (port In (busWidth b,snkComp,ni))
+           printf "%s -> %s %s"
+             (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
+          where
+            width = busWidth b
+            label 1 = ""
+            label n = printf "[label=\"%d\"]" n
    port :: Dir -> (Width,CompNum,PortNum) -> String
    -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
