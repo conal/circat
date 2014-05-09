@@ -51,6 +51,17 @@ data Tree :: * -> * -> * where
 
 deriving instance Eq a => Eq (Tree n a)
 
+cant :: String -> a
+cant str = error $ str ++ ": GHC doesn't know this case can't happen."
+
+cantT :: String -> a
+cantT str = cant (str ++ " on Vec")
+
+instance Ord a => Ord (Tree n a) where
+  L a  `compare` L b  = a  `compare` b
+  B us `compare` B vs = us `compare` vs
+  _    `compare` _   = cantT "compare"
+
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B uv) = showsApp1 "B" p uv
@@ -320,3 +331,15 @@ fromList' (Succ n) as  = B (fromList' n <$> halves as)
 halves :: [a] -> Pair [a]
 halves as = toPair (splitAt (length as `div` 2) as)
 
+
+{--------------------------------------------------------------------
+    Numeric instances via the applicative-numbers package
+--------------------------------------------------------------------}
+
+-- Generate bogus (error-producing) Enum
+#define INSTANCE_Enum
+
+#define CONSTRAINTS IsNat n, 
+
+#define APPLICATIVE Tree n
+#include "ApplicativeNumeric-inc.hs"

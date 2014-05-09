@@ -31,6 +31,7 @@ import Data.Functor ((<$>))
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 import Control.Applicative (Applicative(..),liftA2)
+import Data.Ord (comparing)
 import Data.Typeable (Typeable)
 import Data.Data (Data)
 
@@ -50,6 +51,9 @@ import Circat.State (pureState,StateFun,StateExp)
 infixl 1 :#
 -- | Uniform pairs
 data Pair a = a :# a deriving (Functor,Eq,Show,Typeable,Data)
+
+instance Ord a => Ord (Pair a) where
+  compare = comparing fromP
 
 -- The derived foldMap inserts a mempty (in GHC 7.0.4).
 instance Foldable Pair where
