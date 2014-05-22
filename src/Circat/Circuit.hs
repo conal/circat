@@ -60,6 +60,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Sequence (Seq,singleton)
 import Text.Printf (printf)
+import Debug.Trace (trace)
 
 -- mtl
 import Control.Monad.State (State,evalState,MonadState)
@@ -98,7 +99,9 @@ type PinSupply = [Pin]
 data Bus n = Bus Pin
 
 deriving instance Eq (Bus n)
-deriving instance Show (Bus n)
+
+-- deriving instance Show (Bus n)
+instance IsNat n => Show (Bus n) where show = show . BBus
 
 data BBus = forall n. IsNat n => BBus (Bus n)
 
@@ -135,6 +138,8 @@ class Show a => IsSource a where
 -- Instantiate a 'Prim'
 genComp :: forall a b. IsSource2 a b =>
            Prim a b -> a -> CircuitM b
+-- genComp prim _ | trace (printf "genComp: %s" (show prim)) False = undefined
+-- genComp prim a | trace (printf "genComp: %s %s" (show prim) (show a)) False = undefined
 genComp prim a = do b <- genSource
                     tell (singleton (Comp prim a b))
                     return b
@@ -237,6 +242,7 @@ primC :: IsSourceP2 a b => Prim (Buses a) (Buses b) -> a :> b
 primC = mkC . genComp
 
 namedC :: IsSourceP2 a b => String -> a :> b
+-- namedC name = trace ("namedC " ++ name) $ primC (Prim name)
 namedC = primC . Prim
 
 -- | Constant circuit from source generator (experimental)
@@ -409,6 +415,10 @@ outG = outGWith ("pdf","")
 outGWith :: IsSourceP2 a b => (String,String) -> String -> (a :> b) -> IO ()
 outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
+     -- writeFile (outFile "graph") (show (simpleComp <$> runC circ))
+     -- putStrLn "outGWith: here goes!!"
+     -- printf "Circuit: %d components\n" (length (runC circ))
+     -- print (simpleComp <$> runC circ)
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
