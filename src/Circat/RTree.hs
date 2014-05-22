@@ -7,8 +7,8 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -21,7 +21,7 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.RTree where
+module Circat.RTree (Tree(..),TreeCat(..)) where
 
 -- TODO: explicit exports
 
@@ -55,7 +55,7 @@ cant :: String -> a
 cant str = error $ str ++ ": GHC doesn't know this case can't happen."
 
 cantT :: String -> a
-cantT str = cant (str ++ " on Vec")
+cantT str = cant (str ++ " on Tree")
 
 instance Ord a => Ord (Tree n a) where
   L a  `compare` L b  = a  `compare` b
@@ -140,26 +140,26 @@ instance Functor (Tree n) where
 instance IsNat n => Applicative (Tree n) where
   pure a = a <$ units nat
 
---   (<*>)  = ap' nat
---    where
---      ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
---      ap' Zero     = inL2 ($)
---      ap' (Succ n) = inB2 (liftA2 (ap' n))
---      {-# INLINE ap' #-}
+  (<*>)  = ap' nat
+   where
+     ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
+     ap' Zero     = inL2 ($)
+     ap' (Succ n) = inB2 (liftA2 (ap' n))
+     {-# INLINE ap' #-}
 
 --   L f  <*> L x  = L (f x)
 --   B fs <*> B xs = B (liftA2 (<*>) fs xs)
 
-  (<*>)  = ap
+--   (<*>)  = ap
 
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
-ap :: Tree n (a -> b) -> Tree n a -> Tree n b
-L f  `ap` L x  = L (f x)
-B fs `ap` B xs = B (liftA2 ap fs xs)
-_    `ap` _    = error "(<*>) on Tree n: impossible case"
-{-# INLINE ap #-}
+-- ap :: Tree n (a -> b) -> Tree n a -> Tree n b
+-- L f  `ap` L x  = L (f x)
+-- B fs `ap` B xs = B (liftA2 ap fs xs)
+-- _    `ap` _    = error "(<*>) on Tree n: impossible case"
+-- {-# INLINE ap #-}
 
 units :: Nat n -> Tree n ()
 units Zero     = L ()
