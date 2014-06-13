@@ -130,7 +130,7 @@ inB2 = inB <~ unB
 --   {-# INLINE fmap #-}
 
 instance Functor (Tree n) where
-  fmap f (L a)  = L (f a)
+  fmap f (L a ) = L (f a)
   fmap f (B ts) = B ((fmap.fmap) f ts)
   {-# INLINE fmap #-}
 
@@ -167,8 +167,8 @@ units (Succ n) = B (pure (units n))
 {-# INLINE units #-}
 
 instance Foldable (Tree n) where
-  foldMap f (L  a) = f a
-  foldMap f (B uv) = (foldMap . foldMap) f uv
+  foldMap f (L a ) = f a
+  foldMap f (B uv) = (foldMap.foldMap) f uv
   {-# INLINE foldMap #-}
 
 instance Traversable (Tree n) where
@@ -187,7 +187,6 @@ joinT (L t)  = t
 joinT (B uv) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ uv
 
 {-# INLINE joinT #-}
-
 
 {-
 
