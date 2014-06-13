@@ -1,5 +1,5 @@
 Name:               circat
-Version:            0.2.8
+Version:            0.2.9
 Cabal-Version:      >= 1.6
 Synopsis:           A categorical framework for circuit construction
 Category:           circuits, categories
@@ -37,6 +37,7 @@ Library
                     Circat.Classes
                     Circat.Pair
                     Circat.RTree
+                    Circat.RTreeS
                     Circat.Circuit
                     Circat.Netlist
   Other-Modules:
