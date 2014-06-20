@@ -66,11 +66,6 @@ instance EqCat (->) where
   eq  = P.uncurry (==)
   neq = P.uncurry (/=)
 
-class Category k => HasNat k where
-  zeroA :: ()        `k` Nat Z
-  succA :: Nat m     `k` Nat (S m) 
-  predA :: Nat (S m) `k` Nat m
-
 class (TerminalCat k, ProductCat k) => VecCat k where
   toVecZ :: () `k` Vec Z a
   unVecZ :: Vec Z a `k` ()

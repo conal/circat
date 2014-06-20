@@ -37,6 +37,7 @@ module Circat.Category
   , StrongCat(..), ClosedCat(..)
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
+  , NatCat(..), natA
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
   , CondCat(..),CondCat2, prodCond, funCond  -- experimental
@@ -55,6 +56,8 @@ import Control.Monad (liftM2) -- liftM,
 import GHC.Prim (Constraint)
 
 import Control.Newtype
+
+import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
 
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
@@ -327,8 +330,25 @@ type BiCCC k = (ClosedCat k, CoproductCat k, TerminalCat k, DistribCat k)
 class HasUnitArrow k p where
   unitArrow :: p b -> Unit `k` b
 
+class Category k => NatCat k where
+  zeroA :: () `k` Nat Z
+  succA :: IsNat m => Nat m `k` Nat (S m) 
+  predA :: Nat (S m) `k` Nat m
+
+natA :: forall k n. (NatCat k, IsNat n) => () `k` Nat n
+natA = mk nat
+ where
+   mk :: Nat m -> (() `k` Nat m)
+   mk Zero     = zeroA
+   mk (Succ m) = succA . mk m
+
+instance NatCat (->) where
+  zeroA = const Zero
+  succA = Succ
+  predA = predN
+
 -- | 'BiCCC' with constant arrows.
-type BiCCCC k p = (BiCCC k, HasUnitArrow k p)
+type BiCCCC k p = (BiCCC k {- , NatCat k -}, HasUnitArrow k p)
 
 {--------------------------------------------------------------------
     Experimental
