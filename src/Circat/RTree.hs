@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs, KindSignatures, CPP #-}
-{-# LANGUAGE ScopedTypeVariables, Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables, Rank2Types, InstanceSigs, ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
@@ -27,6 +27,7 @@ module Circat.RTree (Tree(..),TreeCat(..)) where
 
 import Prelude hiding (id,(.))
 
+import Data.Monoid (Monoid)
 import Data.Functor ((<$),(<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
@@ -64,7 +65,7 @@ instance Ord a => Ord (Tree n a) where
 
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
-  showsPrec p (B uv) = showsApp1 "B" p uv
+  showsPrec p (B ts) = showsApp1 "B" p ts
 
 class PairCat k => TreeCat k where
   toL :: a `k` Tree Z a
@@ -166,14 +167,15 @@ units Zero     = L ()
 units (Succ n) = B (pure (units n))
 {-# INLINE units #-}
 
+#if 1
 instance Foldable (Tree n) where
   foldMap f (L a ) = f a
-  foldMap f (B uv) = (foldMap.foldMap) f uv
+  foldMap f (B ts) = (foldMap.foldMap) f ts
   {-# INLINE foldMap #-}
 
 instance Traversable (Tree n) where
   traverse f (L a ) = L <$> f a
-  traverse f (B uv) = B <$> (traverse.traverse) f uv
+  traverse f (B ts) = B <$> (traverse.traverse) f ts
   {-# INLINE traverse #-}
 
 instance IsNat n => Monad (Tree n) where
@@ -184,13 +186,60 @@ instance IsNat n => Monad (Tree n) where
 
 joinT :: Tree n (Tree n a) -> Tree n a
 joinT (L t)  = t
-joinT (B uv) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ uv
+joinT (B ts) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ ts
+
+#else
+
+instance IsNat n => Foldable (Tree n) where
+{-
+  foldMap :: forall a o. Monoid o => (a -> o) -> Tree n a -> o
+  foldMap f = foldMap' nat
+   where
+     foldMap' :: Nat m -> Tree m a -> o
+--      foldMap' Zero     = \ (L a ) -> f a
+--      foldMap' (Succ m) = \ (B ts) -> foldMap (foldMap' m) ts
+     foldMap' Zero     = f . unL
+     foldMap' (Succ m) = foldMap (foldMap' m) . unB
+-}
+  foldMap = foldMap' nat
+
+foldMap' :: Monoid o => Nat m -> (a -> o) -> Tree m a -> o
+foldMap' Zero     f = f . unL
+foldMap' (Succ m) f = foldMap (foldMap' m f) . unB
+{-# INLINE foldMap' #-}
+
+
+instance IsNat n => Traversable (Tree n) where
+  traverse :: forall a f b. Applicative f => (a -> f b) -> Tree n a -> f (Tree n b)
+  traverse f = traverse' nat
+   where
+     traverse' :: Nat m -> Tree m a -> f (Tree m b)
+--      traverse' Zero = \ (L a ) -> L <$> f a
+--      traverse' (Succ m) = \ (B ts) -> B <$> traverse (traverse' m) ts
+     traverse' Zero = fmap L . f . unL
+     traverse' (Succ m) = fmap B . traverse (traverse' m) . unB
+  {-# INLINE traverse #-}
+
+instance IsNat n => Monad (Tree n) where
+  return = pure
+  m >>= f = joinT nat (fmap f m)
+  {-# INLINE return #-}
+  {-# INLINE (>>=) #-}
+
+joinT :: Nat n -> Tree n (Tree n a) -> Tree n a
+-- joinT Zero = \ (L t) -> t
+-- joinT (Succ m) = \ (B ts) -> B . fmap (joinT m) . join . fmap sequenceA . (fmap . fmap) unB $ ts
+joinT Zero = unL
+joinT (Succ m) = B . fmap (joinT m) . join . fmap sequenceA . (fmap . fmap) unB . unB
+#endif
 
 {-# INLINE joinT #-}
 
+-- TODO: fmap with IsNat
+
 {-
 
--- joinT (B uv) = B . joinMMT . (fmap . fmap) unB $ uv
+-- joinT (B ts) = B . joinMMT . (fmap . fmap) unB $ ts
 
 -- TODO: Generalize this construction past (->). Rework def without sequenceA.
 -- TODO: Generalize past Tree. Use pack/unpack?
@@ -201,9 +250,9 @@ joinT' :: Nat n -> Tree n (Tree n a) -> Tree n a
 joinT' Zero = unL
 joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
--- uv :: P (Tree m (Tree (S m) a))
+-- ts :: P (Tree m (Tree (S m) a))
 
--- (fmap . fmap) unB $ uv :: P (Tree m (P (Tree m a)))
+-- (fmap . fmap) unB $ ts :: P (Tree m (P (Tree m a)))
 
 -- fmap sequenceA $ '' :: P (P (Tree m (Tree m a)))
 -- join $ '' :: P (Tree m (Tree m a))
