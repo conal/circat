@@ -11,7 +11,7 @@
 {-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-}
 
 {-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -fcontext-stack=35 #-} -- for add
+{-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -28,9 +28,11 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
--- #define StaticSums
+#define StaticSums
 -- #define TaggedSums
-#define ChurchSums
+-- #define ChurchSums
+
+-- #define VecsAndTrees
 
 module Circat.Circuit 
   ( CircuitM, (:>)
@@ -340,6 +342,7 @@ instance BoolCat (:>) where
   or  = namedC "or"
   xor = namedC "xor"
 
+#ifdef VecsAndTrees
 instance EqCat (:>) where
   type EqKon (:>) a = IsSource (Buses a)
   eq  = namedC "eq"
@@ -361,6 +364,8 @@ instance TreeCat (:>) where
   unL = C unL
   toB = C toB
   unB = C unB
+
+#endif
 
 instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
@@ -709,6 +714,8 @@ instance CoproductCat (:>) where
   inl   = C inl
   inr   = C inr
   (|||) = inC2 (|||)
+
+instance DistribCat (:>) where
   distl = C distl
   distr = C distr
 
@@ -877,11 +884,13 @@ injr v = inCK (. (,v))
 -- (. (u,)) :: (Buses (u :* a) -> CircuitM (Buses c)) -> (Buses a -> CircuitM (Buses c))
 -- inCK (. (u,)) :: (u :* a : c) -> (a :> c)
 
+#if 0
 instance                        CondCat (:>) Unit      where cond = it
 instance                        CondCat (:>) Bool      where cond = mux
 instance (CondCat2 (:>) a b) => CondCat (:>) (a :*  b) where cond = prodCond
 instance (CondCat (:>) b)    => CondCat (:>) (a :=> b) where cond = funCond
 instance CondCat (:>) (a :+ b)                         where cond = sumCond
+#endif
 
 sumToFun' :: (t :> a :+ b)
           -> forall c. CondCat (:>) c => t :> ((a :=> c) :* (b :=> c) :=> c)

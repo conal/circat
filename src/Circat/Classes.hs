@@ -20,6 +20,10 @@
 -- Additional type classes for circuit-friendly operations
 ----------------------------------------------------------------------
 
+-- #define VecsAndTrees
+
+-- TODO: Rename "VecsAndTrees", since it also governs pairs and state
+
 module Circat.Classes where
 
 -- TODO: explicit exports
@@ -27,18 +31,26 @@ module Circat.Classes where
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
-
+#ifdef VecsAndTrees
 import GHC.Prim (Constraint)
+#endif
 
 -- import Control.Newtype (Newtype)
 -- import qualified Control.Newtype as N
 
+#ifdef VecsAndTrees
 import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
+#endif
 
-import Circat.Misc ((:*),(<~))
+import Circat.Misc ((:*))
+#ifdef VecsAndTrees
+import Circat.Misc ((<~))
+#endif
 import Circat.Category
+#ifdef VecsAndTrees
 import Circat.Pair
 import Circat.State
+#endif
 
 -- | Category with boolean operations.
 class ProductCat k => BoolCat k where
@@ -53,6 +65,7 @@ instance BoolCat (->) where
   or  = P.uncurry (||)
   xor = P.uncurry (/=)
 
+#ifdef VecsAndTrees
 class BoolCat k => EqCat k where
   type EqKon k a :: Constraint
   type EqKon k a = Yes a
@@ -126,6 +139,7 @@ second or               :: S * (C * C) -> S * C
 -}
 
 instance AddCat (->)  -- use defaults
+#endif
 
 -- HACK: generalize/replace/...
 class NumCat k a where
@@ -139,6 +153,7 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
   add = arr add
   mul = arr mul
 
+#ifdef VecsAndTrees
 -- Structure addition with carry in & out
 
 type Adds k f = 
@@ -257,6 +272,8 @@ addS = traverseC fullAddS
 -- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.
 #endif
 
+#endif
+
 {--------------------------------------------------------------------
     Misc
 --------------------------------------------------------------------}
@@ -267,3 +284,4 @@ class MuxCat k where
 
 instance MuxCat (->) where
   mux (i,(e,t)) = (i && t) || (not i && e)
+

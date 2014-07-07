@@ -40,8 +40,10 @@ module Circat.Category
   , NatCat(..), natA
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
+#if 0
   , CondCat(..),CondCat2, prodCond, funCond  -- experimental
   , guard, if_then_else  -- experimental
+#endif
   , Yes
   ) where
 
@@ -350,6 +352,7 @@ instance NatCat (->) where
 -- | 'BiCCC' with constant arrows.
 type BiCCCC k p = (BiCCC k {- , NatCat k -}, HasUnitArrow k p)
 
+#if 0
 {--------------------------------------------------------------------
     Experimental
 --------------------------------------------------------------------}
@@ -368,6 +371,8 @@ instance Monad m => CondCat (Kleisli m) a where
   cond = arr cond
 
 type CondCat2 k a b = (CondCat k a, CondCat k b)
+
+#endif
 
 #if 0
 
@@ -388,6 +393,7 @@ instance (ClosedCat k, CondCat k b)
 
 #endif
 
+#if 0
 prodCond :: forall k a b. (ProductCat k, CondCat2 k a b) =>
             (Bool :* ((a :* b) :* (a :* b))) `k` (a :* b)
 prodCond = half exl &&& half exr
@@ -423,3 +429,5 @@ guard p = (exl +++ exl) . distl . (id &&& p)
 if_then_else :: (ProductCat k, CoproductCat k, DistribCat k) =>
                 (a `k` BoolUU) -> (a `k` b) -> (a `k` b) -> (a `k` b)
 if_then_else p f g = (f ||| g) . guard p
+
+#endif

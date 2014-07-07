@@ -33,11 +33,10 @@ Library
                     Circat.Misc
                     Circat.Show
                     Circat.Category
-                    Circat.State
+--                     Circat.State
                     Circat.Classes
                     Circat.Pair
                     Circat.RTree
-                    Circat.RTreeS
                     Circat.Circuit
                     Circat.Netlist
   Other-Modules:

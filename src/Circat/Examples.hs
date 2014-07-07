@@ -17,7 +17,9 @@
 module Circat.Examples (outSimples,outAll,bc,outV) where
 
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
+#if 0
 import TypeUnary.Vec hiding (get)
+#endif
 
 import Circat.Circuit
 import Circat.Misc ((:*),Unop)
@@ -121,6 +123,8 @@ digraph {
 -}
 -- Vectors
 
+#if 0
+
 addV1 :: AddVP N1
 addV1 = adds
 
@@ -143,6 +147,8 @@ outVecs = do
   outGV "addV4"  addV4
   outGV "addV8"  addV8
   outGV "addV16" addV16
+
+#endif
 
 -- Trees (identical results)
 
@@ -241,4 +247,4 @@ addVS16 = addS
 ----
 
 outAll :: IO ()
-outAll = do outSimples ; outVecs -- ; outTrees
+outAll = do outSimples -- ; outVecs -- ; outTrees

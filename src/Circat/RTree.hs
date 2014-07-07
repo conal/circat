@@ -23,6 +23,8 @@
 
 module Circat.RTree (Tree(..),TreeCat(..)) where
 
+-- #define VecsAndTrees
+
 -- TODO: explicit exports
 
 import Prelude hiding (id,(.))
@@ -267,6 +269,8 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
 -}
 
+#ifdef VecsAndTrees
+
 instance CTraversable (Tree Z) where
   type CTraversableKon (Tree Z) k = TreeCat k
   traverseC = inL
@@ -275,6 +279,8 @@ instance (IsNat n, CTraversable (Tree n)) => CTraversable (Tree (S n)) where
   type CTraversableKon (Tree (S n)) k =
     (TreeCat k, CTraversableKon (Tree n) k)
   traverseC = inB . traverseC . traverseC
+
+#endif
 
 {--------------------------------------------------------------------
     Addition
