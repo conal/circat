@@ -43,3 +43,5 @@ Library
                     Circat.Examples
 
 
+-- TODO: Move Pair and RTree elsewhere, e.g., TypeUnary.
+-- Wait until I've removed PairCat, VecCat, and TreeCat.
