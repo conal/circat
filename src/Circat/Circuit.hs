@@ -204,8 +204,8 @@ type instance Buses Bool = Bus N1
 -- Distribute over product-based structures:
 type instance Buses ()         = ()
 type instance Buses (a :* b)   = Buses a :* Buses b
-type instance Buses (Pair a  ) = Pair (Buses a)
-type instance Buses (Vec n a ) = Vec  n (Buses a)
+type instance Buses (Pair   a) = Pair   (Buses a)
+type instance Buses (Vec  n a) = Vec  n (Buses a)
 type instance Buses (Tree n a) = Tree n (Buses a)
 
 type N32 = N16 :+: N16
