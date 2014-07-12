@@ -4,6 +4,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveDataTypeable #-} -- experiment
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -36,6 +37,7 @@ import Control.Monad (join)
 import Data.Foldable
 import Data.Traversable (Traversable(..))
 import Control.Arrow (arr,Kleisli)
+import Data.Typeable (Typeable)
 
 import TypeUnary.Nat hiding ((:*:))
 
@@ -53,6 +55,7 @@ data Tree :: * -> * -> * where
   B :: Pair (Tree n a) -> Tree (S n) a
 
 deriving instance Eq a => Eq (Tree n a)
+deriving instance Typeable Tree
 
 cant :: String -> a
 cant str = error $ str ++ ": GHC doesn't know this case can't happen."
