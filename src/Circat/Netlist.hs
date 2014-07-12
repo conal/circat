@@ -30,8 +30,8 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), IsSourceP2, Comp', simpleComp, runC, tagged
-  , Width, CompNum, Pin, Bus(..), BBus(..), unBBus )
+  ( (:>), GenBuses, Comp', simpleComp, runC, tagged
+  , Width, CompNum, PinId, Bus(..) )
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Range(..)
@@ -41,12 +41,12 @@ import Language.Netlist.GenVHDL(genVHDL)
 import Language.Netlist.GenVerilog(mk_module)
 import qualified Language.Verilog as V
 
--- Pin description: width & name
+-- PinId description: width & name
 type PinDesc = (Width,String)
 
-type PinToWireDesc = (Pin,PinDesc) 
+type PinToWireDesc = (PinId,PinDesc) 
 
-outV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
+outV :: GenBuses a => String -> (a :> b) -> IO ()
 outV cirName cir = 
   do createDirectoryIfMissing False outDir
      writeFile filePath (toV cirName cir)
@@ -54,11 +54,11 @@ outV cirName cir =
     outDir   = "out"
     filePath = outDir ++ "/" ++ cirName ++ ".v.txt"
 
-toV :: IsSourceP2 a b => String -> (a :> b) -> String
+toV :: GenBuses a => String -> (a :> b) -> String
 toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
 
 -- | Converts a Circuit to a Module
-toNetlist :: IsSourceP2 a b => String -> (a :> b) -> Module
+toNetlist :: GenBuses a => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
   where comps  = simpleComp <$> runC cir
         ncomps      = tagged comps
@@ -68,7 +68,7 @@ toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
         p2w         = M.fromList (p2wM ++ p2wI)
         assigns     = moduleAssigns p2w ncomps 
 
-type PinMap = Map Pin PinDesc
+type PinMap = Map PinId PinDesc
 
 -- | Produces the assign statements for every Comp except "In"
 -- Assign statements bind the result of a function (and,or,add etc.)
@@ -128,7 +128,7 @@ moduleAssign p2w (_,(name,[],[o])) =
 
 -- output assignments
 moduleAssign p2w (_,("Out",ps,[])) =
-  map (\(n,p) -> NetAssign (outPortName n) (expVar p2w p)) (tagged ps)
+  map (\ (n,p) -> NetAssign (outPortName n) (expVar p2w p)) (tagged ps)
   where
      outPortName = portName "Out" ps
 
@@ -143,23 +143,23 @@ moduleAssign p2w (_,(name,is,os)) =
 
 -- TODO: Swap arguments in expVar, lw, lookupWireDesc
 
-expVar :: PinMap -> BBus -> Expr
+expVar :: PinMap -> Bus -> Expr
 expVar p2w b = ExprVar (busName p2w b)
 
-lw :: PinMap -> Pin -> PinDesc
+lw :: PinMap -> PinId -> PinDesc
 lw = lookupWireDesc
 
-lookupWireDesc :: PinMap -> Pin -> PinDesc
+lookupWireDesc :: PinMap -> PinId -> PinDesc
 lookupWireDesc p2w pin = fromMaybe err (M.lookup pin p2w)
   where
-    err = error $ "Circat.Netlist.lookupWireDesc: Pin " ++ show pin
+    err = error $ "Circat.Netlist.lookupWireDesc: PinId " ++ show pin
                   ++ " does not have an entry."
 
-busName :: PinMap -> BBus -> String
-busName p2w (BBus (Bus p)) = snd (lw p2w p)
+busName :: PinMap -> Bus -> String
+busName p2w (Bus i _) = snd (lw p2w i)
 
 -- | Generates a wire declaration for all Comp outputs along with 
--- a map from Pin to wire name
+-- a map from PinId to wire name
 moduleNets :: [(CompNum,Comp')] -> ([PinToWireDesc],[Decl])
 moduleNets = unzip . concatMap moduleNet
 
@@ -168,7 +168,7 @@ moduleNet (_,("In",_,_))      = []
 moduleNet (_,("Out",_,_))     = []
 moduleNet c@(_,(_,_,outs)) = 
   [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
-  | (i,unBBus -> (o,wid)) <- tagged outs ]
+  | (i,Bus o wid) <- tagged outs ]
   where
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
@@ -191,11 +191,11 @@ modulePorts comp' =
       error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
                ++ " not recognized." 
   where
-    ports :: String -> [BBus] -> [(PinToWireDesc,(Ident, Maybe Range))]
+    ports :: String -> [Bus] -> [(PinToWireDesc,(Ident, Maybe Range))]
     ports dir ps =
       [ let name = portName dir ps i in
           ((p,(wid,name)),(name,Just (busRange wid))) -- TODO: redesign
-      | (i,unBBus -> (p,wid)) <- tagged ps
+      | (i,Bus p wid) <- tagged ps
       ]
 
 portName :: Show b => String -> [a] -> b  -> String
@@ -211,7 +211,7 @@ portComp dir comps
   | length fC == 1              = head fC
   | otherwise                   = error eIncorrectComps
   where 
-    fC = filter (\(n,_,_) -> n == dir) comps
+    fC = filter (\ (n,_,_) -> n == dir) comps
     floc = "Circat.Netlist.gPortComp"
     eIllegalDir = 
       floc ++ ": Illegal value for dir " ++ dir

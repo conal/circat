@@ -34,7 +34,7 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
-outGV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
+outGV :: GenBuses a => String -> (a :> b) -> IO ()
 outGV name cir = 
   do outG name cir
      outG name cir
@@ -185,7 +185,7 @@ outTrees = do
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
+outSG :: (IsSourceP s, GenBuses a, StateCatWith sk (:>) s) =>
          String -> (a `sk` b) -> IO ()
 outSG name = outG name . runState
 
