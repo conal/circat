@@ -38,7 +38,7 @@ module Circat.Category
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
   , NatCat(..), natA
-  , BiCCC
+  , CoerceCat(..), BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
 #if 0
   , CondCat(..),CondCat2, prodCond, funCond  -- experimental
@@ -56,6 +56,8 @@ import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM2) -- liftM,
 -- import Data.Traversable (Traversable,sequence)
 import GHC.Prim (Constraint)
+import Data.Typeable (Typeable,cast)
+import Data.Coerce
 
 import Control.Newtype
 
@@ -349,8 +351,16 @@ instance NatCat (->) where
   succA = Succ
   predA = predN
 
+-- | Categories with coercion. The 'Typeable' constraints help with non-standard
+-- types. This interface may change.
+class CoerceCat k where
+  coerceC :: (Typeable a, Typeable b, Coercible a b) => a `k` b
+
+instance CoerceCat (->) where
+  coerceC = coerce
+
 -- | 'BiCCC' with constant arrows.
-type BiCCCC k p = (BiCCC k {- , NatCat k -}, HasUnitArrow k p)
+type BiCCCC k p = (BiCCC k {- , NatCat k -}, CoerceCat k, HasUnitArrow k p)
 
 #if 0
 {--------------------------------------------------------------------
