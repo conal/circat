@@ -38,7 +38,9 @@ module Circat.Category
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
   , NatCat(..), natA
-  , CoerceCat(..), BiCCC
+  , Rep, RepCat(..)
+--   , CoerceCat(..)
+  , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
 #if 0
   , CondCat(..),CondCat2, prodCond, funCond  -- experimental
@@ -351,6 +353,7 @@ instance NatCat (->) where
   succA = Succ
   predA = predN
 
+#if 0
 -- | Categories with coercion. The 'Typeable' constraints help with non-standard
 -- types. This interface may change.
 class CoerceCat k where
@@ -358,9 +361,21 @@ class CoerceCat k where
 
 instance CoerceCat (->) where
   coerceC = coerce
+#else
+
+type family Rep a
+
+class RepCat k where
+  repr :: a `k` Rep a
+  abst :: Rep a `k` a
+
+instance RepCat (->) where
+  repr = error "repr on (->): not implemented"
+  abst = error "abst on (->): not implemented"
+#endif
 
 -- | 'BiCCC' with constant arrows.
-type BiCCCC k p = (BiCCC k {- , NatCat k -}, CoerceCat k, HasUnitArrow k p)
+type BiCCCC k p = (BiCCC k {- , NatCat k -} {-, CoerceCat k-}, RepCat k, HasUnitArrow k p)
 
 #if 0
 {--------------------------------------------------------------------

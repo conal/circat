@@ -120,7 +120,8 @@ data Buses :: * -> * where
   FunB  :: (a :> b) -> Buses (a -> b)
   -- | Isomorphic form. Note: b must not have one of the standard forms.
   -- If it does, we'll get a run-time error when consuming.
-  IsoB  :: Typeable a => Buses a -> Buses b
+  IsoB  :: Buses (Rep a) -> Buses a
+--   IsoB   :: Typeable a => Buses a -> Buses b
 
 deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
@@ -128,12 +129,14 @@ deriving instance Typeable Buses
 -- Deriving would need GenBuses a.
 
 instance Show (Buses a) where
-  show UnitB = "()"
-  show (BoolB b) = show b
-  show (IntB b) = show b
+  show UnitB       = "()"
+  show (BoolB b)   = show b
+  show (IntB b)    = show b
   show (PairB a b) = "("++show a++","++show b++")"
-  show (FunB _) = "<function>"
+  show (FunB _)    = "<function>"
   show (IsoB b) = "IsoB ("++show b++")"
+
+-- TODO: Improve to Show instance with showsPrec
 
 class GenBuses a where genBuses :: CircuitM (Buses a)
 
@@ -175,12 +178,30 @@ unFunB (IsoB _) = isoErr "unFunB"
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
 
+#if 0
+
 -- | Smart constructor. Use instead of 'IsoB'. Maintains invariant that we never
 -- have composed inverse IsoB constructors, so functions like unPairB don't need
 -- to check for them.
 isoB :: (Typeable a, Typeable b) => Buses a -> Buses b
 isoB (IsoB (cast -> Just b)) = b
 isoB a                       = IsoB a
+
+#else
+
+-- Temporary synonym
+isoB :: Buses (Rep a) -> Buses a
+isoB = absB
+
+absB :: Buses (Rep a) -> Buses a
+absB = IsoB
+
+repB :: Buses a -> Buses (Rep a)
+repB (IsoB a) = a
+repB b = error ("repB: non-IsoB: " ++ show b)
+
+#endif
+
 
 {--------------------------------------------------------------------
     The circuit monad
@@ -232,8 +253,15 @@ type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
 -- | Circuit category
 newtype a :> b = C { unC :: a :+> b }
 
+#if 0
 instance CoerceCat (:>) where
   coerceC = C (arr isoB)
+#else
+instance RepCat (:>) where
+  repr = C (arr repB)
+  abst = C (arr absB)
+#endif
+
 
 mkCK :: BCirc a b -> (a :> b)
 mkCK = C . Kleisli
@@ -1005,9 +1033,20 @@ instance DistribCat (:>) where
 
 -- I don't know where to put the following instances:
 
+#if 0
+
 #define IsoGen(abs,rep) \
 instance (Typeable (abs), Typeable (rep), GenBuses (rep)) => GenBuses (abs) where \
   genBuses = isoB <$> (genBuses :: CircuitM (Buses (rep)))
+
+#else
+
+#define IsoGen(abs,rep) \
+type instance Rep(abs) = rep ; \
+instance (Typeable (abs), Typeable (rep), GenBuses (rep)) => GenBuses (abs) where \
+  genBuses = absB <$> (genBuses :: CircuitM (Buses (rep)))
+
+#endif
 
 IsoGen(Pair a, a:* a)
 IsoGen(Vec Z a, ())
