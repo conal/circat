@@ -31,7 +31,6 @@ module Circat.Classes where
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
-import Data.Typeable (Typeable)
 #ifdef VecsAndTrees
 import GHC.Prim (Constraint)
 #endif
@@ -285,6 +284,3 @@ class MuxCat k where
 
 instance MuxCat (->) where
   mux (i,(e,t)) = (i && t) || (not i && e)
-
-class CastCat k where
-  castC :: (Typeable a, Typeable b) => a `k` b
