@@ -232,8 +232,8 @@ type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
 -- | Circuit category
 newtype a :> b = C { unC :: a :+> b }
 
-instance CastCat (:>) where
-  castC = C (arr isoB)
+instance CoerceCat (:>) where
+  coerceC = C (arr isoB)
 
 mkCK :: BCirc a b -> (a :> b)
 mkCK = C . Kleisli
