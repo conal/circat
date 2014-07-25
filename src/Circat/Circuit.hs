@@ -258,8 +258,8 @@ instance CoerceCat (:>) where
   coerceC = C (arr isoB)
 #else
 instance RepCat (:>) where
-  repr = C (arr repB)
-  abst = C (arr absB)
+  repC = C (arr repB)
+  absC = C (arr absB)
 #endif
 
 
