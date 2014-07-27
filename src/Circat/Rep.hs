@@ -21,21 +21,21 @@ module Circat.Rep (Rep,HasRep(..)) where
 
 import Circat.Misc ((:*))
 import TypeUnary.TyNat (Z,S)
-import TypeUnary.Vec (Vec(..),unConsV)
+import TypeUnary.Vec (Vec(..))
 
 type family Rep a
 
 class HasRep a where
-  repr :: a' ~ Rep a => a -> a'
-  abst :: a' ~ Rep a => a' -> a
+  repr :: Rep a ~ a' => a -> a'
+  abst :: Rep a ~ a' => a' -> a
 
 -- Note types:
 -- 
---   repr :: forall a. HasRep a => forall a'. a' ~ Rep a => EP (a' -> a)
---   abst :: forall a. HasRep a => forall a'. a' ~ Rep a => EP (a -> a')
-
--- TODO: maybe switch to Rep a ~ a' across the board, to make the calls a little
--- to construct (using normaliseType and no mkSymCo).
+--   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => EP (a' -> a)
+--   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => EP (a -> a')
+-- 
+-- Note: Using Rep a ~ a' rather than the reverse to make the calls a little to
+-- construct (using normaliseType and no mkSymCo).
 
 type instance Rep (Vec Z a) = ()
 instance HasRep (Vec Z a) where

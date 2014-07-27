@@ -365,8 +365,8 @@ instance CoerceCat (->) where
 #else
 
 class RepCat k where
-  reprC :: (HasRep a, a' ~ Rep a) => a `k` a'
-  abstC :: (HasRep a, a' ~ Rep a) => a' `k` a
+  reprC :: (HasRep a, Rep a ~ a') => a `k` a'
+  abstC :: (HasRep a, Rep a ~ a') => a' `k` a
 
 instance RepCat (->) where
   reprC = repr
