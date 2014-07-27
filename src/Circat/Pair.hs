@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor, DeriveDataTypeable, CPP #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -39,7 +39,7 @@ import Data.Data (Data)
 
 import Circat.Misc ((:*),(<~))
 import Circat.Category  -- (ProductCat(..))
-import Circat.State (pureState,StateFun,StateExp)
+-- import Circat.State (pureState,StateFun,StateExp)
 
 {--------------------------------------------------------------------
     Pair representation and basic instances
@@ -51,6 +51,11 @@ import Circat.State (pureState,StateFun,StateExp)
 infixl 1 :#
 -- | Uniform pairs
 data Pair a = a :# a deriving (Functor,Eq,Show,Typeable,Data)
+
+type instance Rep (Pair a) = a :* a
+instance HasRep (Pair a) where
+  repr (a :# a') = (a,a')
+  abst (a,a') = (a :# a')
 
 instance Ord a => Ord (Pair a) where
   compare = comparing fromP
@@ -93,6 +98,7 @@ toP (a,b) = a :# b
 fromP :: Pair a -> (a,a)
 fromP (a :# b) = (a,b)
 
+-- TODO: Remove PairCat
 
 class ProductCat k => PairCat k where
   toPair :: (a :* a) `k` Pair a
@@ -106,6 +112,7 @@ instance Monad m => PairCat (Kleisli m) where
   toPair = arr toPair
   unPair = arr unPair
 
+#if 0
 instance (TerminalCat k, PairCat k) => PairCat (StateFun k s) where
   toPair = pureState toPair
   unPair = pureState unPair
@@ -113,6 +120,7 @@ instance (TerminalCat k, PairCat k) => PairCat (StateFun k s) where
 instance (ClosedCat k, TerminalCat k, PairCat k) => PairCat (StateExp k s) where
   toPair = pureState toPair
   unPair = pureState unPair
+#endif
 
 inPair :: PairCat k =>
           ((a :* a) `k` (b :* b)) -> (Pair a `k` Pair b)

@@ -38,7 +38,7 @@ module Circat.Category
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
   , NatCat(..), natA
-  , Rep, RepCat(..), repr, abst
+  , Rep, HasRep(..), RepCat(..)
 --   , CoerceCat(..)
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
@@ -68,6 +68,7 @@ import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
 import Circat.Misc (Unit,(:*),(:+),(:=>),(<~),inNew,inNew2) -- ,inNew
+import Circat.Rep
 
 infixr 3 ***, &&&
 
@@ -363,21 +364,14 @@ instance CoerceCat (->) where
   coerceC = coerce
 #else
 
-type family Rep a
-
-repr :: a -> Rep a
-repr = error "repr: not implemented"
-
-abst :: Rep a -> a
-abst = error "abst: not implemented"
-
 class RepCat k where
-  repC :: a `k` Rep a
-  absC :: Rep a `k` a
+  reprC :: (HasRep a, a' ~ Rep a) => a `k` a'
+  abstC :: (HasRep a, a' ~ Rep a) => a' `k` a
 
 instance RepCat (->) where
-  repC = repr
-  absC = abst
+  reprC = repr
+  abstC = abst
+
 #endif
 
 -- | 'BiCCC' with constant arrows.

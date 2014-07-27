@@ -46,7 +46,8 @@ import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
-import Circat.State (pureState,StateFun,StateExp)
+-- import Circat.State (pureState,StateFun,StateExp)
+import Circat.Rep
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -56,6 +57,27 @@ data Tree :: * -> * -> * where
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
+
+type instance Rep (Tree Z a) = a
+instance HasRep (Tree Z a) where
+  repr (L a) = a
+  abst a = L a
+
+#if 0
+type instance Rep (Tree (S n) a) = Pair (Tree n a)
+instance HasRep (Tree (S n) a) where
+  repr (B ts) = ts
+  abst ts = B ts
+#else
+-- Two steps:
+-- type instance Rep (Tree (S n) a) = Rep (Pair (Tree n a))
+type instance Rep (Tree (S n) a) = (Tree n a , Tree n a)
+instance HasRep (Tree (S n) a) where
+  repr (B ts) = repr ts
+  abst ts = B (abst ts)
+#endif
+
+-- The two-step formulation makes for simpler Core.
 
 cant :: String -> a
 cant str = error $ str ++ ": GHC doesn't know this case can't happen."
@@ -71,6 +93,8 @@ instance Ord a => Ord (Tree n a) where
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B ts) = showsApp1 "B" p ts
+
+-- TODO: Remove TreeCat
 
 class PairCat k => TreeCat k where
   toL :: a `k` Tree Z a
@@ -96,6 +120,7 @@ instance Monad m => TreeCat (Kleisli m) where
   toB = arr toB
   unB = arr unB
 
+#if 0
 instance (TerminalCat k, TreeCat k) => TreeCat (StateFun k s) where
   toL = pureState toL
   unL = pureState unL
@@ -107,6 +132,7 @@ instance (ClosedCat k, TerminalCat k, TreeCat k) => TreeCat (StateExp k s) where
   unL = pureState unL
   toB = pureState toB
   unB = pureState unB
+#endif
 
 inL :: TreeCat k => (a `k` b) -> (Tree Z a `k` Tree Z b)
 inL = toL <~ unL

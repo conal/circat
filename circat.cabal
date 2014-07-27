@@ -35,6 +35,7 @@ Library
                     Circat.Category
 --                     Circat.State
                     Circat.Classes
+                    Circat.Rep
                     Circat.Pair
                     Circat.RTree
                     Circat.Circuit

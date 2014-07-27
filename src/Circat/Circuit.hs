@@ -80,6 +80,7 @@ import TypeUnary.Vec hiding (get)
 import Circat.Misc
 import Circat.Category
 import Circat.Classes
+import Circat.Rep
 import Circat.Pair
 import Circat.RTree
 
@@ -121,7 +122,6 @@ data Buses :: * -> * where
   -- | Isomorphic form. Note: b must not have one of the standard forms.
   -- If it does, we'll get a run-time error when consuming.
   IsoB  :: Buses (Rep a) -> Buses a
---   IsoB   :: Typeable a => Buses a -> Buses b
 
 deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
@@ -178,29 +178,12 @@ unFunB (IsoB _) = isoErr "unFunB"
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
 
-#if 0
+abstB :: Buses (Rep a) -> Buses a
+abstB = IsoB
 
--- | Smart constructor. Use instead of 'IsoB'. Maintains invariant that we never
--- have composed inverse IsoB constructors, so functions like unPairB don't need
--- to check for them.
-isoB :: (Typeable a, Typeable b) => Buses a -> Buses b
-isoB (IsoB (cast -> Just b)) = b
-isoB a                       = IsoB a
-
-#else
-
--- Temporary synonym
-isoB :: Buses (Rep a) -> Buses a
-isoB = absB
-
-absB :: Buses (Rep a) -> Buses a
-absB = IsoB
-
-repB :: Buses a -> Buses (Rep a)
-repB (IsoB a) = a
-repB b = error ("repB: non-IsoB: " ++ show b)
-
-#endif
+reprB :: Buses a -> Buses (Rep a)
+reprB (IsoB a) = a
+reprB b = error ("repB: non-IsoB: " ++ show b)
 
 
 {--------------------------------------------------------------------
@@ -253,15 +236,9 @@ type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
 -- | Circuit category
 newtype a :> b = C { unC :: a :+> b }
 
-#if 0
-instance CoerceCat (:>) where
-  coerceC = C (arr isoB)
-#else
 instance RepCat (:>) where
-  repC = C (arr repB)
-  absC = C (arr absB)
-#endif
-
+  reprC = C (arr reprB)
+  abstC = C (arr abstB)
 
 mkCK :: BCirc a b -> (a :> b)
 mkCK = C . Kleisli
@@ -1031,25 +1008,12 @@ instance DistribCat (:>) where
     Other GenBuses instances
 --------------------------------------------------------------------}
 
--- I don't know where to put the following instances:
+#define IsoGen(abs) \
+instance GenBuses (Rep (abs)) => GenBuses (abs) where \
+  genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
 
-#if 0
-
-#define IsoGen(abs,rep) \
-instance (Typeable (abs), Typeable (rep), GenBuses (rep)) => GenBuses (abs) where \
-  genBuses = isoB <$> (genBuses :: CircuitM (Buses (rep)))
-
-#else
-
-#define IsoGen(abs,rep) \
-type instance Rep(abs) = rep ; \
-instance (Typeable (abs), Typeable (rep), GenBuses (rep)) => GenBuses (abs) where \
-  genBuses = absB <$> (genBuses :: CircuitM (Buses (rep)))
-
-#endif
-
-IsoGen(Pair a, a:* a)
-IsoGen(Vec Z a, ())
-IsoGen(Vec (S n) a, a :* Vec n a)
-IsoGen(Tree Z a, a)
-IsoGen(Tree (S n) a, Pair (Tree n a))
+IsoGen(Pair a)
+IsoGen(Vec Z a)
+IsoGen(Vec (S n) a)
+IsoGen(Tree Z a)
+IsoGen(Tree (S n) a)
