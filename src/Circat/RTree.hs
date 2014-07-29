@@ -63,7 +63,7 @@ instance HasRep (Tree Z a) where
   repr (L a) = a
   abst a = L a
 
-#if 0
+#if 1
 type instance Rep (Tree (S n) a) = Pair (Tree n a)
 instance HasRep (Tree (S n) a) where
   repr (B ts) = ts
