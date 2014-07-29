@@ -123,6 +123,9 @@ data Buses :: * -> * where
   -- If it does, we'll get a run-time error when consuming.
   IsoB  :: Buses (Rep a) -> Buses a
 
+-- -- Alternatively,
+-- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
+
 deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
 
@@ -134,7 +137,7 @@ instance Show (Buses a) where
   show (IntB b)    = show b
   show (PairB a b) = "("++show a++","++show b++")"
   show (FunB _)    = "<function>"
-  show (IsoB b) = "IsoB ("++show b++")"
+  show (IsoB b)    = "IsoB ("++show b++")"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -185,6 +188,10 @@ reprB :: Buses a -> Buses (Rep a)
 reprB (IsoB a) = a
 reprB b = error ("repB: non-IsoB: " ++ show b)
 
+-- Alternatively,
+-- 
+--   abstB :: Rep a ~ a' => Buses a' -> Buses a
+--   reprB :: Rep a ~ a' => Buses a -> Buses a'
 
 {--------------------------------------------------------------------
     The circuit monad
