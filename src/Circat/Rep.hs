@@ -19,7 +19,7 @@
 
 module Circat.Rep (Rep,HasRep(..)) where
 
-import Data.Monoid (Sum(..))
+import Data.Monoid
 -- TODO: more
 
 import Circat.Misc ((:*))
@@ -50,7 +50,14 @@ instance HasRep (Vec (S n) a) where
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
 
-type instance Rep (Sum a) = a
-instance HasRep (Sum a) where
-  repr (Sum a) = a
-  abst a = Sum a
+#define WrapRep(abstT,reprT,con) \
+type instance Rep (abstT) = reprT; \
+instance HasRep (abstT) where { repr (con a) = a ; abst a = con a }
+
+WrapRep(Sum a,a,Sum)
+WrapRep(Product a,a,Product)
+WrapRep(All,Bool,All)
+WrapRep(Any,Bool,Any)
+
+-- TODO: Generate these dictionaries on the fly during compilation, so we won't
+-- have to list them here.
