@@ -444,6 +444,7 @@ outGWith (outType,res) name circ =
      writeFile (outFile "dot") (toG circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
+     printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
