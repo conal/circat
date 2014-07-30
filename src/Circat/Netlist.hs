@@ -50,6 +50,7 @@ outV :: GenBuses a => String -> (a :> b) -> IO ()
 outV cirName cir = 
   do createDirectoryIfMissing False outDir
      writeFile filePath (toV cirName cir)
+     putStrLn ("Wrote " ++ filePath)
   where
     outDir   = "out"
     filePath = outDir ++ "/" ++ cirName ++ ".v.txt"
