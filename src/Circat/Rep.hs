@@ -24,10 +24,17 @@ import Data.Monoid
 
 import Circat.Misc ((:*))
 import TypeUnary.TyNat (Z,S)
+import TypeUnary.Nat (Nat(..),IsNat(..))
 import TypeUnary.Vec (Vec(..))
 
 type family Rep a
 
+-- | Convert to and from standard representations. Used for transforming case
+-- expression scrutinees and constructor applications. The 'repr' method should
+-- convert to a standard representation (unit, products, sums), or closer to
+-- such a representation, via another type with a 'HasRep' instance. The 'abst'
+-- method should reveal a constructor so that we can perform the
+-- case-of-known-constructor transformation.
 class HasRep a where
   repr :: Rep a ~ a' => a -> a'
   abst :: Rep a ~ a' => a' -> a
@@ -61,3 +68,15 @@ WrapRep(Any,Bool,Any)
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
+
+type instance Rep (Nat Z) = ()
+instance HasRep (Nat Z) where
+  repr Zero = ()
+  abst () = Zero
+
+type instance Rep (Nat (S n)) = () :* Nat n
+instance IsNat n => HasRep (Nat (S n)) where
+  repr (Succ n) = ((),n)
+  abst ((),n) = Succ n
+-- The IsNat constraint comes from Succ.
+-- TODO: See about eliminating that constructor constraint.
