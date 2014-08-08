@@ -149,15 +149,15 @@ instance GenBuses Int  where genBuses = IntB  <$> newBus 32
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses = liftA2 PairB genBuses genBuses
 
-flattenB :: Buses a -> [Bus]
-flattenB = flip flat []
+flattenB :: String -> Buses a -> [Bus]
+flattenB name = flip flat []
  where
    flat :: Buses a -> Unop [Bus]
    flat UnitB       = id
    flat (BoolB b)   = (b :)
    flat (IntB b)    = (b :)
    flat (PairB a b) = flat a . flat b
-   flat (FunB _)    = error "flat: FunB unhandled"
+   flat (FunB _)    = error $ "flattenB: FunB unhandled in " ++ name
    flat (IsoB b)    = flat b
 
 isoErr :: String -> x
@@ -476,7 +476,12 @@ type Outputs = [Bus]
 type Comp' = (String,Inputs,Outputs)
 
 simpleComp :: Comp -> Comp'
-simpleComp (Comp prim a b) = (show prim, flattenB a, flattenB b)
+-- simpleComp (Comp prim a b) = (show prim, flattenB a, flattenB b)
+simpleComp (Comp prim a b) = (name, flat a, flat b)
+ where
+   name = show prim
+   flat :: forall t. Buses t -> [Bus]
+   flat = flattenB name
 
 data Dir = In | Out deriving Show
 type PortNum = Int
