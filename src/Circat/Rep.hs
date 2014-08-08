@@ -52,10 +52,25 @@ instance HasRep (Vec Z a) where
   repr ZVec = ()
   abst () = ZVec
 
+#if 0
 type instance Rep (Vec (S n) a) = a :* Vec n a
 instance HasRep (Vec (S n) a) where
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
+#else
+-- Trickier encoding, avoiding () base case when possible.
+type instance Rep (Vec (S Z) a) = a
+instance HasRep (Vec (S Z) a) where
+  repr (a :< ZVec) = a
+  repr (_ :< _) = error "repr on Vec (S Z) a: bogus case"
+  abst a = (a :< ZVec)
+
+type instance Rep (Vec (S (S n)) a) = a :* Vec (S n) a
+instance HasRep (Vec (S (S n)) a) where
+  repr (a :< as) = (a, as)
+  abst (a, as) = (a :< as)
+#endif
+
 
 #define WrapRep(abstT,reprT,con) \
 type instance Rep (abstT) = reprT; \
