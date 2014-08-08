@@ -134,6 +134,7 @@ moduleAssign p2w (_,("Out",ps,[])) =
      outPortName = portName "Out" ps
 
 -- HACK: Catch-all
+moduleAssign _ (_,("()",[],[])) = []
 moduleAssign p2w (_,(name,is,os)) = 
   [InstDecl name "inst" [] (port "i" is) (port "o" os)]
   where
