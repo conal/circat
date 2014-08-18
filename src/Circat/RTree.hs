@@ -26,11 +26,9 @@ module Circat.RTree (Tree(..),TreeCat(..)) where
 
 -- #define VecsAndTrees
 
--- TODO: explicit exports
+import Prelude hiding (id,(.),uncurry,zip)
 
-import Prelude hiding (id,(.))
-
-import Data.Monoid (Monoid)
+import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$),(<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
@@ -48,6 +46,7 @@ import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
 import Circat.Rep
+import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -137,7 +136,7 @@ instance (ClosedCat k, TerminalCat k, TreeCat k) => TreeCat (StateExp k s) where
 inL :: TreeCat k => (a `k` b) -> (Tree Z a `k` Tree Z b)
 inL = toL <~ unL
 
-inB :: (TreeCat k, IsNat m, IsNat n) =>
+inB :: TreeCat k =>
        (Pair (Tree m a) `k` Pair (Tree n b))
     -> (Tree (S m) a `k` Tree (S n) b)
 inB = toB <~ unB
@@ -145,7 +144,7 @@ inB = toB <~ unB
 inL2 :: TreeCat k => (a -> b `k` c) -> (Tree Z a -> Tree Z b `k` Tree Z c)
 inL2 = inL <~ unL
 
-inB2 :: (TreeCat k, IsNat m, IsNat n, IsNat o) =>
+inB2 :: TreeCat k =>
         (Pair (Tree m a) -> Pair (Tree n b) `k` Pair (Tree o c))
      -> (Tree (S m) a -> Tree (S n) b `k` Tree (S o) c)
 inB2 = inB <~ unB
@@ -223,6 +222,23 @@ joinT :: Tree n (Tree n a) -> Tree n a
 joinT (L t)  = t
 joinT (B ts) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ ts
 
+joinT' :: Tree n (Tree n a) -> Tree n a
+joinT' (L t)  = t
+joinT' (B (u :# v)) = B (joinT' ((fstP . unB) <$> u) :# joinT' ((sndP . unB) <$> v))
+
+#if 0
+
+-- Type derivation:
+B ts :: Tree (S n) (Tree (S n) a)
+ts :: Pair (Tree n (Tree (S n) a))
+(fmap.fmap) unB ts :: Pair (Tree n (Pair (Tree n a)))
+sequenceA <$> ((fmap.fmap) unB ts) :: Pair (Pair (Tree n (Tree n a)))
+joinT' (sequenceA <$> ((fmap.fmap) unB ts)) :: Pair (Tree n (Tree n a))
+joinT' <$> joinT' (sequenceA <$> ((fmap.fmap) unB ts)) :: Pair (Tree n a)
+B (joinT' <$> joinT' (sequenceA <$> ((fmap.fmap) unB ts))) :: Tree (S n) a
+
+#endif
+
 #else
 
 instance IsNat n => Foldable (Tree n) where
@@ -242,7 +258,6 @@ foldMap' :: Monoid o => Nat m -> (a -> o) -> Tree m a -> o
 foldMap' Zero     f = f . unL
 foldMap' (Succ m) f = foldMap (foldMap' m f) . unB
 {-# INLINE foldMap' #-}
-
 
 instance IsNat n => Traversable (Tree n) where
   traverse :: forall a f b. Applicative f => (a -> f b) -> Tree n a -> f (Tree n b)
@@ -269,6 +284,9 @@ joinT (Succ m) = B . fmap (joinT m) . join . fmap sequenceA . (fmap . fmap) unB 
 #endif
 
 {-# INLINE joinT #-}
+
+-- TODO: Revisit joinT. Make sure it suits Tree as trie, matching the function
+-- (reader) monad. Should be derivable.
 
 -- TODO: fmap with IsNat
 
@@ -301,6 +319,42 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -- . (fmap . fmap) unB
 
 -}
+
+instance Zippable (Tree Z) where
+  L a `zip` L b = L (a,b)
+
+instance Zippable (Tree n) => Zippable (Tree (S n)) where
+  B u `zip` B v = B (uncurry zip <$> (u `zip` v))
+
+#if 1
+instance LScan (Tree Z) where
+  lscan (L a) = (L mempty, a)
+
+instance LScan (Tree n) => LScan (Tree (S n)) where
+  lscan (B ts)  = first B (lscanGF ts)
+#elif 1
+instance LScan (Tree Z) where lscan = lscan' nat
+
+lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
+lscan' Zero     = \ (L a)  -> (L mempty, a)
+lscan' (Succ m) = \ (B ts) -> first B (lscanGF' lscan (lscan' m) ts)
+{-# INLINE lscan' #-}
+#else
+instance LScan (Tree Z) where lscan = lscan' nat
+
+lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
+lscan' Zero     = \ (L a)  -> (L mempty, a)
+lscan' (Succ m) = lscanS m
+
+## working here ##
+
+lscanS :: Monoid a => Nat n -> Tree (S n) a -> (Tree (S n) a, a)
+-- lscanS m = \ (B ts) -> first B (lscanGF' lscan (lscan' m) ts)
+
+lscanS Zero (B (L a :# L b)) = (B 
+
+{-# INLINE lscanS #-}
+#endif
 
 #ifdef VecsAndTrees
 
