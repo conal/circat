@@ -47,6 +47,16 @@ class HasRep a where
 -- Note: Using Rep a ~ a' rather than the reverse to make the calls a little to
 -- construct (using normaliseType and no mkSymCo).
 
+type instance Rep (a,b,c) = ((a,b),c)
+instance HasRep (a,b,c) where
+  repr (a,b,c) = ((a,b),c)
+  abst ((a,b),c) = (a,b,c)
+
+type instance Rep (a,b,c,d) = ((a,b),(c,d))
+instance HasRep (a,b,c,d) where
+  repr (a,b,c,d) = ((a,b),(c,d))
+  abst ((a,b),(c,d)) = (a,b,c,d)
+
 type instance Rep (Vec Z a) = ()
 instance HasRep (Vec Z a) where
   repr ZVec = ()
@@ -80,6 +90,7 @@ WrapRep(Sum a,a,Sum)
 WrapRep(Product a,a,Product)
 WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)
+WrapRep(Endo a,a->a,Endo)
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
