@@ -49,7 +49,7 @@ module Circat.Circuit
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 -- import qualified Prelude as P
 
-import Data.Monoid (mempty,(<>))
+import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..))
@@ -82,7 +82,8 @@ import Circat.Category
 import Circat.Classes
 import Circat.Rep
 import Circat.Pair
-import Circat.RTree
+import qualified Circat.RTree as RT
+import qualified Circat.LTree as LT
 
 {--------------------------------------------------------------------
     Buses
@@ -523,7 +524,7 @@ recordDots comps = nodes ++ edges
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
             label 1 = ""
-            label n = printf "[label=\"%d\"]" n
+            label n = printf "[label=\"%d\",fontsize=10]" n
    port :: Dir -> (Width,CompNum,PortNum) -> String
    -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
@@ -1025,8 +1026,15 @@ instance DistribCat (:>) where
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
 
+IsoGen ((a,b,c))
+IsoGen ((a,b,c,d))
 IsoGen(Pair a)
 IsoGen(Vec Z a)
 IsoGen(Vec (S n) a)
-IsoGen(Tree Z a)
-IsoGen(Tree (S n) a)
+IsoGen(RT.Tree Z a)
+IsoGen(RT.Tree (S n) a)
+IsoGen(LT.Tree Z a)
+IsoGen(LT.Tree (S n) a)
+
+-- Newtypes. Alternatively, don't use them in external interfaces.
+IsoGen(Sum Int)
