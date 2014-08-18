@@ -38,6 +38,8 @@ Library
                     Circat.Rep
                     Circat.Pair
                     Circat.RTree
+                    Circat.LTree
+                    Circat.Scan
                     Circat.Circuit
                     Circat.Netlist
   Other-Modules:
