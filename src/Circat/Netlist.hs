@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts #-}
-{-# LANGUAGE ViewPatterns, ParallelListComp #-}
+{-# LANGUAGE ViewPatterns, ParallelListComp, ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -119,13 +119,16 @@ moduleAssign p2w c@(_,(name,[i],[o])) =
 
 -- constant sources
 moduleAssign p2w (_,(name,[],[o])) = 
-  [NetAssign (busName p2w o) (ExprLit Nothing (ExprBit bit))]
+  [NetAssign (busName p2w o) (ExprLit Nothing val)]
   where 
-    bit = case name of 
-            "True"  -> T
-            "False" -> F
-            _       -> error $ "Circat.Netlist.moduleAssign: Literal "
-                                ++ name ++ " not recognized."
+    val = case name of 
+            "True"  -> ExprBit T
+            "False" -> ExprBit F
+            _       ->
+              case reads name of
+                [(n :: Int,"")] -> ExprNum (fromIntegral n)
+                _ -> error $ "Circat.Netlist.moduleAssign: Literal "
+                              ++ name ++ " not recognized."
 
 -- output assignments
 moduleAssign p2w (_,("Out",ps,[])) =
