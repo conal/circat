@@ -21,11 +21,12 @@
 module Circat.Pair
   ( Pair(..),PairCat(..),inPair
   , curryP, uncurryP, toP, fromP
+  , fstP, sndP
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry)
 
-import Data.Monoid (Monoid(..))
+import Data.Monoid (Monoid(..),(<>))
 import Control.Arrow (arr,Kleisli)
 import Data.Functor ((<$>))
 import Data.Foldable (Foldable(..))
@@ -40,6 +41,7 @@ import Data.Data (Data)
 import Circat.Misc ((:*),(<~))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
+import Circat.Scan
 
 {--------------------------------------------------------------------
     Pair representation and basic instances
@@ -75,6 +77,9 @@ instance Monad Pair where
 joinP :: Pair (Pair a) -> Pair a
 joinP ((a :# _) :# (_ :# d)) = a :# d
 
+instance Zippable Pair where
+  (a :# b) `zip` (a' :# b') = (a,a') :# (b,b')
+
 -- so
 --
 --   (a :# b) >>= f = (c :# d)
@@ -85,6 +90,9 @@ joinP ((a :# _) :# (_ :# d)) = a :# d
 instance Traversable Pair where
   traverse h (fa :# fb) = liftA2 (:#) (h fa) (h fb)
   -- sequenceA (fa :# fb) = liftA2 (:#) fa fb
+
+instance LScan Pair where
+  lscan (a :# b) = (mempty :# a, a <> b)
 
 curryP :: (Pair a -> b) -> (a -> a -> b)
 curryP g = curry (g . toP)
@@ -97,6 +105,12 @@ toP (a,b) = a :# b
 
 fromP :: Pair a -> (a,a)
 fromP (a :# b) = (a,b)
+
+fstP :: Pair a -> a
+fstP (a :# _) = a
+
+sndP :: Pair a -> a
+sndP (_ :# b) = b
 
 -- TODO: Remove PairCat
 
