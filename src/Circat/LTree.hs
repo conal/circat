@@ -22,9 +22,7 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
--- #define DefTreeCat
-
-module Circat.LTree (Tree(..) {-,TreeCat(..)-}) where
+module Circat.LTree (Tree(..)) where
 
 import Prelude hiding (id,(.),uncurry,zip)
 
@@ -90,69 +88,6 @@ instance Ord a => Ord (Tree n a) where
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B ts) = showsApp1 "B" p ts
-
-#ifdef DefTreeCat
--- TODO: Remove TreeCat
-
-class PairCat k => TreeCat k where
-  toL :: a `k` Tree Z a
-  unL :: Tree Z a `k` a
-  toB :: Tree n (Pair a) `k` Tree (S n) a
-  unB :: Tree (S n) a `k` Tree n (Pair a)
-
--- toB' :: (TreeCat k) => (Tree n a :* Tree n a) `k` Tree (S n) a
--- toB' = toB . toPair
-
--- unB' :: (TreeCat k, IsNat n) => Tree (S n) a `k` (Tree n a :* Tree n a)
--- unB' = unPair . unB
-
-instance TreeCat (->) where
-  toL a     = L a
-  unL (L a) = a
-  toB p     = (B p)
-  unB (B p) = p
-
-instance Monad m => TreeCat (Kleisli m) where
-  toL = arr toL
-  unL = arr unL
-  toB = arr toB
-  unB = arr unB
-
-#if 0
-instance (TerminalCat k, TreeCat k) => TreeCat (StateFun k s) where
-  toL = pureState toL
-  unL = pureState unL
-  toB = pureState toB
-  unB = pureState unB
-
-instance (ClosedCat k, TerminalCat k, TreeCat k) => TreeCat (StateExp k s) where
-  toL = pureState toL
-  unL = pureState unL
-  toB = pureState toB
-  unB = pureState unB
-#endif
-
-inL :: TreeCat k => (a `k` b) -> (Tree Z a `k` Tree Z b)
-inL = toL <~ unL
-
-inB :: TreeCat k =>
-       (Tree m (Pair a) `k` Tree n (Pair b))
-    -> (Tree (S m) a `k` Tree (S n) b)
-inB = toB <~ unB
-
-inL2 :: TreeCat k => (a -> b `k` c) -> (Tree Z a -> Tree Z b `k` Tree Z c)
-inL2 = inL <~ unL
-
-inB2 :: TreeCat k =>
-        (Tree m (Pair a) -> Tree n (Pair b) `k` Tree o (Pair c))
-     -> (Tree (S m) a -> Tree (S n) b `k` Tree (S o) c)
-inB2 = inB <~ unB
-
--- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
--- etc. What would become of TreeCat and VecCat?
-
-#else
-
 toL :: a -> Tree Z a
 toL a     = L a
 unL :: Tree Z a -> a
@@ -177,22 +112,10 @@ inB2 :: (Tree m (Pair a) -> Tree n (Pair b) -> Tree o (Pair c))
      -> (Tree (S m) a -> Tree (S n) b -> Tree (S o) c)
 inB2 = inB <~ unB
 
-#endif
-
--- instance IsNat n => Functor (Tree n) where
---   fmap = fmap' nat
---    where
---      fmap' :: Nat m -> (a -> b) -> (Tree m a -> Tree m b)
---      fmap' Zero     = inL
---      fmap' (Succ n) = inB . fmap . fmap' n
---   {-# INLINE fmap #-}
-
 instance Functor (Tree n) where
   fmap f (L a ) = L (f a)
   fmap f (B ts) = B ((fmap.fmap) f ts)
   {-# INLINE fmap #-}
-
--- TODO: Categorical generalization (easy)
 
 instance IsNat n => Applicative (Tree n) where
   pure = pure' nat
@@ -398,113 +321,6 @@ lscan' Zero     = \ (L a)  -> (L mempty, a)
 lscan' (Succ m) = \ (B ts) -> first B (lscanGF' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
 #endif
-
-#ifdef DefTreeCat
-
-instance CTraversable (Tree Z) where
-  type CTraversableKon (Tree Z) k = TreeCat k
-  traverseC = inL
-
-instance (IsNat n, CTraversable (Tree n)) => CTraversable (Tree (S n)) where
-  type CTraversableKon (Tree (S n)) k =
-    (TreeCat k, CTraversableKon (Tree n) k)
-  traverseC = inB . traverseC . traverseC
-
-#endif
-
-{--------------------------------------------------------------------
-    Addition
---------------------------------------------------------------------}
-
-#if 0
-
-instance (ConstCat k, AddCat k, TreeCat k, IsNat n)
-      => AddsCat k (Tree n) where
-  adds = addTN nat
-
-type AddTP n = forall k. (ConstCat k, AddCat k, TreeCat k) =>
-               Adds k (Tree n)
-
-addTN :: Nat n -> AddTP n
-addTN Zero     = first toL . fullAdd . second unL
-addTN (Succ n) =
-    first toB' . lassocP . second (addTN n)
-  . inLassocP (first (addTN n)) . second unB'
-
--- swapP because I want to consider the left as LSB.
-
-{- Derivation:
-
--- C carry, A addend pair, R result
-
-second unB'      :: C * As (S n) `k` C * (As n * As n)
-lassocP          ::              `k` (C * As n) * As n
-first (addTN n)  ::              `k` (Rs n * C) * As n
-rassocP          ::              `k` Rs n * (C * As n)
-second (addTN n) ::              `k` Rs n * (Rs n * C)
-lassocP          ::              `k` (Rs n * Rs n) * C
-first toB'       ::              `k` Rs (S n) * C
-
--}
-
-#endif
-
-{--------------------------------------------------------------------
-    Miscellany. May remove later, or might prove useful.
---------------------------------------------------------------------}
-
-#if 0
-tree :: (a -> b)
-     -> (forall m. (IsNat m, S m ~ n) => Pair (Tree m a) -> b)
-     -> (Tree n a -> b)
-tree l _ (L a) = l a
-tree _ b (B u) = b u
-
--- Fold for trees. How does it relate to the Foldable instance? We can easily
--- define fold or foldMap via foldT. What about conversely?
-foldT :: forall a b n. (a -> b) -> (Pair b -> b) -> (Tree n a -> b)
-foldT l b = foldT'
- where
-   foldT' :: forall m. Tree m a -> b
-   foldT' = tree l (b . fmap foldT')
-{-# INLINE foldT #-}
-#endif
-
-#if 0
--- Fold for trees. How does it relate to the Foldable instance? We can easily
--- define fold or foldMap via foldT. What about conversely?
-foldT' :: forall a b n. (a -> b) -> (Pair b -> b) -> (Tree n a -> b)
-foldT' l _ (L a)  = l a
-foldT' l b (B ts) = b (fmap (foldT' l b) ts)
-{-# INLINE foldT' #-}
-
-foldT :: forall a b n. (a -> b) -> (b -> b -> b) -> (Tree n a -> b)
-foldT l b = foldT' l (uncurryP b)
-#endif
-
--- TODO: Eliminate foldT in favor of plain old fold or foldMap and helpers like
--- sum and product from Data.Foldable.
-
-#if 0
-retree :: (a -> b)
-       -> (forall m. (IsNat m, S m ~ n) => Pair (Tree m a) -> Pair (Tree m b))
-       -> (Tree n a -> Tree n b)
-retree l _ (L a) = (L . l) a
-retree _ b (B u) = (B . b) u
-
--- I'd rather say
---   retree l b = tree (L . l) (B . b)
--- but I get
---   Couldn't match type `S m' with `Z'
-
--- | Reverse a tree. Transform away later
-reverseT :: Unop (Tree n a)
-reverseT = retree id (inPair swapP . fmap reverseT)
-
-#endif
-
--- Or
--- reverseT = retree id (fmap reverseT . swapP)
 
 fromList :: IsNat n => [a] -> Tree n a
 fromList = fromList' nat
