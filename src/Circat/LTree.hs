@@ -22,9 +22,9 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.LTree (Tree(..),TreeCat(..)) where
+-- #define DefTreeCat
 
--- #define VecsAndTrees
+module Circat.LTree (Tree(..) {-,TreeCat(..)-}) where
 
 import Prelude hiding (id,(.),uncurry,zip)
 
@@ -91,6 +91,7 @@ instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B ts) = showsApp1 "B" p ts
 
+#ifdef DefTreeCat
 -- TODO: Remove TreeCat
 
 class PairCat k => TreeCat k where
@@ -149,6 +150,34 @@ inB2 = inB <~ unB
 
 -- TODO: Maybe resurrect my category-generalized Newtype and use in place of inL
 -- etc. What would become of TreeCat and VecCat?
+
+#else
+
+toL :: a -> Tree Z a
+toL a     = L a
+unL :: Tree Z a -> a
+unL (L a) = a
+
+toB :: Tree n (Pair a) -> Tree (S n) a
+toB p     = (B p)
+unB :: Tree (S n) a -> Tree n (Pair a)
+unB (B p) = p
+
+inL :: (a -> b) -> (Tree Z a -> Tree Z b)
+inL = toL <~ unL
+
+inB :: (Tree m (Pair a) -> Tree n (Pair b))
+    -> (Tree (S m) a -> Tree (S n) b)
+inB = toB <~ unB
+
+inL2 :: (a -> b -> c) -> (Tree Z a -> Tree Z b -> Tree Z c)
+inL2 = inL <~ unL
+
+inB2 :: (Tree m (Pair a) -> Tree n (Pair b) -> Tree o (Pair c))
+     -> (Tree (S m) a -> Tree (S n) b -> Tree (S o) c)
+inB2 = inB <~ unB
+
+#endif
 
 -- instance IsNat n => Functor (Tree n) where
 --   fmap = fmap' nat
@@ -370,7 +399,7 @@ lscan' (Succ m) = \ (B ts) -> first B (lscanGF' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
 #endif
 
-#ifdef VecsAndTrees
+#ifdef DefTreeCat
 
 instance CTraversable (Tree Z) where
   type CTraversableKon (Tree Z) k = TreeCat k
