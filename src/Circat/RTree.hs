@@ -22,7 +22,7 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.RTree (Tree(..) {-,TreeCat(..) -}) where
+module Circat.RTree (Tree(..)) where
 
 import Prelude hiding (id,(.),uncurry,zip)
 
@@ -82,10 +82,16 @@ cant str = error $ str ++ ": GHC doesn't know this case can't happen."
 cantT :: String -> a
 cantT str = cant (str ++ " on Tree")
 
+-- instance Ord a => Ord (Tree n a) where
+--   L a  `compare` L b  = a  `compare` b
+--   B us `compare` B vs = us `compare` vs
+--   _    `compare` _   = cantT "compare"
+
 instance Ord a => Ord (Tree n a) where
-  L a  `compare` L b  = a  `compare` b
-  B us `compare` B vs = us `compare` vs
-  _    `compare` _   = cantT "compare"
+  compare (L a ) = \ (L b)  -> a  `compare` b 
+  compare (B us) = \ (B vs) -> us `compare` vs
+
+-- TODO: Maybe use IsNat for Ord
 
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
@@ -132,7 +138,9 @@ instance Functor (Tree n) where
 
 instance IsNat n => Applicative (Tree n) where
   pure a = a <$ units nat
-  (<*>)  = ap' nat
+  -- (<*>)  = ap' nat
+  (<*>)  = ap''
+  -- (<*>)  = ap'''
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
@@ -158,6 +166,16 @@ ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
 ap' Zero     = inL2 ($)
 ap' (Succ n) = inB2 (liftA2 (ap' n))
 {-# INLINE ap' #-}
+
+ap'' :: Tree m (a -> b) -> Tree m a -> Tree m b
+ap'' (L f ) = inL (\ x -> f x)
+ap'' (B fs) = inB (\ xs -> liftA2 ap'' fs xs)
+{-# INLINE ap'' #-}
+
+ap''' :: Tree m (a -> b) -> Tree m a -> Tree m b
+ap''' (L f ) = inL f
+ap''' (B fs) = inB (liftA2 ap''' fs)
+{-# INLINE ap''' #-}
 
 units :: Nat n -> Tree n ()
 units Zero     = L ()
