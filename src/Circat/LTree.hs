@@ -120,7 +120,9 @@ instance Functor (Tree n) where
 instance IsNat n => Applicative (Tree n) where
   pure = pure' nat
   -- (<*>)  = ap' nat
-  (<*>)  = liftA2' nat ($)
+  -- (<*>)  = liftA2' nat ($)
+  (<*>)  = liftA2'' ($)
+  -- (<*>)  = liftA2''' ($)
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
@@ -146,6 +148,16 @@ liftA2' :: Nat m -> (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
 liftA2' Zero     f = inL2 f
 liftA2' (Succ n) f = inB2 (liftA2' n (liftA2 f))
 {-# INLINE liftA2' #-}
+
+-- liftA2'' :: (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
+-- liftA2'' f (L a ) = \ (L b ) -> L (f a b)
+-- liftA2'' f (B as) = \ (B bs) -> B (liftA2'' (liftA2 f) as bs)
+-- {-# INLINE liftA2'' #-}
+
+liftA2''' :: (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
+liftA2''' f (L a ) = inL (f a)
+liftA2''' f (B as) = inB (liftA2''' (liftA2 f) as)
+{-# INLINE liftA2''' #-}
 
 -- ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
 -- ap' Zero     = inL2 ($)
