@@ -183,15 +183,32 @@ units (Succ n) = B (pure (units n))
 {-# INLINE units #-}
 
 #if 1
+
 instance Foldable (Tree n) where
   foldMap f (L a ) = f a
   foldMap f (B ts) = (foldMap.foldMap) f ts
   {-# INLINE foldMap #-}
 
+-- instance Foldable (Tree Z) where
+--   foldMap f (L a ) = f a
+--   {-# INLINE foldMap #-}
+
+-- instance Foldable (Tree n) => Foldable (Tree (S n)) where
+--   foldMap f (B ts) = (foldMap.foldMap) f ts
+--   {-# INLINE foldMap #-}
+
 instance Traversable (Tree n) where
   traverse f (L a ) = L <$> f a
   traverse f (B ts) = B <$> (traverse.traverse) f ts
   {-# INLINE traverse #-}
+
+-- instance Traversable (Tree Z) where
+--   traverse f (L a ) = L <$> f a
+--   {-# INLINE traverse #-}
+
+-- instance Traversable (Tree n) => Traversable (Tree (S n)) where
+--   traverse f (B ts) = B <$> (traverse.traverse) f ts
+--   {-# INLINE traverse #-}
 
 instance IsNat n => Monad (Tree n) where
   return = pure
