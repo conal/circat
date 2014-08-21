@@ -73,12 +73,18 @@ instance Traversable (T u) where
 
 #if 0
 pureT :: forall r a. HasSingT r => a -> T r a
+#if 0
 pureT a = go
  where
    go :: forall p. HasSingT p => T p a
    go = case (singT :: ST p) of
           SL -> L a
           SB -> B go go
+#else
+pureT a = case (singT :: ST r) of
+            SL -> L a
+            SB -> B (pureT a) (pureT a)
+#endif
 
 apT :: forall r a b. HasSingT r => T r (a -> b) -> T r a -> T r b
 apT = case (singT :: ST r) of
@@ -112,7 +118,24 @@ instance HasSingT r => Applicative (T r) where
             SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
 
 -- TODO: Define inL and inB, and rework fmap and apT
+
+-- Experiment
+
+#if 0
+apT :: T r (a -> b) -> T r a -> T r b
+L f     `apT` L x     = L (f x)
+B fs gs `apT` B xs ys = B (fs `apT` xs) (gs `apT` ys)
+#else
+apT :: T r (a -> b) -> T r a -> T r b
+apT (L f)     = \ (L x)     -> L (f x)
+apT (B fs gs) = \ (B xs ys) -> B (fs `apT` xs) (gs `apT` ys)
 #endif
+
+#endif
+
+instance HasSingT r => Monad (T r) where
+  return = pure
+  t >>= f = joinT (f <$> t)
 
 joinT :: forall r a. HasSingT r => T r (T r a) -> T r a
 joinT = case (singT :: ST r) of
@@ -127,12 +150,14 @@ left  <$> u :: T p (T p a)
 right <$> v :: T q (T q a)
 joinT (left  <$> u) :: T p
 joinT (right <$> v) :: T q
-B (joinT (left  <$> u)) (joinT (right <$> v)) :: T (BU p q)
+B (joinT (left <$> u)) (joinT (right <$> v)) :: T (BU p q)
 #endif
 
-instance HasSingT r => Monad (T r) where
-  return = pure
-  t >>= f = joinT (f <$> t)
+-- Experiment
+joinT' :: T r (T r a) -> T r a
+joinT' (L t)   = t
+joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
+
 
 {--------------------------------------------------------------------
     Examples
