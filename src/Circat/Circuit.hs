@@ -35,16 +35,13 @@
 -- #define ChurchSums
 
 module Circat.Circuit 
-  {-
   ( CircuitM, (:>)
-  , PinId, Bus(..), BBus(..), unBBus
-  , IsSourceP, IsSourceP2, namedC, constS, constC
+  , PinId, Bus(..), GenBuses
+  , namedC, constS, constC
   -- , (|||*), fromBool, toBool
   , Comp', CompNum, Width, toG, outGWith, outG
   , simpleComp, runC, tagged
-  ) 
-   -}
-    where
+  ) where
 
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 -- import qualified Prelude as P
