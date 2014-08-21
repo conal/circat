@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures, ScopedTypeVariables #-}
 -- {-# LANGUAGE InstanceSigs #-} -- experiment
+-- {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -29,6 +30,8 @@ import Data.Traversable (Traversable(..))
 
 import Circat.Show (showsApp1,showsApp2)
 
+-- import Data.Constraint (Dict(..)) -- experiment
+
 -- data Tree a = L a | B (Tree a) (Tree a)
 
 -- | Tree shape data kind, simplified from non-indexed Tree ()
@@ -40,7 +43,7 @@ data ST :: TU -> * where
   SL :: ST LU
   SB :: (HasSingT p, HasSingT q) => ST (BU p q)
 
-class HasSingT x where singT :: ST x
+class HasSingT p where singT :: ST p
 
 instance HasSingT LU where singT = SL
 instance (HasSingT p, HasSingT q) => HasSingT (BU p q) where singT = SB
@@ -54,6 +57,11 @@ left  (B u _) = u
 
 right :: T (BU p q) a -> T q a
 right (B _ v) = v
+
+-- -- | Prove that a tree has a shape. Warning: expensive.
+-- tShape :: T p a -> Dict (HasSingT p)
+-- tShape (L _)                                 = Dict
+-- tShape (B (tShape -> Dict) (tShape -> Dict)) = Dict
 
 instance Show a => Show (T p a) where
   showsPrec p (L a)   = showsApp1 "L" p a
@@ -71,67 +79,17 @@ instance Traversable (T u) where
   traverse f (L a)   = L <$> f a
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
 
-#if 0
-pureT :: forall r a. HasSingT r => a -> T r a
-#if 0
-pureT a = go
- where
-   go :: forall p. HasSingT p => T p a
-   go = case (singT :: ST p) of
-          SL -> L a
-          SB -> B go go
-#else
-pureT a = case (singT :: ST r) of
-            SL -> L a
-            SB -> B (pureT a) (pureT a)
-#endif
-
-apT :: forall r a b. HasSingT r => T r (a -> b) -> T r a -> T r b
-apT = case (singT :: ST r) of
-        SL -> \ (L f)     (L x)     -> L (f x)
-        SB -> \ (B fs gs) (B xs ys) -> B (apT fs xs) (apT gs ys)
-
--- TODO: Define inL and inB, and rework fmap and apT
-
 instance HasSingT r => Applicative (T r) where
-  pure  = pureT
-  (<*>) = apT
-#else
-instance HasSingT r => Applicative (T r) where
-#if 0
-  pure :: forall a. a -> T r a
-  pure a = go
-   where
-     go :: forall p. HasSingT p => T p a
-     go = case (singT :: ST p) of
-            SL -> L a
-            SB -> B go go
-#else
   -- pure :: forall a. a -> T r a
   pure a = case (singT :: ST r) of
              SL -> L a
              SB -> B (pure a) (pure a)
-#endif
   -- (<*>) :: forall a b. T r (a -> b) -> T r a -> T r b
   (<*>) = case (singT :: ST r) of
             SL -> \ (L f)     (L x)     -> L (f x)
             SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
 
 -- TODO: Define inL and inB, and rework fmap and apT
-
--- Experiment
-
-#if 0
-apT :: T r (a -> b) -> T r a -> T r b
-L f     `apT` L x     = L (f x)
-B fs gs `apT` B xs ys = B (fs `apT` xs) (gs `apT` ys)
-#else
-apT :: T r (a -> b) -> T r a -> T r b
-apT (L f)     = \ (L x)     -> L (f x)
-apT (B fs gs) = \ (B xs ys) -> B (fs `apT` xs) (gs `apT` ys)
-#endif
-
-#endif
 
 instance HasSingT r => Monad (T r) where
   return = pure
@@ -153,10 +111,23 @@ joinT (right <$> v) :: T q
 B (joinT (left <$> u)) (joinT (right <$> v)) :: T (BU p q)
 #endif
 
--- Experiment
+#if 0
+-- Experiment in dropping the HasSingT constraint.
+-- Sadly, I still need it for pure/return.
+
+apT :: T r (a -> b) -> T r a -> T r b
+L f     `apT` L x     = L (f x)
+B fs gs `apT` B xs ys = B (fs `apT` xs) (gs `apT` ys)
+
+-- GHC complains of non-exhaustive patterns. Alternatively,
+apT' :: T r (a -> b) -> T r a -> T r b
+apT' (L f)     = \ (L x)     -> L (f x)
+apT' (B fs gs) = \ (B xs ys) -> B (fs `apT'` xs) (gs `apT'` ys)
+
 joinT' :: T r (T r a) -> T r a
 joinT' (L t)   = t
 joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
+#endif
 
 
 {--------------------------------------------------------------------
