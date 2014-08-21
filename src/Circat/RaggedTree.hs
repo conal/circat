@@ -30,8 +30,6 @@ import Data.Traversable (Traversable(..))
 
 import Circat.Show (showsApp1,showsApp2)
 
--- import Data.Constraint (Dict(..)) -- experiment
-
 -- data Tree a = L a | B (Tree a) (Tree a)
 
 -- | Tree shape data kind, simplified from non-indexed Tree ()
@@ -58,11 +56,6 @@ left  (B u _) = u
 right :: T (BU p q) a -> T q a
 right (B _ v) = v
 
--- -- | Prove that a tree has a shape. Warning: expensive.
--- tShape :: T p a -> Dict (HasSingT p)
--- tShape (L _)                                 = Dict
--- tShape (B (tShape -> Dict) (tShape -> Dict)) = Dict
-
 instance Show a => Show (T p a) where
   showsPrec p (L a)   = showsApp1 "L" p a
   showsPrec p (B u v) = showsApp2 "B" p u v
@@ -80,14 +73,12 @@ instance Traversable (T u) where
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
 
 instance HasSingT r => Applicative (T r) where
-  -- pure :: forall a. a -> T r a
   pure a = case (singT :: ST r) of
              SL -> L a
              SB -> B (pure a) (pure a)
-  -- (<*>) :: forall a b. T r (a -> b) -> T r a -> T r b
-  (<*>) = case (singT :: ST r) of
-            SL -> \ (L f)     (L x)     -> L (f x)
-            SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
+  (<*>)  = case (singT :: ST r) of
+             SL -> \ (L f)     (L x)     -> L (f x)
+             SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
 
 -- TODO: Define inL and inB, and rework fmap and apT
 
@@ -118,7 +109,6 @@ B (joinT (left <$> u)) (joinT (right <$> v)) :: T (BU p q)
 apT :: T r (a -> b) -> T r a -> T r b
 L f     `apT` L x     = L (f x)
 B fs gs `apT` B xs ys = B (fs `apT` xs) (gs `apT` ys)
-
 -- GHC complains of non-exhaustive patterns. Alternatively,
 apT' :: T r (a -> b) -> T r a -> T r b
 apT' (L f)     = \ (L x)     -> L (f x)
