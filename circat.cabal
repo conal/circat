@@ -19,8 +19,7 @@ source-repository head
   location:         git://github.com/conal/circat
 
 Library
-  hs-Source-Dirs:   src
-  Include-Dirs:     src
+  hs-Source-Dirs:   src/
   Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
                   , type-unary>=0.2.16
                   , applicative-numbers
@@ -39,6 +38,7 @@ Library
                     Circat.Pair
                     Circat.RTree
                     Circat.LTree
+                    Circat.RaggedTree
                     Circat.Scan
                     Circat.Circuit
                     Circat.Netlist
