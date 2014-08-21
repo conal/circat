@@ -26,6 +26,8 @@ import Control.Applicative (Applicative(..))
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 
+import Circat.Show (showsApp1,showsApp2)
+
 -- | Tree shape data kind
 data TS = LS | BS TS TS
 
@@ -53,14 +55,9 @@ left  (B u _) = u
 right :: T (BS p q) a -> T q a
 right (B _ v) = v
 
-t1 :: T LS Bool
-t1 = L False
-
-t2 :: T (BS LS LS) Bool
-t2 = B (L False) (L True)
-
-t3 :: T (BS LS (BS LS LS)) Bool
-t3 = B t1 t2
+instance Show a => Show (T p a) where
+  showsPrec p (L a)   = showsApp1 "L" p a
+  showsPrec p (B u v) = showsApp2 "B" p u v
 
 instance Functor (T u) where
   fmap f (L a)   = L (f a)
@@ -119,3 +116,19 @@ joinT p (left  <$> u) :: T p
 joinT q (right <$> v) :: T q
 B (joinT p (left  <$> u)) (joinT q (right <$> v)) :: T (BS p q)
 #endif
+
+{--------------------------------------------------------------------
+    Examples
+--------------------------------------------------------------------}
+
+t1 :: T LS Bool
+t1 = L False
+
+t2 :: T (BS LS LS) Bool
+t2 = B (L False) (L True)
+
+t3 :: T (BS LS (BS LS LS)) Bool
+t3 = B t1 t2
+
+t4 :: T (BS LS (BS LS LS)) Bool
+t4 = not <$> t3
