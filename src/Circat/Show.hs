@@ -31,8 +31,9 @@ showsApp1 s p a = showParen (p > appPrec) $
 
 -- | Show a simple function application
 showsApp2 :: (Show a, Show b) => String -> Prec -> a -> b -> ShowS
-showsApp2 s p a b = showParen (p > appPrec) $
-                    showString s . showChar ' ' . showsPrec (appPrec+1) a . showsPrec (appPrec+1) b
+showsApp2 s p a b =
+  showParen (p > appPrec) $
+  showString s . showChar ' ' . showsPrec (appPrec+1) a . showChar ' ' . showsPrec (appPrec+1) b
 
 -- | Show a simple function application
 showsApp :: (Show a, Show b) => Prec -> a -> b -> ShowS
