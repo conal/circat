@@ -29,30 +29,30 @@ import Data.Traversable (Traversable(..))
 
 import Circat.Show (showsApp1,showsApp2)
 
--- | Tree shape data kind
-data TS = LS | BS TS TS
+-- data Tree a = L a | B (Tree a) (Tree a)
+
+-- | Tree shape data kind, simplified from non-indexed Tree ()
+data TU = LU | BU TU TU
 
 -- Singleton type. 
 -- TODO: Use the singletons package
-data TSing :: TS -> * where
-  LSsing :: TSing LS
-  BSsing :: (HasTSing p, HasTSing q) => TSing (BS p q)
+data ST :: TU -> * where
+  SL :: ST LU
+  SB :: (HasSingT p, HasSingT q) => ST (BU p q)
 
--- TODO: Could I use HasTSing constraints in place of the TSing arguments?
+class HasSingT x where singT :: ST x
 
-class HasTSing x where tSing :: TSing x
+instance HasSingT LU where singT = SL
+instance (HasSingT p, HasSingT q) => HasSingT (BU p q) where singT = SB
 
-instance HasTSing LS where tSing = LSsing
-instance (HasTSing p, HasTSing q) => HasTSing (BS p q) where tSing = BSsing
+data T :: TU -> * -> * where
+  L :: a -> T LU a
+  B :: T p a -> T q a -> T (BU p q) a
 
-data T :: TS -> * -> * where
-  L :: a -> T LS a
-  B :: T p a -> T q a -> T (BS p q) a
-
-left  :: T (BS p q) a -> T p a
+left  :: T (BU p q) a -> T p a
 left  (B u _) = u
 
-right :: T (BS p q) a -> T q a
+right :: T (BU p q) a -> T q a
 right (B _ v) = v
 
 instance Show a => Show (T p a) where
@@ -72,81 +72,80 @@ instance Traversable (T u) where
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
 
 #if 0
-pureT :: forall r a. HasTSing r => a -> T r a
+pureT :: forall r a. HasSingT r => a -> T r a
 pureT a = go
  where
-   go :: forall p. HasTSing p => T p a
-   go = case (tSing :: TSing p) of
-          LSsing -> L a
-          BSsing -> B go go
+   go :: forall p. HasSingT p => T p a
+   go = case (singT :: ST p) of
+          SL -> L a
+          SB -> B go go
 
-apT :: forall r a b. HasTSing r => T r (a -> b) -> T r a -> T r b
-apT = case (tSing :: TSing r) of
-        LSsing -> \ (L f)     (L x)     -> L (f x)
-        BSsing -> \ (B fs gs) (B xs ys) -> B (apT fs xs) (apT gs ys)
+apT :: forall r a b. HasSingT r => T r (a -> b) -> T r a -> T r b
+apT = case (singT :: ST r) of
+        SL -> \ (L f)     (L x)     -> L (f x)
+        SB -> \ (B fs gs) (B xs ys) -> B (apT fs xs) (apT gs ys)
 
 -- TODO: Define inL and inB, and rework fmap and apT
 
-instance HasTSing r => Applicative (T r) where
+instance HasSingT r => Applicative (T r) where
   pure  = pureT
   (<*>) = apT
 #else
-instance HasTSing r => Applicative (T r) where
+instance HasSingT r => Applicative (T r) where
 #if 0
   pure :: forall a. a -> T r a
   pure a = go
    where
-     go :: forall p. HasTSing p => T p a
-     go = case (tSing :: TSing p) of
-            LSsing -> L a
-            BSsing -> B go go
+     go :: forall p. HasSingT p => T p a
+     go = case (singT :: ST p) of
+            SL -> L a
+            SB -> B go go
 #else
   -- pure :: forall a. a -> T r a
-  pure a = case (tSing :: TSing r) of
-             LSsing -> L a
-             BSsing -> B (pure a) (pure a)
+  pure a = case (singT :: ST r) of
+             SL -> L a
+             SB -> B (pure a) (pure a)
 #endif
   -- (<*>) :: forall a b. T r (a -> b) -> T r a -> T r b
-  (<*>) = case (tSing :: TSing r) of
-            LSsing -> \ (L f)     (L x)     -> L (f x)
-            BSsing -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
+  (<*>) = case (singT :: ST r) of
+            SL -> \ (L f)     (L x)     -> L (f x)
+            SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
 
 -- TODO: Define inL and inB, and rework fmap and apT
 #endif
 
-joinT :: forall r a. HasTSing r => T r (T r a) -> T r a
-joinT = case (tSing :: TSing r) of
-          LSsing -> \ (L t)   -> t
-          BSsing -> \ (B u v) -> B (joinT (left <$> u)) (joinT (right <$> v))
+joinT :: forall r a. HasSingT r => T r (T r a) -> T r a
+joinT = case (singT :: ST r) of
+          SL -> \ (L t)   -> t
+          SB -> \ (B u v) -> B (joinT (left <$> u)) (joinT (right <$> v))
 
 #if 0
-B u v :: T (BS p q) (T (BS p q) a)
-u :: T p (T (BS p q) a)
-v :: T q (T (BS p q) a)
+B u v :: T (BU p q) (T (BU p q) a)
+u :: T p (T (BU p q) a)
+v :: T q (T (BU p q) a)
 left  <$> u :: T p (T p a)
 right <$> v :: T q (T q a)
 joinT (left  <$> u) :: T p
 joinT (right <$> v) :: T q
-B (joinT (left  <$> u)) (joinT (right <$> v)) :: T (BS p q)
+B (joinT (left  <$> u)) (joinT (right <$> v)) :: T (BU p q)
 #endif
 
-instance HasTSing r => Monad (T r) where
+instance HasSingT r => Monad (T r) where
   return = pure
   t >>= f = joinT (f <$> t)
-
 
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
 
-t1 :: T LS Bool
+t1 :: T LU Bool
 t1 = L False
 
-t2 :: T (BS LS LS) Bool
+t2 :: T (BU LU LU) Bool
 t2 = B (L False) (L True)
 
-t3 :: T (BS LS (BS LS LS)) Bool
+t3 :: T (BU LU (BU LU LU)) Bool
 t3 = B t1 t2
 
-t4 :: T (BS LS (BS LS LS)) Bool
+t4 :: T (BU LU (BU LU LU)) Bool
 t4 = not <$> t3
