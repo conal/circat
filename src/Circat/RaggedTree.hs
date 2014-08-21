@@ -35,8 +35,7 @@ data TS = LS | BS TS TS
 -- TODO: Use the singletons package
 data TSing :: TS -> * where
   LSsing :: TSing LS
-  BSsing :: -- (HasTSing p, HasTSing q) =>
-            TSing p -> TSing q -> TSing (BS p q)
+  BSsing :: TSing p -> TSing q -> TSing (BS p q)
 
 -- TODO: Could I use HasTSing constraints in place of the TSing arguments?
 
