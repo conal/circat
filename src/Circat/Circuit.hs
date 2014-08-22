@@ -5,6 +5,7 @@
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE CPP #-}
 
 -- For Church sum experiment
@@ -36,8 +37,9 @@
 
 module Circat.Circuit 
   ( CircuitM, (:>)
-  , PinId, Bus(..), GenBuses
+  , PinId, Bus(..), Source(..), GenBuses
   , namedC, constS, constC
+  , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
   , Comp', CompNum, Width, toG, outGWith, outG
   , simpleComp, runC, tagged
@@ -106,6 +108,11 @@ newPinId = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
 newBus :: Width -> CircuitM Bus
 newBus w = flip Bus w <$> newPinId
 
+data Source = BusS Bus | BoolS Bool | IntS Int deriving Show
+
+newSource :: Width -> CircuitM Source
+newSource w = BusS <$> newBus w
+
 {--------------------------------------------------------------------
     Buses representing a given type
 --------------------------------------------------------------------}
@@ -113,8 +120,8 @@ newBus w = flip Bus w <$> newPinId
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
 data Buses :: * -> * where
   UnitB :: Buses Unit
-  BoolB :: Bus -> Buses Bool
-  IntB  :: Bus -> Buses Int
+  BoolB :: Source -> Buses Bool
+  IntB  :: Source -> Buses Int
   PairB :: Buses a -> Buses b -> Buses (a :* b)
   FunB  :: (a :> b) -> Buses (a -> b)
   -- | Isomorphic form. Note: b must not have one of the standard forms.
@@ -142,15 +149,15 @@ instance Show (Buses a) where
 class GenBuses a where genBuses :: CircuitM (Buses a)
 
 instance GenBuses Unit   where genBuses = return UnitB
-instance GenBuses Bool where genBuses = BoolB <$> newBus 1
-instance GenBuses Int  where genBuses = IntB  <$> newBus 32
+instance GenBuses Bool where genBuses = BoolB <$> newSource 1
+instance GenBuses Int  where genBuses = IntB  <$> newSource 32
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses = liftA2 PairB genBuses genBuses
 
-flattenB :: String -> Buses a -> [Bus]
+flattenB :: String -> Buses a -> [Source]
 flattenB name = flip flat []
  where
-   flat :: Buses a -> Unop [Bus]
+   flat :: Buses a -> Unop [Source]
    flat UnitB       = id
    flat (BoolB b)   = (b :)
    flat (IntB b)    = (b :)
@@ -225,9 +232,9 @@ constComp str _ = do b <- genBuses
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM :: (Show q, GenBuses b) =>
-          q -> BCirc a b
-constM q = constComp (show q)
+constM :: (Show b, GenBuses b) =>
+          b -> BCirc a b
+constM b = constComp (show b)
 
 {--------------------------------------------------------------------
     Circuit category
@@ -263,7 +270,17 @@ primC :: GenBuses b => Prim a b -> a :> b
 primC = mkCK . genComp
 
 namedC :: GenBuses b => String -> a :> b
-namedC = primC . Prim
+-- namedC = primC . Prim
+namedC name = namedOptC name noOpt
+
+type Opt a b = Buses a -> Maybe (Buses b)
+
+noOpt :: Opt a b
+noOpt = const Nothing
+
+namedOptC :: GenBuses b => String -> Opt a b -> a :> b
+namedOptC name opt = mkCK $ \ a ->
+  maybe (genComp (Prim name) a) return (opt a)
 
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
@@ -275,6 +292,20 @@ constS b = constSM (return b)
 
 constC :: (Show b, GenBuses b) => b -> a :> b
 constC = mkCK . constM
+
+-- Phasing out constC
+
+pureC :: Buses b -> a :> b
+pureC = mkCK . pure . pure
+
+litUnit :: Unit -> a :> Unit
+litUnit = pureC . const UnitB
+
+litInt :: Int -> a :> Int
+litInt = pureC . IntB . IntS
+
+litBool :: Bool -> a :> Bool
+litBool = pureC . BoolB . BoolS
 
 inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
 inC = C <~ unC
@@ -385,7 +416,21 @@ instance BoolCat (:>) where
   or  = namedC "or"
   xor = namedC "xor"
 
-instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
+-- TODO: namedOptC
+
+-- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
+
+instance NumCat (:>) Int where
+  add = namedOptC "add" $ \ case
+          PairB (IntB (IntS 0)) y   -> Just y
+          PairB x (IntB (IntS 0))   -> Just x
+          _                         -> Nothing
+  mul = namedOptC "mul" $ \ case
+          PairB (IntB (IntS 1)) y   -> Just y
+          PairB x (IntB (IntS 1))   -> Just x
+          PairB a@(IntB (IntS 0)) _ -> Just a
+          PairB _ b@(IntB (IntS 0)) -> Just b
+          _                         -> Nothing
 
 instance GenBuses a => Show (a :> b) where
   show = show . runC
@@ -468,8 +513,8 @@ toG cir = printf "digraph {\n%s}\n"
 
 type Statement = String
 
-type Inputs  = [Bus]
-type Outputs = [Bus]
+type Inputs  = [Source]
+type Outputs = [Source]
 
 type Comp' = (String,Inputs,Outputs)
 
@@ -478,7 +523,7 @@ simpleComp :: Comp -> Comp'
 simpleComp (Comp prim a b) = (name, flat a, flat b)
  where
    name = show prim
-   flat :: forall t. Buses t -> [Bus]
+   flat :: forall t. Buses t -> [Source]
    flat = flattenB name
 
 data Dir = In | Out deriving Show
@@ -504,10 +549,13 @@ recordDots comps = nodes ++ edges
        where
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
-         labs dir bs = intercalate "|" (portSticker . fst <$> tagged bs)
+         labs :: Dir -> [Source] -> String
+         labs dir bs = intercalate "|" (portSticker <$> tagged bs)
           where
-            -- portSticker = bracket . portLab dir
-            portSticker p = bracket (portLab dir p) {- ++ show p -} -- show p for port # debugging
+            portSticker :: (Int,Source) -> String
+            portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
+            portSticker (_,BoolS x) = show x
+            portSticker (_,IntS  x) = show x
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
@@ -516,12 +564,16 @@ recordDots comps = nodes ++ edges
     where
       compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
        where
-         edge (ni, Bus i width) =
+         edge (ni, BusS (Bus i width)) =
            printf "%s -> %s %s"
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
             label 1 = ""
-            label n = printf "[label=\"%d\",fontsize=10]" n
+            label w = printf "[label=\"%d\",fontsize=10]" w
+         edge (ni, BoolS x) = litComment ni x
+         edge (ni, IntS  x) = litComment ni x
+         litComment :: Show a => CompNum -> a -> String
+         litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
    port :: Dir -> (Width,CompNum,PortNum) -> String
    -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
@@ -530,9 +582,14 @@ recordDots comps = nodes ++ edges
 -- Map each pin to its width, source component and output port numbers
 type SourceMap = Map PinId (Width,CompNum,PortNum)
 
+-- TODO: Try removing width.
+
+-- data SourceInfo = BusInfo Width CompNum PortNum
+--                 | LitInfo String
+
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
-              M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
+              M.fromList [(p,(wid,nc,np)) | (np,BusS (Bus p wid)) <- tagged outs ]
 
 {-
 
