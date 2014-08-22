@@ -17,15 +17,16 @@
 ----------------------------------------------------------------------
 
 module Circat.Scan
-  ( LScan(..), Zippable(..), lscanInc
+  ( Zippable(..), zipWith
+  , LScanTy, LScan(..), lscanInc
   , lsums, lproducts, lsums', lproducts'
   , shiftL, shiftR
-  , lscanGF, lscanGF'
+  , lscanProd, lscanProd', lscanComp, lscanComp'
   ) where
 
-import Prelude hiding (zip,unzip)
+import Prelude hiding (zip,unzip,zipWith)
 
-import Data.Monoid (Monoid(..),Sum(..),Product(..))
+import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
 import Data.Functor ((<$>))
 import Control.Arrow ((***))
 import Data.Traversable (Traversable(..)) -- ,mapAccumR
@@ -34,33 +35,51 @@ import Control.Applicative (Applicative(..))
 import Circat.Misc (Unop)
 import Circat.Rep
 
+type LScanTy f = forall a. Monoid a => f a -> (f a, a)
+
 class Functor f => LScan f where
-  lscan :: Monoid a => f a -> (f a, a)
+  lscan :: LScanTy f
   -- Temporary hack to avoid newtype-like representation.
   lscanDummy :: f a
   lscanDummy = undefined
 
-type LScanTy f = forall a. Monoid a => f a -> (f a, a)
+-- | Scan a product of functors. See also 'lscanProd'.
+lscanProd' :: (Functor g, Monoid a)
+           => LScanTy f -> LScanTy g
+           -> (f a, g a) -> ((f a, g a), a)
+lscanProd' lscanF lscanG (fa,ga) = ((fa', adjust <$> ga'), adjust gx)
+ where
+   (fa',fx) = lscanF fa
+   (ga',gx) = lscanG ga
+   adjust   = (fx <>)
 
--- | Variant of 'lscanGF' useful with size-indexed functors
-lscanGF' :: (Zippable g, Functor g, Functor f, Monoid a) =>
-            LScanTy g -> LScanTy f
-         -> g (f a) -> (g (f a), a)
-lscanGF' lscanG lscanF gfa  = (adjust <$> zip tots' gfa', tot)
+-- | Scan a product of functors. See also 'lscanProd''.
+lscanProd :: (Functor g, Monoid a, LScan f, LScan g)
+          => (f a, g a) -> ((f a, g a), a)
+lscanProd = lscanProd' lscan lscan
+
+-- | Variant of 'lscanComp' useful with size-indexed functors
+lscanComp' :: (Zippable g, Functor g, Functor f, Monoid a) =>
+              LScanTy g -> LScanTy f
+           -> g (f a) -> (g (f a), a)
+lscanComp' lscanG lscanF gfa  = (zipWith adjustl tots' gfa', tot)
  where
    (gfa' ,tots)  = unzip (lscanF <$> gfa)
    (tots',tot)   = lscanG tots
-   adjust (p,t)  = (p `mappend`) <$> t
 
-lscanGF :: (LScan g, LScan f, Zippable g, Monoid a) =>
-           g (f a) -> (g (f a), a)
-lscanGF = lscanGF' lscan lscan
+adjustl :: (Monoid a, Functor t) => a -> t a -> t a
+adjustl p = fmap (p <>)
 
--- lscanGF gfa  = (adjust <$> zip tots' gfa', tot)
+-- | Scan a composition of functors
+lscanComp :: (LScan g, LScan f, Zippable g, Monoid a) =>
+             g (f a) -> (g (f a), a)
+lscanComp = lscanComp' lscan lscan
+
+-- lscanComp gfa  = (zipWith adjust tots' gfa', tot)
 --  where
 --    (gfa' ,tots)  = unzip (lscan <$> gfa)
 --    (tots',tot)   = lscan tots
---    adjust (p,t)  = (p `mappend`) <$> t
+--    adjust (p,t)  = (p <>) <$> t
 
 shiftL :: Traversable t => (t a, a) -> (a, t a)
 shiftL (as,a') = mapAccumR (flip (,)) a' as
@@ -73,6 +92,7 @@ shiftR (a',as) = swap (mapAccumL (flip (,)) a' as)
 lscanInc :: (LScan f, Traversable f, Monoid b) => Unop (f b)
 lscanInc = snd . shiftL . lscan
 
+-- lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums = (fmap getSum *** getSum) . lscan . fmap Sum
 
@@ -100,6 +120,9 @@ class Zippable f where
 
 unzip :: Functor f => f (a,b) -> (f a, f b)
 unzip ps = (fst <$> ps, snd <$> ps)
+
+zipWith :: (Functor f, Zippable f) => (a -> b -> c) -> f a -> f b -> f c
+zipWith h as bs = uncurry h <$> zip as bs
 
 {--------------------------------------------------------------------
     From Data.Traversable
