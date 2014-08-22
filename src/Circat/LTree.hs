@@ -324,13 +324,13 @@ instance LScan (Tree Z) where
   lscan (L a) = (L mempty, a)
 
 instance (Zippable (Tree n), LScan (Tree n)) => LScan (Tree (S n)) where
-  lscan (B ts)  = first B (lscanGF ts)
+  lscan (B ts)  = first B (lscanComp ts)
 #else
 instance IsNat n => LScan (Tree n) where lscan = lscan' nat
 
 lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
 lscan' Zero     = \ (L a)  -> (L mempty, a)
-lscan' (Succ m) = \ (B ts) -> first B (lscanGF' (lscan' m) lscan ts)
+lscan' (Succ m) = \ (B ts) -> first B (lscanComp' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
 #endif
 
