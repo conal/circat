@@ -6,6 +6,7 @@
 {-# LANGUAGE UndecidableInstances #-} -- see below
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE CPP #-}
 
 -- For Church sum experiment
@@ -81,8 +82,9 @@ import Circat.Category
 import Circat.Classes
 import Circat.Rep
 import Circat.Pair
-import qualified Circat.RTree as RT
-import qualified Circat.LTree as LT
+import qualified Circat.RTree as RTree
+import qualified Circat.LTree as LTree
+import qualified Circat.RaggedTree as Ragged
 
 {--------------------------------------------------------------------
     Buses
@@ -422,15 +424,17 @@ instance BoolCat (:>) where
 
 instance NumCat (:>) Int where
   add = namedOptC "add" $ \ case
-          PairB (IntB (IntS 0)) y   -> Just y
-          PairB x (IntB (IntS 0))   -> Just x
-          _                         -> Nothing
+          PairB (IntB (IntS x)) (IntB (IntS y)) -> Just (IntB (IntS (x+y)))
+          PairB (IntB (IntS 0))        y        -> Just y
+          PairB        x        (IntB (IntS 0)) -> Just x
+          _                                     -> Nothing
   mul = namedOptC "mul" $ \ case
-          PairB (IntB (IntS 1)) y   -> Just y
-          PairB x (IntB (IntS 1))   -> Just x
-          PairB a@(IntB (IntS 0)) _ -> Just a
-          PairB _ b@(IntB (IntS 0)) -> Just b
-          _                         -> Nothing
+          PairB   (IntB (IntS x))   (IntB (IntS y)) -> Just (IntB (IntS (x*y)))
+          PairB   (IntB (IntS 1))         y         -> Just y
+          PairB         x           (IntB (IntS 1)) -> Just x
+          PairB z@(IntB (IntS 0))         _         -> Just z
+          PairB         _         z@(IntB (IntS 0)) -> Just z
+          _                                         -> Nothing
 
 instance GenBuses a => Show (a :> b) where
   show = show . runC
@@ -1085,10 +1089,12 @@ IsoGen ((a,b,c,d))
 IsoGen(Pair a)
 IsoGen(Vec Z a)
 IsoGen(Vec (S n) a)
-IsoGen(RT.Tree Z a)
-IsoGen(RT.Tree (S n) a)
-IsoGen(LT.Tree Z a)
-IsoGen(LT.Tree (S n) a)
+IsoGen(RTree.Tree Z a)
+IsoGen(RTree.Tree (S n) a)
+IsoGen(LTree.Tree Z a)
+IsoGen(LTree.Tree (S n) a)
+IsoGen(Ragged.Tree Ragged.LU a)
+IsoGen(Ragged.Tree (Ragged.BU p q) a)
 
 -- Newtypes. Alternatively, don't use them in external interfaces.
 IsoGen(Sum Int)
