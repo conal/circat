@@ -1088,8 +1088,8 @@ instance DistribCat (:>) where
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
 
-IsoGen ((a,b,c))
-IsoGen ((a,b,c,d))
+IsoGen((a,b,c))
+IsoGen((a,b,c,d))
 IsoGen(Pair a)
 IsoGen(Vec Z a)
 IsoGen(Vec (S n) a)
