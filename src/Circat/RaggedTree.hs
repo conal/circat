@@ -1,5 +1,8 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures, ScopedTypeVariables #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE StandaloneDeriving #-}
 -- {-# LANGUAGE InstanceSigs #-} -- experiment
 -- {-# LANGUAGE ViewPatterns #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -22,12 +25,15 @@ module Circat.RaggedTree where
 
 -- TODO: explicit exports
 
-import Data.Monoid ((<>))
+import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..))
+import Control.Applicative (Applicative(..),liftA2)
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 
+import Circat.Misc ((:*))
+import Circat.Rep
+import Circat.Scan
 import Circat.Show (showsApp1,showsApp2)
 
 -- data Tree a = L a | B (Tree a) (Tree a)
@@ -50,6 +56,34 @@ data Tree :: TU -> * -> * where
   L :: a -> Tree LU a
   B :: Tree p a -> Tree q a -> Tree (BU p q) a
 
+deriving instance Eq a => Eq (Tree n a)
+
+instance Ord a => Ord (Tree n a) where
+  compare (L a  ) = \ (L a'   ) -> a     `compare` a'
+  compare (B u v) = \ (B u' v') -> (u,v) `compare` (u',v')
+
+-- TODO: Redo in 'case singT' style
+
+type instance Rep (ST LU) = ()
+instance HasRep (ST LU) where
+  repr SL = ()
+  abst () = SL
+
+type instance Rep (ST (BU p q)) = ST p :* ST q
+instance (HasSingT p, HasSingT q) => HasRep (ST (BU p q)) where
+  repr SB = (singT :: ST p , singT :: ST q)
+  abst _  = SB
+
+type instance Rep (Tree LU a) = a
+instance HasRep (Tree LU a) where
+  repr (L a) = a
+  abst a = L a
+
+type instance Rep (Tree (BU p q) a) = Tree p a :* Tree q a
+instance HasRep (Tree (BU p q) a) where
+  repr (B u v) = (u,v)
+  abst (u,v) = B u v
+
 left  :: Tree (BU p q) a -> Tree p a
 left  (B u _) = u
 
@@ -63,14 +97,17 @@ instance Show a => Show (Tree p a) where
 instance Functor (Tree u) where
   fmap f (L a)   = L (f a)
   fmap f (B u v) = B (fmap f u) (fmap f v)
+  {-# INLINE fmap #-}
 
 instance Foldable (Tree u) where
   foldMap f (L a)   = f a
   foldMap f (B u v) = foldMap f u <> foldMap f v
+  {-# INLINE foldMap #-}
 
 instance Traversable (Tree u) where
   traverse f (L a)   = L <$> f a
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
+  {-# INLINE traverse #-}
 
 instance HasSingT r => Applicative (Tree r) where
   pure a = case (singT :: ST r) of
@@ -79,17 +116,22 @@ instance HasSingT r => Applicative (Tree r) where
   (<*>)  = case (singT :: ST r) of
              SL -> \ (L f)     (L x)     -> L (f x)
              SB -> \ (B fs gs) (B xs ys) -> B (fs <*> xs) (gs <*> ys)
+  {-# INLINE pure #-}
+  {-# INLINE (<*>) #-}
 
 -- TODO: Define inL and inB, and rework fmap and apT
 
 instance HasSingT r => Monad (Tree r) where
   return = pure
   t >>= f = joinT (f <$> t)
+  {-# INLINE return #-}
+  {-# INLINE (>>=) #-}
 
 joinT :: forall r a. HasSingT r => Tree r (Tree r a) -> Tree r a
 joinT = case (singT :: ST r) of
           SL -> \ (L t)   -> t
           SB -> \ (B u v) -> B (joinT (left <$> u)) (joinT (right <$> v))
+{-# INLINE joinT #-}
 
 #if 0
 B u v :: Tree (BU p q) (Tree (BU p q) a)
@@ -119,7 +161,15 @@ joinT' (L t)   = t
 joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
 #endif
 
+instance LScan (Tree LU) where
+  lscan (L a) = (L mempty, a)
 
+instance (LScan (Tree p), LScan (Tree q)) => LScan (Tree (BU p q)) where
+  lscan (B u v) = (B u' v', tot)
+   where
+     ((u',v'),tot) = lscanProd (u,v)
+
+#if 0
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
@@ -135,3 +185,17 @@ t3 = B t1 t2
 
 t4 :: Tree (BU LU (BU LU LU)) Bool
 t4 = not <$> t3
+
+#endif
+
+{--------------------------------------------------------------------
+    Numeric instances via the applicative-numbers package
+--------------------------------------------------------------------}
+
+-- Generate bogus (error-producing) Enum
+#define INSTANCE_Enum
+
+#define CONSTRAINTS HasSingT r, 
+
+#define APPLICATIVE Tree r
+#include "ApplicativeNumeric-inc.hs"
