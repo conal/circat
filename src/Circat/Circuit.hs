@@ -274,16 +274,24 @@ primC = mkCK . genComp
 
 namedC :: GenBuses b => String -> a :> b
 -- namedC = primC . Prim
-namedC name = namedOptC name noOpt
+namedC name = namedOpt name noOpt
 
-type Opt a b = Buses a -> Maybe (Buses b)
+type OptC a b = Buses a -> CircuitM (Maybe (Buses b))
+
+type Opt  a b = Buses a -> Maybe (Buses b)
 
 noOpt :: Opt a b
 noOpt = const Nothing
 
-namedOptC :: GenBuses b => String -> Opt a b -> a :> b
-namedOptC name opt = mkCK $ \ a ->
-  maybe (genComp (Prim name) a) return (opt a)
+namedOptC :: GenBuses b => String -> OptC a b -> a :> b
+namedOptC name opt =
+  mkCK $ \ a -> opt a >>= maybe (genComp (Prim name) a) return
+
+namedOpt :: GenBuses b => String -> Opt a b -> a :> b
+namedOpt name opt = namedOptC name (return . opt)
+
+-- namedOptC name opt = mkCK $ \ a ->
+--   maybe (genComp (Prim name) a) return (opt a)
 
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
@@ -413,29 +421,59 @@ instance ConstCat (:>) where
   type ConstKon (:>) a b = (Show b, GenBuses b)
   const = constC
 
-instance BoolCat (:>) where
-  not = namedC "not"
-  and = namedC "and"
-  or  = namedC "or"
-  xor = namedC "xor"
+-- instance BoolCat (:>) where
+--   not = namedC "not"
+--   and = namedC "and"
+--   or  = namedC "or"
+--   xor = namedC "xor"
 
--- TODO: namedOptC
+instance BoolCat (:>) where
+  not = namedOpt "not" $ \ case
+          BoolB (BoolS x) -> Just (BoolB (BoolS (not x)))
+          _               -> Nothing
+  and = namedOpt "and" $ \ case
+          PairB   (BoolB (BoolS x))       (BoolB (BoolS y))     -> Just (BoolB (BoolS (x && y)))
+          PairB   (BoolB (BoolS True ))           y             -> Just y
+          PairB           x               (BoolB (BoolS True )) -> Just x
+          PairB z@(BoolB (BoolS False))           _             -> Just z
+          PairB           _             z@(BoolB (BoolS False)) -> Just z
+          _                                                     -> Nothing
+  or  = namedOpt "or"  $ \ case
+          PairB   (BoolB (BoolS x))       (BoolB (BoolS y))     -> Just (BoolB (BoolS (x || y)))
+          PairB   (BoolB (BoolS False))           y             -> Just y
+          PairB           x               (BoolB (BoolS False)) -> Just x
+          PairB z@(BoolB (BoolS True ))           _             -> Just z
+          PairB           _             z@(BoolB (BoolS True )) -> Just z
+          _                                                     -> Nothing
+  xor = namedOptC "xor" $ \ case
+          PairB (BoolB (BoolS x))     (BoolB (BoolS y))     -> return $ Just (BoolB (BoolS (x /= y)))
+          PairB (BoolB (BoolS False))         y             -> return $ Just y
+          PairB         x             (BoolB (BoolS False)) -> return $ Just x
+          PairB (BoolB (BoolS True ))         y             -> Just <$> unmkCK not y
+          PairB         x             (BoolB (BoolS True )) -> Just <$> unmkCK not x
+          _                                                 -> return $ Nothing
+
+-- TODO: After I have more experience with these graph optimizations, reconsider
+-- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
 instance NumCat (:>) Int where
-  add = namedOptC "add" $ \ case
+  add = namedOpt "add" $ \ case
           PairB (IntB (IntS x)) (IntB (IntS y)) -> Just (IntB (IntS (x+y)))
           PairB (IntB (IntS 0))        y        -> Just y
           PairB        x        (IntB (IntS 0)) -> Just x
           _                                     -> Nothing
-  mul = namedOptC "mul" $ \ case
+  mul = namedOpt "mul" $ \ case
           PairB   (IntB (IntS x))   (IntB (IntS y)) -> Just (IntB (IntS (x*y)))
           PairB   (IntB (IntS 1))         y         -> Just y
           PairB         x           (IntB (IntS 1)) -> Just x
           PairB z@(IntB (IntS 0))         _         -> Just z
           PairB         _         z@(IntB (IntS 0)) -> Just z
           _                                         -> Nothing
+
+-- TODO: Some optimizations drop results. Make another pass to remove unused
+-- components (recursively).
 
 instance GenBuses a => Show (a :> b) where
   show = show . runC
