@@ -46,33 +46,33 @@ class HasSingT p where singT :: ST p
 instance HasSingT LU where singT = SL
 instance (HasSingT p, HasSingT q) => HasSingT (BU p q) where singT = SB
 
-data T :: TU -> * -> * where
-  L :: a -> T LU a
-  B :: T p a -> T q a -> T (BU p q) a
+data Tree :: TU -> * -> * where
+  L :: a -> Tree LU a
+  B :: Tree p a -> Tree q a -> Tree (BU p q) a
 
-left  :: T (BU p q) a -> T p a
+left  :: Tree (BU p q) a -> Tree p a
 left  (B u _) = u
 
-right :: T (BU p q) a -> T q a
+right :: Tree (BU p q) a -> Tree q a
 right (B _ v) = v
 
-instance Show a => Show (T p a) where
+instance Show a => Show (Tree p a) where
   showsPrec p (L a)   = showsApp1 "L" p a
   showsPrec p (B u v) = showsApp2 "B" p u v
 
-instance Functor (T u) where
+instance Functor (Tree u) where
   fmap f (L a)   = L (f a)
   fmap f (B u v) = B (fmap f u) (fmap f v)
 
-instance Foldable (T u) where
+instance Foldable (Tree u) where
   foldMap f (L a)   = f a
   foldMap f (B u v) = foldMap f u <> foldMap f v
 
-instance Traversable (T u) where
+instance Traversable (Tree u) where
   traverse f (L a)   = L <$> f a
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
 
-instance HasSingT r => Applicative (T r) where
+instance HasSingT r => Applicative (Tree r) where
   pure a = case (singT :: ST r) of
              SL -> L a
              SB -> B (pure a) (pure a)
@@ -82,39 +82,39 @@ instance HasSingT r => Applicative (T r) where
 
 -- TODO: Define inL and inB, and rework fmap and apT
 
-instance HasSingT r => Monad (T r) where
+instance HasSingT r => Monad (Tree r) where
   return = pure
   t >>= f = joinT (f <$> t)
 
-joinT :: forall r a. HasSingT r => T r (T r a) -> T r a
+joinT :: forall r a. HasSingT r => Tree r (Tree r a) -> Tree r a
 joinT = case (singT :: ST r) of
           SL -> \ (L t)   -> t
           SB -> \ (B u v) -> B (joinT (left <$> u)) (joinT (right <$> v))
 
 #if 0
-B u v :: T (BU p q) (T (BU p q) a)
-u :: T p (T (BU p q) a)
-v :: T q (T (BU p q) a)
-left  <$> u :: T p (T p a)
-right <$> v :: T q (T q a)
-joinT (left  <$> u) :: T p
-joinT (right <$> v) :: T q
-B (joinT (left <$> u)) (joinT (right <$> v)) :: T (BU p q)
+B u v :: Tree (BU p q) (Tree (BU p q) a)
+u :: Tree p (Tree (BU p q) a)
+v :: Tree q (Tree (BU p q) a)
+left  <$> u :: Tree p (Tree p a)
+right <$> v :: Tree q (Tree q a)
+joinT (left  <$> u) :: Tree p
+joinT (right <$> v) :: Tree q
+B (joinT (left <$> u)) (joinT (right <$> v)) :: Tree (BU p q)
 #endif
 
 #if 0
 -- Experiment in dropping the HasSingT constraint.
 -- Sadly, I still need it for pure/return.
 
-apT :: T r (a -> b) -> T r a -> T r b
+apT :: Tree r (a -> b) -> Tree r a -> Tree r b
 L f     `apT` L x     = L (f x)
 B fs gs `apT` B xs ys = B (fs `apT` xs) (gs `apT` ys)
 -- GHC complains of non-exhaustive patterns. Alternatively,
-apT' :: T r (a -> b) -> T r a -> T r b
+apT' :: Tree r (a -> b) -> Tree r a -> Tree r b
 apT' (L f)     = \ (L x)     -> L (f x)
 apT' (B fs gs) = \ (B xs ys) -> B (fs `apT'` xs) (gs `apT'` ys)
 
-joinT' :: T r (T r a) -> T r a
+joinT' :: Tree r (Tree r a) -> Tree r a
 joinT' (L t)   = t
 joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
 #endif
@@ -124,14 +124,14 @@ joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
     Examples
 --------------------------------------------------------------------}
 
-t1 :: T LU Bool
+t1 :: Tree LU Bool
 t1 = L False
 
-t2 :: T (BU LU LU) Bool
+t2 :: Tree (BU LU LU) Bool
 t2 = B (L False) (L True)
 
-t3 :: T (BU LU (BU LU LU)) Bool
+t3 :: Tree (BU LU (BU LU LU)) Bool
 t3 = B t1 t2
 
-t4 :: T (BU LU (BU LU LU)) Bool
+t4 :: Tree (BU LU (BU LU LU)) Bool
 t4 = not <$> t3
