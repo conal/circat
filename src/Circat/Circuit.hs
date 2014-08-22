@@ -84,7 +84,8 @@ import Circat.Rep
 import Circat.Pair
 import qualified Circat.RTree as RTree
 import qualified Circat.LTree as LTree
-import qualified Circat.RaggedTree as Ragged
+import Circat.RaggedTree (TU(..))
+import qualified Circat.RaggedTree as Rag
 
 {--------------------------------------------------------------------
     Buses
@@ -1080,6 +1081,9 @@ instance DistribCat (:>) where
     Other GenBuses instances
 --------------------------------------------------------------------}
 
+-- Needed for data types appearing the external interfaces (and hence not
+-- removed during compilation).
+
 #define IsoGen(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
@@ -1093,8 +1097,8 @@ IsoGen(RTree.Tree Z a)
 IsoGen(RTree.Tree (S n) a)
 IsoGen(LTree.Tree Z a)
 IsoGen(LTree.Tree (S n) a)
-IsoGen(Ragged.Tree Ragged.LU a)
-IsoGen(Ragged.Tree (Ragged.BU p q) a)
+IsoGen(Rag.Tree LU a)
+IsoGen(Rag.Tree (BU p q) a)
 
 -- Newtypes. Alternatively, don't use them in external interfaces.
 IsoGen(Sum Int)
