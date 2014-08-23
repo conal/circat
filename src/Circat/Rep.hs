@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
+-- {-# LANGUAGE ScopedTypeVariables #-} -- experiment
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -106,3 +107,25 @@ instance IsNat n => HasRep (Nat (S n)) where
   abst ((),n) = Succ n
 -- The IsNat constraint comes from Succ.
 -- TODO: See about eliminating that constructor constraint.
+
+#if 0
+{--------------------------------------------------------------------
+    Experiment
+--------------------------------------------------------------------}
+
+abstRepVec :: forall n a. IsNat n => Vec n a -> Vec n a
+-- For the simpler Vec encoding:
+abstRepVec =
+  case (nat :: Nat n) of
+    Zero   -> abst . repr
+    Succ _ -> abst . repr
+
+-- -- For the trickier Vec encoding:
+--
+-- abstRepVec =
+--   case (nat :: Nat n) of
+--     Zero          -> abst . repr
+--     Succ Zero     -> abst . repr
+--     Succ (Succ _) -> abst . repr
+
+#endif
