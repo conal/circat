@@ -32,6 +32,8 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
+#define OptimizeCircuit
+
 #define NoSums
 -- #define StaticSums
 -- #define TaggedSums
@@ -285,14 +287,31 @@ noOpt :: Opt a b
 noOpt = const Nothing
 
 namedOptC :: GenBuses b => String -> OptC a b -> a :> b
+#ifdef OptimizeCircuit
 namedOptC name opt =
   mkCK $ \ a -> opt a >>= maybe (genComp (Prim name) a) return
+#else
+namedOptC name _ = mkCK (genComp (Prim name))
+#endif
 
 namedOpt :: GenBuses b => String -> Opt a b -> a :> b
 namedOpt name opt = namedOptC name (return . opt)
 
 -- namedOptC name opt = mkCK $ \ a ->
 --   maybe (genComp (Prim name) a) return (opt a)
+
+-- Convenient variations
+
+type Opt2C a b c = Buses a :* Buses b -> CircuitM (Maybe (Buses c))
+
+type Opt2  a b c = Buses a :* Buses b -> Maybe (Buses c)
+
+namedOpt2C :: GenBuses c => String -> Opt2C a b c -> a :* b :> c
+namedOpt2C name opt = namedOptC name (opt . unPairB)
+
+namedOpt2 :: GenBuses c => String -> Opt2 a b c -> a :* b :> c
+namedOpt2 name opt = namedOpt name (opt . unPairB)
+
 
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
@@ -431,57 +450,59 @@ instance ConstCat (:>) where
 pattern BoolBS a    = BoolB (BoolS a)
 pattern TrueS       = BoolBS True
 pattern FalseS      = BoolBS False
-pattern BoolB2S x y = PairB (BoolBS x) (BoolBS y)
+pattern BoolB2S x y = ((BoolBS x,BoolBS y) :: (Buses Bool, Buses Bool))
+-- See https://ghc.haskell.org/trac/ghc/ticket/8968 about the pattern signature.
 
 instance BoolCat (:>) where
   not = namedOpt "not" $ \ case
-          BoolBS x       -> Just (BoolBS (not x))
-          _              -> Nothing
-  and = namedOpt "and" $ \ case
-          BoolB2S x y    -> Just (BoolBS (x && y))
-          PairB TrueS y  -> Just y
-          PairB x TrueS  -> Just x
-          PairB FalseS _ -> Just FalseS
-          PairB _ FalseS -> Just FalseS
-          _              -> Nothing
-  or  = namedOpt "or"  $ \ case
-          BoolB2S x y    -> Just (BoolBS (x || y))
-          PairB FalseS y -> Just y
-          PairB x FalseS -> Just x
-          PairB TrueS _  -> Just TrueS
-          PairB _ TrueS  -> Just TrueS
-          _              -> Nothing
-  xor = namedOptC "xor" $ \ case
-          BoolB2S x y    -> return $ Just (BoolBS (x /= y))
-          PairB FalseS y -> return $ Just y
-          PairB x FalseS -> return $ Just x
-          PairB TrueS y  -> Just <$> unmkCK not y
-          PairB x TrueS  -> Just <$> unmkCK not x
-          _              -> return $ Nothing
+          BoolBS x    -> Just (BoolBS (not x))
+          _           -> Nothing
+  and = namedOpt2 "and" $ \ case
+          BoolB2S x y -> Just (BoolBS (x && y))
+          (TrueS ,y)  -> Just y
+          (x,TrueS )  -> Just x
+          (FalseS,_)  -> Just FalseS
+          (_,FalseS)  -> Just FalseS
+          _           -> Nothing
+  or  = namedOpt2 "or"  $ \ case
+          BoolB2S x y -> Just (BoolBS (x || y))
+          (FalseS,y)  -> Just y
+          (x,FalseS)  -> Just x
+          (TrueS ,_)  -> Just TrueS
+          (_,TrueS )  -> Just TrueS
+          _           -> Nothing
+  xor = namedOpt2C "xor" $ \ case
+          BoolB2S x y -> return $ Just (BoolBS (x /= y))
+          (FalseS,y)  -> return $ Just y
+          (x,FalseS)  -> return $ Just x
+          (TrueS,y )  -> Just <$> unmkCK not y
+          (x,TrueS )  -> Just <$> unmkCK not x
+          _           -> return $ Nothing
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
-pattern IntBS a = IntB (IntS a)
-pattern ZeroS   = IntBS 0
-pattern OneS    = IntBS 1
-pattern IntB2S x y = PairB (IntBS x) (IntBS y)
+pattern IntBS a    = IntB (IntS a)
+pattern ZeroS      = IntBS 0
+pattern OneS       = IntBS 1
+pattern IntB2S x y = ((IntBS x,IntBS y) :: (Buses Int, Buses Int))
+-- See https://ghc.haskell.org/trac/ghc/ticket/8968 about the pattern signature.
 
 instance NumCat (:>) Int where
- add = namedOpt "add" $ \ case
-         IntB2S x y    -> Just (IntBS (x+y))
-         PairB ZeroS y -> Just y
-         PairB x ZeroS -> Just x
-         _             -> Nothing
- mul = namedOpt "mul" $ \ case
-         IntB2S x y    -> Just (IntBS (x*y))
-         PairB OneS y  -> Just y
-         PairB x OneS  -> Just x
-         PairB ZeroS _ -> Just ZeroS
-         PairB _ ZeroS -> Just ZeroS
-         _             -> Nothing
+ add = namedOpt2 "add" $ \ case
+         IntB2S x y -> Just (IntBS (x+y))
+         (ZeroS,y)  -> Just y
+         (x,ZeroS)  -> Just x
+         _          -> Nothing
+ mul = namedOpt2 "mul" $ \ case
+         IntB2S x y -> Just (IntBS (x*y))
+         (OneS ,y)  -> Just y
+         (x,OneS )  -> Just x
+         (ZeroS,_)  -> Just ZeroS
+         (_,ZeroS)  -> Just ZeroS
+         _          -> Nothing
 
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
