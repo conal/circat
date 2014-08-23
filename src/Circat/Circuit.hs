@@ -7,6 +7,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-} -- for LU & BU
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE CPP #-}
 
 -- For Church sum experiment
@@ -427,50 +428,60 @@ instance ConstCat (:>) where
 --   or  = namedC "or"
 --   xor = namedC "xor"
 
+pattern BoolBS a    = BoolB (BoolS a)
+pattern TrueS       = BoolBS True
+pattern FalseS      = BoolBS False
+pattern BoolB2S x y = PairB (BoolBS x) (BoolBS y)
+
 instance BoolCat (:>) where
   not = namedOpt "not" $ \ case
-          BoolB (BoolS x) -> Just (BoolB (BoolS (not x)))
-          _               -> Nothing
+          BoolBS x       -> Just (BoolBS (not x))
+          _              -> Nothing
   and = namedOpt "and" $ \ case
-          PairB   (BoolB (BoolS x))       (BoolB (BoolS y))     -> Just (BoolB (BoolS (x && y)))
-          PairB   (BoolB (BoolS True ))           y             -> Just y
-          PairB           x               (BoolB (BoolS True )) -> Just x
-          PairB z@(BoolB (BoolS False))           _             -> Just z
-          PairB           _             z@(BoolB (BoolS False)) -> Just z
-          _                                                     -> Nothing
+          BoolB2S x y    -> Just (BoolBS (x && y))
+          PairB TrueS y  -> Just y
+          PairB x TrueS  -> Just x
+          PairB FalseS _ -> Just FalseS
+          PairB _ FalseS -> Just FalseS
+          _              -> Nothing
   or  = namedOpt "or"  $ \ case
-          PairB   (BoolB (BoolS x))       (BoolB (BoolS y))     -> Just (BoolB (BoolS (x || y)))
-          PairB   (BoolB (BoolS False))           y             -> Just y
-          PairB           x               (BoolB (BoolS False)) -> Just x
-          PairB z@(BoolB (BoolS True ))           _             -> Just z
-          PairB           _             z@(BoolB (BoolS True )) -> Just z
-          _                                                     -> Nothing
+          BoolB2S x y    -> Just (BoolBS (x || y))
+          PairB FalseS y -> Just y
+          PairB x FalseS -> Just x
+          PairB TrueS _  -> Just TrueS
+          PairB _ TrueS  -> Just TrueS
+          _              -> Nothing
   xor = namedOptC "xor" $ \ case
-          PairB (BoolB (BoolS x))     (BoolB (BoolS y))     -> return $ Just (BoolB (BoolS (x /= y)))
-          PairB (BoolB (BoolS False))         y             -> return $ Just y
-          PairB         x             (BoolB (BoolS False)) -> return $ Just x
-          PairB (BoolB (BoolS True ))         y             -> Just <$> unmkCK not y
-          PairB         x             (BoolB (BoolS True )) -> Just <$> unmkCK not x
-          _                                                 -> return $ Nothing
+          BoolB2S x y    -> return $ Just (BoolBS (x /= y))
+          PairB FalseS y -> return $ Just y
+          PairB x FalseS -> return $ Just x
+          PairB TrueS y  -> Just <$> unmkCK not y
+          PairB x TrueS  -> Just <$> unmkCK not x
+          _              -> return $ Nothing
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
+pattern IntBS a = IntB (IntS a)
+pattern ZeroS   = IntBS 0
+pattern OneS    = IntBS 1
+pattern IntB2S x y = PairB (IntBS x) (IntBS y)
+
 instance NumCat (:>) Int where
-  add = namedOpt "add" $ \ case
-          PairB (IntB (IntS x)) (IntB (IntS y)) -> Just (IntB (IntS (x+y)))
-          PairB (IntB (IntS 0))        y        -> Just y
-          PairB        x        (IntB (IntS 0)) -> Just x
-          _                                     -> Nothing
-  mul = namedOpt "mul" $ \ case
-          PairB   (IntB (IntS x))   (IntB (IntS y)) -> Just (IntB (IntS (x*y)))
-          PairB   (IntB (IntS 1))         y         -> Just y
-          PairB         x           (IntB (IntS 1)) -> Just x
-          PairB z@(IntB (IntS 0))         _         -> Just z
-          PairB         _         z@(IntB (IntS 0)) -> Just z
-          _                                         -> Nothing
+ add = namedOpt "add" $ \ case
+         IntB2S x y    -> Just (IntBS (x+y))
+         PairB ZeroS y -> Just y
+         PairB x ZeroS -> Just x
+         _             -> Nothing
+ mul = namedOpt "mul" $ \ case
+         IntB2S x y    -> Just (IntBS (x*y))
+         PairB OneS y  -> Just y
+         PairB x OneS  -> Just x
+         PairB ZeroS _ -> Just ZeroS
+         PairB _ ZeroS -> Just ZeroS
+         _             -> Nothing
 
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
