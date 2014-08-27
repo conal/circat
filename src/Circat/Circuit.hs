@@ -431,8 +431,28 @@ uncurryK (arr (unC . unFunB) . f) . arr unPairB == h
 -- muxC :: IsSourceP c => Bool :* (c :* c) :> c
 -- muxC = namedC "mux"
 
+#if 1
+
 instance MuxCat (:>) where
   mux = namedC "mux"
+
+#else
+
+-- instance GenBuses t => HasIf (:>) t where
+--   ifA = namedC "mux"
+
+-- or
+
+instance IfCat (:>) Bool where ifA = namedC "mux"
+instance IfCat (:>) Int  where ifA = namedC "mux32"
+
+instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
+  ifA = prodIf
+
+instance IfCat (:>) b => IfCat (:>) (a -> b) where
+  ifA = funIf
+
+#endif
 
 instance TerminalCat (:>) where
   it = C (const UnitB . it)
@@ -1150,27 +1170,39 @@ instance DistribCat (:>) where
 #endif
 
 {--------------------------------------------------------------------
-    Other GenBuses instances
+    Type-specific support
 --------------------------------------------------------------------}
 
--- Needed for data types appearing the external interfaces (and hence not
--- removed during compilation).
+-- GenBuses needed for data types appearing the external interfaces (and hence
+-- not removed during compilation).
 
-#define IsoGen(abs) \
+#if 1
+
+#define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
+ genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
 
-IsoGen((a,b,c))
-IsoGen((a,b,c,d))
-IsoGen(Pair a)
-IsoGen(Vec Z a)
-IsoGen(Vec (S n) a)
-IsoGen(RTree.Tree Z a)
-IsoGen(RTree.Tree (S n) a)
-IsoGen(LTree.Tree Z a)
-IsoGen(LTree.Tree (S n) a)
-IsoGen(Rag.Tree LU a)
-IsoGen(Rag.Tree (BU p q) a)
+#else
+
+#define AbsTy(abs) \
+instance GenBuses (Rep (abs)) => GenBuses (abs) where \
+ { genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs)))) }; \
+instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifA = repIf }
+
+#endif
+
+AbsTy((a,b,c))
+AbsTy((a,b,c,d))
+AbsTy(Pair a)
+AbsTy(Vec Z a)
+AbsTy(Vec (S n) a)
+AbsTy(RTree.Tree Z a)
+AbsTy(RTree.Tree (S n) a)
+AbsTy(LTree.Tree Z a)
+AbsTy(LTree.Tree (S n) a)
+AbsTy(Rag.Tree LU a)
+AbsTy(Rag.Tree (BU p q) a)
 
 -- Newtypes. Alternatively, don't use them in external interfaces.
-IsoGen(Sum Int)
+AbsTy(Sum Int)
+

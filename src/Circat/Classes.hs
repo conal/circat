@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs, CPP #-}
-{-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables, Rank2Types, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
 
@@ -60,9 +60,70 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
     Misc
 --------------------------------------------------------------------}
 
+#if 1
+
 -- | One-bit mux
 class MuxCat k where
   mux :: (Bool :* (Bool :* Bool)) `k` Bool
 
 instance MuxCat (->) where
   mux (i,(e,t)) = (i && t) || (not i && e)
+
+#else
+
+type IfT k a = (Bool :* (a :* a)) `k` a
+
+class IfCat k a where ifA :: IfT k a
+
+instance IfCat (->) a where
+  ifA (i,(t,e)) = if i then t else e
+
+prodIf :: forall k a b. (ProductCat k, IfCat k a, IfCat k b) => IfT k (a :* b)
+prodIf = half exl &&& half exr
+  where
+    half :: IfCat k c => (u `k` c) -> ((Bool :* (u :* u)) `k` c)
+    half f = ifA . second (twiceP f)
+
+#if 0
+
+   prodIf
+== \ (c,((a,b),(a',b'))) -> (ifA (c,(a,a')), ifA (c,(b,b')))
+== (\ (c,((a,b),(a',b'))) -> ifA (c,(a,a'))) &&& ...
+== (ifA . (\ (c,((a,b),(a',b'))) -> (c,(a,a')))) &&& ...
+== (ifA . first (\ ((a,b),(a',b')) -> (a,a'))) &&& ...
+== (ifA . first (twiceP exl)) &&& (ifA . first (twiceP exr))
+
+#endif
+
+funIf :: forall k a b. (ClosedCat k, IfCat k b) => IfT k (a -> b)
+funIf = curry (ifA . (exl . exl &&& (half exl &&& half exr)))
+ where
+   half :: (u `k` (a -> b)) -> (((_Bool :* u) :* a) `k` b)
+   half h = apply . first (h . exr)
+
+-- funIf = curry (ifA . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+
+#if 0
+
+   funIf
+== \ (c,(f,f')) -> \ a -> ifA (c,(f a,f' a))
+== curry (\ ((c,(f,f')),a) -> ifA (c,(f a,f' a)))
+== curry (ifA . \ ((c,(f,f')),a) -> (c,(f a,f' a)))
+== curry (ifA . ((exl.exl) &&& \ ((c,(f,f')),a) -> (f a,f' a)))
+== curry (ifA . ((exl.exl) &&& ((\ ((c,(f,f')),a) -> f a) &&& (\ ((c,(f,f')),a) -> f' a))))
+== curry (ifA . ((exl.exl) &&& (apply (first (exl.exr)) &&& (apply (first (exl.exr))))))
+
+#endif
+
+repIf :: (RepCat k, ProductCat k, HasRep a, IfCat k (Rep a)) => IfT k a
+repIf = abstC . ifA . second (twiceP reprC)
+
+#if 0
+   repIf
+== \ (c,(a,a')) -> abstC (ifA (c,(reprC a,reprC a')))
+== \ (c,(a,a')) -> abstC (ifA (c,(twiceP reprC (a,a'))))
+== \ (c,(a,a')) -> abstC (ifA (second (twiceP reprC) (c,((a,a')))))
+== abstC . ifA . second (twiceP reprC)
+#endif
+
+#endif
