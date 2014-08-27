@@ -377,7 +377,7 @@ fromList' Zero     _   = error "fromList': length mismatch"
 fromList' (Succ n) as  = B (fromList' n <$> halves as)
 
 halves :: [a] -> Pair [a]
-halves as = toPair (splitAt (length as `div` 2) as)
+halves as = toP (splitAt (length as `div` 2) as)
 
 
 {--------------------------------------------------------------------
