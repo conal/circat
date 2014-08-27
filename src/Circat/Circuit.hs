@@ -559,7 +559,7 @@ outGWith (outType,res) name circ =
      -- putStrLn "outGWith: here goes!!"
      -- printf "Circuit: %d components\n" (length (runC circ))
      -- print (simpleComp <$> runC circ)
-     writeFile (outFile "dot") (toG circ)
+     writeFile (outFile "dot") (toG name circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
@@ -578,13 +578,15 @@ outGWith (outType,res) name circ =
 
 type DGraph = String
 
-toG :: GenBuses a => (a :> b) -> DGraph
-toG cir = printf "digraph {\n%s}\n"
-            (concatMap wrap (prelude ++ recordDots comps))
+toG :: GenBuses a => String -> (a :> b) -> DGraph
+toG name cir = printf "digraph %s {\n%s}\n" (tweak <$> name)
+                (concatMap wrap (prelude ++ recordDots comps))
  where
    prelude = ["rankdir=LR","node [shape=Mrecord]"{-, "ranksep=1"-}, "ratio=1"] -- maybe add fixedsize=true
    comps = simpleComp <$> runC cir
    wrap  = ("  " ++) . (++ ";\n")
+   tweak '-' = '_'
+   tweak c   = c
 
 type Statement = String
 
