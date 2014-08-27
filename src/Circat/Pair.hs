@@ -21,7 +21,7 @@
 ----------------------------------------------------------------------
 
 module Circat.Pair
-  ( Pair(..),PairCat(..),inPair
+  ( Pair(..)
   , curryP, uncurryP, toP, fromP
   , fstP, sndP
   ) where
@@ -29,7 +29,6 @@ module Circat.Pair
 import Prelude hiding (id,(.),curry,uncurry,reverse)
 
 import Data.Monoid (Monoid(..),(<>))
-import Control.Arrow (arr,Kleisli)
 import Data.Functor ((<$>))
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
@@ -40,7 +39,7 @@ import Data.Data (Data)
 
 -- More in FunctorCombo.Pair
 
-import Circat.Misc ((:*),(<~),Reversible(..))
+import Circat.Misc ((:*),Reversible(..))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
 import Circat.If
@@ -126,31 +125,3 @@ fstP (a :# _) = a
 
 sndP :: Pair a -> a
 sndP (_ :# b) = b
-
--- TODO: Remove PairCat
-
-class ProductCat k => PairCat k where
-  toPair :: (a :* a) `k` Pair a
-  unPair :: Pair a `k` (a :* a)
-
-instance PairCat (->) where
-  toPair (a,b) = a :# b
-  unPair (a :# b) = (a,b)
-
-instance Monad m => PairCat (Kleisli m) where
-  toPair = arr toPair
-  unPair = arr unPair
-
-#if 0
-instance (TerminalCat k, PairCat k) => PairCat (StateFun k s) where
-  toPair = pureState toPair
-  unPair = pureState unPair
-
-instance (ClosedCat k, TerminalCat k, PairCat k) => PairCat (StateExp k s) where
-  toPair = pureState toPair
-  unPair = pureState unPair
-#endif
-
-inPair :: PairCat k =>
-          ((a :* a) `k` (b :* b)) -> (Pair a `k` Pair b)
-inPair = toPair <~ unPair
