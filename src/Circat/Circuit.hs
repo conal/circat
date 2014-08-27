@@ -434,7 +434,8 @@ uncurryK (arr (unC . unFunB) . f) . arr unPairB == h
 #if 1
 
 instance MuxCat (:>) where
-  mux = namedC "mux"
+  muxB = namedC "mux"
+  muxI = namedC "mux"
 
 #else
 

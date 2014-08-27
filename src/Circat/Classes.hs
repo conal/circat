@@ -64,10 +64,18 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
 
 -- | One-bit mux
 class MuxCat k where
-  mux :: (Bool :* (Bool :* Bool)) `k` Bool
+  muxB :: (Bool :* (Bool :* Bool)) `k` Bool
+  muxI :: (Bool :* (Int  :* Int )) `k` Int
+
+-- TODO: Simplify & generalize. How to keep MuxCat having only one parameter, as
+-- needed for the HasUnitArrow k Prim instance in LambdaCCC.Prim?
+
+muxF :: (Bool :* (a :* a)) -> a
+muxF (i,(e,t)) = if i then t else e
 
 instance MuxCat (->) where
-  mux (i,(e,t)) = (i && t) || (not i && e)
+  muxB = muxF
+  muxI = muxF
 
 #else
 
