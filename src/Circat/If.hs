@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}  -- See below
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -16,6 +17,8 @@
 ----------------------------------------------------------------------
 
 module Circat.If (HasIf(..), repIf) where
+
+import TypeUnary.Vec (Vec) -- ,Z,S
 
 import Circat.Rep
 
@@ -69,3 +72,13 @@ instance (HasIf s, HasIf t) => HasIf (s -> t) where
 
 repIf :: (HasRep a, HasIf (Rep a)) => Bool -> a -> a -> a
 repIf c a a' = abst (if_then_else c (repr a) (repr a'))
+
+instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) =>
+  HasIf (Vec n a) where if_then_else = repIf
+
+--     Constraint is no smaller than the instance head
+--       in the constraint: HasIf (Rep (Vec n a))
+--     (Use UndecidableInstances to permit this)
+
+-- instance HasIf (Vec Z a) where if_then_else = repIf
+-- instance (HasIf (Vec n a), HasIf a) => HasIf (Vec (S n) a) where if_then_else = repIf
