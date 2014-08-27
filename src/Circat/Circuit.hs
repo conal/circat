@@ -651,7 +651,7 @@ recordDots comps = nodes ++ edges
           where
             portSticker :: (Int,Source) -> String
             portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
-            portSticker (_,BoolS x) = show x
+            portSticker (_,BoolS x) = show x  -- or showBool x
             portSticker (_,IntS  x) = show x
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
@@ -675,6 +675,10 @@ recordDots comps = nodes ++ edges
    -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
+
+-- showBool :: Bool -> String
+-- showBool False = "F"
+-- showBool True  = "T"
 
 -- Map each pin to its width, source component and output port numbers
 type SourceMap = Map PinId (Width,CompNum,PortNum)
@@ -1205,4 +1209,3 @@ AbsTy(Rag.Tree (BU p q) a)
 
 -- Newtypes. Alternatively, don't use them in external interfaces.
 AbsTy(Sum Int)
-
