@@ -17,18 +17,26 @@
 -- Class for conditionals
 ----------------------------------------------------------------------
 
-module Circat.If (HasIf(..), muxB, repIf) where
+module Circat.If (HasIf(..), muxBool, muxInt, repIf) where
 
 import TypeUnary.Vec (Vec) -- ,Z,S
 
+import Circat.Classes (muxB,muxI)
 import Circat.Rep
 
 -- | Conditional on boolean values, uncurried and with then/else swapped (for
 -- trie consistency).
-muxB :: (Bool,(Bool,Bool)) -> Bool
-muxB (i,(e,t)) = (i && t) || (not i && e)  -- note then/else swap
-{-# NOINLINE muxB #-}
--- Don't inline muxB, since we have a primitive for it.
+muxBool :: (Bool,(Bool,Bool)) -> Bool
+muxBool = muxB
+{-# NOINLINE muxBool #-}
+-- Don't inline muxBool, since we have a primitive for it.
+
+-- | Conditional on Int values, uncurried and with then/else swapped (for
+-- trie consistency).
+muxInt :: (Bool,(Int,Int)) -> Int
+muxInt = muxI
+{-# NOINLINE muxInt #-}
+-- Don't inline muxInt, since we have a primitive for it.
 
 class HasIf a where
   if_then_else :: Bool -> a -> a -> a
@@ -37,7 +45,11 @@ class HasIf a where
   temp_hack_HasIf = undefined
 
 instance HasIf Bool where
-  if_then_else c a a' = muxB (c,(a',a))  -- note reversal
+  if_then_else c a a' = muxBool (c,(a',a))  -- note reversal
+  {-# INLINE if_then_else #-}
+
+instance HasIf Int where
+  if_then_else c a a' = muxInt (c,(a',a))  -- note reversal
   {-# INLINE if_then_else #-}
 
 instance HasIf () where
