@@ -170,6 +170,7 @@ busName p2w (Bus i _) = snd (lw p2w i)
 
 sourceName :: PinMap -> Source -> String
 sourceName p2w (BusS b) = busName p2w b
+sourceName _ src = error ("sourceName: non-bus source: " ++ show src)
 
 -- | Generates a wire declaration for all Comp outputs along with 
 -- a map from PinId to wire name
