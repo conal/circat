@@ -52,9 +52,11 @@ class HasSingT p where singT :: ST p
 instance HasSingT LU where singT = SL
 instance (HasSingT p, HasSingT q) => HasSingT (BU p q) where singT = SB
 
-data Tree :: TU -> * -> * where
+data GTree :: TU -> * -> * where
   L :: a -> Tree LU a
   B :: Tree p a -> Tree q a -> Tree (BU p q) a
+
+type Tree = GTree
 
 deriving instance Eq a => Eq (Tree n a)
 
@@ -94,17 +96,17 @@ instance Show a => Show (Tree p a) where
   showsPrec p (L a)   = showsApp1 "L" p a
   showsPrec p (B u v) = showsApp2 "B" p u v
 
-instance Functor (Tree u) where
+instance Functor (Tree r) where
   fmap f (L a)   = L (f a)
   fmap f (B u v) = B (fmap f u) (fmap f v)
   {-# INLINE fmap #-}
 
-instance Foldable (Tree u) where
+instance Foldable (Tree r) where
   foldMap f (L a)   = f a
   foldMap f (B u v) = foldMap f u <> foldMap f v
   {-# INLINE foldMap #-}
 
-instance Traversable (Tree u) where
+instance Traversable (Tree r) where
   traverse f (L a)   = L <$> f a
   traverse f (B u v) = B <$> traverse f u <*> traverse f v
   {-# INLINE traverse #-}
@@ -161,6 +163,7 @@ joinT' (L t)   = t
 joinT' (B u v) = B (joinT' (left <$> u)) (joinT' (right <$> v))
 #endif
 
+#if 0
 instance LScan (Tree LU) where
   lscan (L a) = (L mempty, a)
 
@@ -168,6 +171,15 @@ instance (LScan (Tree p), LScan (Tree q)) => LScan (Tree (BU p q)) where
   lscan (B u v) = (B u' v', tot)
    where
      ((u',v'),tot) = lscanProd (u,v)
+#else
+
+instance HasSingT r => LScan (Tree r) where
+  lscan = case (singT :: ST r) of
+            SL -> \ (L a)   -> (L mempty, a)
+            SB -> \ (B u v) -> let ((u',v'),tot) = lscanProd (u,v) in (B u' v', tot)
+  {-# INLINE lscan #-}
+
+#endif
 
 #if 0
 {--------------------------------------------------------------------
