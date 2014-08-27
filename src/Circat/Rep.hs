@@ -1,7 +1,7 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
--- {-# LANGUAGE ScopedTypeVariables #-} -- experiment
+{-# LANGUAGE ScopedTypeVariables #-} -- experiment
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -22,6 +22,8 @@ module Circat.Rep (Rep,HasRep(..)) where
 
 import Data.Monoid
 -- TODO: more
+
+-- import Data.Constraint
 
 import Circat.Misc ((:*))
 import TypeUnary.TyNat (Z,S)
@@ -58,12 +60,14 @@ instance HasRep (a,b,c,d) where
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
 
+#if 1
 type instance Rep (Vec Z a) = ()
 instance HasRep (Vec Z a) where
   repr ZVec = ()
   abst () = ZVec
 
-#if 0
+#if 1
+
 type instance Rep (Vec (S n) a) = a :* Vec n a
 instance HasRep (Vec (S n) a) where
   repr (a :< as) = (a, as)
@@ -82,6 +86,19 @@ instance HasRep (Vec (S (S n)) a) where
   abst (a, as) = (a :< as)
 #endif
 
+#else
+
+type instance Rep (Vec Z a) = ()
+type instance Rep (Vec (S n) a) = a :* Vec n a
+
+instance IsNat n => HasRep (Vec n a) where
+   repr = case (nat :: Nat n) of
+            Zero -> \ ZVec -> ()
+            Succ _ -> \ (a :< as) -> (a, as)
+   abst = case (nat :: Nat n) of
+            Zero -> \ () -> ZVec
+            Succ _ -> \ (a, as) -> (a :< as)
+#endif
 
 #define WrapRep(abstT,reprT,con) \
 type instance Rep (abstT) = reprT; \
@@ -108,11 +125,11 @@ instance IsNat n => HasRep (Nat (S n)) where
 -- The IsNat constraint comes from Succ.
 -- TODO: See about eliminating that constructor constraint.
 
-#if 0
 {--------------------------------------------------------------------
-    Experiment
+    Experiments
 --------------------------------------------------------------------}
 
+#if 0
 abstRepVec :: forall n a. IsNat n => Vec n a -> Vec n a
 -- For the simpler Vec encoding:
 abstRepVec =
@@ -128,4 +145,19 @@ abstRepVec =
 --     Succ Zero     -> abst . repr
 --     Succ (Succ _) -> abst . repr
 
+#endif
+
+#if 0
+class HasHasRep t where hasRep :: Dict (HasRep t)
+
+instance IsNat n => HasHasRep (Vec n a) where
+  hasRep = case (nat :: Nat n) of
+             Zero   -> Dict
+             Succ _ -> Dict
+
+abstRepr' :: forall t. HasHasRep t => t -> t
+abstRepr' | Dict <- hasRep :: Dict (HasRep t) = abst . repr
+
+-- abstRepr :: HasRep t => t -> t
+-- abstRepr = abst . repr
 #endif
