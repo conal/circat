@@ -5,6 +5,8 @@
 {-# LANGUAGE StandaloneDeriving #-}
 -- {-# LANGUAGE InstanceSigs #-} -- experiment
 -- {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE UndecidableInstances #-}  -- See below
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -21,9 +23,7 @@
 -- Shape-typed ragged trees
 ----------------------------------------------------------------------
 
-module Circat.RaggedTree where
-
--- TODO: explicit exports
+module Circat.RaggedTree (GTree(..),Tree,TU(..)) where
 
 import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$>))
@@ -32,9 +32,10 @@ import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
 
 import Circat.Misc ((:*))
-import Circat.Rep
-import Circat.Scan
 import Circat.Show (showsApp1,showsApp2)
+import Circat.Rep
+import Circat.If
+import Circat.Scan
 
 -- data Tree a = L a | B (Tree a) (Tree a)
 
@@ -180,6 +181,14 @@ instance HasSingT r => LScan (Tree r) where
   {-# INLINE lscan #-}
 
 #endif
+
+instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) =>
+  HasIf (Tree n a) where if_then_else = repIf
+
+--     Constraint is no smaller than the instance head
+--       in the constraint: HasIf (Rep (Vec n a))
+--     (Use UndecidableInstances to permit this)
+
 
 #if 0
 {--------------------------------------------------------------------

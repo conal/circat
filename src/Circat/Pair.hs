@@ -1,5 +1,7 @@
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable, CPP #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -24,7 +26,7 @@ module Circat.Pair
   , fstP, sndP
   ) where
 
-import Prelude hiding (id,(.),curry,uncurry)
+import Prelude hiding (id,(.),curry,uncurry,reverse)
 
 import Data.Monoid (Monoid(..),(<>))
 import Control.Arrow (arr,Kleisli)
@@ -38,9 +40,10 @@ import Data.Data (Data)
 
 -- More in FunctorCombo.Pair
 
-import Circat.Misc ((:*),(<~))
+import Circat.Misc ((:*),(<~),Reversible(..))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
+import Circat.If
 import Circat.Scan
 
 {--------------------------------------------------------------------
@@ -93,6 +96,18 @@ instance Traversable Pair where
 
 instance LScan Pair where
   lscan (a :# b) = (mempty :# a, a <> b)
+
+instance Reversible Pair where
+  reverse (a :# b) = b :# a
+  {-# INLINE reverse #-}
+
+instance (HasIf (Rep (Pair a)), HasRep (Pair a)) => HasIf (Pair a) where
+  if_then_else = repIf
+
+--     Constraint is no smaller than the instance head
+--       in the constraint: HasIf (Rep (Vec n a))
+--     (Use UndecidableInstances to permit this)
+
 
 curryP :: (Pair a -> b) -> (a -> a -> b)
 curryP g = curry (g . toP)

@@ -5,6 +5,7 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
+{-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -24,7 +25,7 @@
 
 module Circat.LTree (Tree(..)) where
 
-import Prelude hiding (id,(.),uncurry,zip)
+import Prelude hiding (id,(.),uncurry,zip,reverse)
 
 import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$),(<$>))
@@ -37,12 +38,13 @@ import Data.Typeable (Typeable)
 
 import TypeUnary.Nat hiding ((:*:))
 
-import Circat.Misc ((<~)) -- Unop,(:*)
+import Circat.Misc ((<~),Reversible(..)) -- Unop,(:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
 import Circat.Pair
 import Circat.Rep
+import Circat.If
 import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
@@ -333,6 +335,19 @@ lscan' Zero     = \ (L a)  -> (L mempty, a)
 lscan' (Succ m) = \ (B ts) -> first B (lscanComp' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
 #endif
+
+instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) => HasIf (Tree n a) where
+  if_then_else = repIf
+
+--     Constraint is no smaller than the instance head
+--       in the constraint: HasIf (Rep (Vec n a))
+--     (Use UndecidableInstances to permit this)
+
+instance Reversible (Tree n) where
+  reverse (L a)  = L a
+  reverse (B ts) = B (reverse (reverse <$> ts))
+  {-# INLINE reverse #-}
+
 
 fromList :: IsNat n => [a] -> Tree n a
 fromList = fromList' nat

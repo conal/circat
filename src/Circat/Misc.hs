@@ -63,3 +63,9 @@ compose :: [Unop a] -> Unop a
 compose = foldr (.) id
 
 -- TODO: Maybe generalize the type of compose to Unop' (~>) a
+
+class Reversible f where
+  reverse :: f a -> f a
+  -- Regrettable hack-around for single-method classes
+  regrettable_hack_reverse :: f a
+  regrettable_hack_reverse = undefined
