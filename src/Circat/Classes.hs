@@ -60,8 +60,6 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
     Misc
 --------------------------------------------------------------------}
 
-#if 1
-
 -- | One-bit mux
 class MuxCat k where
   muxB :: (Bool :* (Bool :* Bool)) `k` Bool
@@ -77,9 +75,42 @@ instance MuxCat (->) where
   muxB = muxF
   muxI = muxF
 
-#else
+#if 0
 
-type IfT k a = (Bool :* (a :* a)) `k` a
+-- Experiment
+class Muxy a where
+  mux :: (ClosedCat k, MuxCat k) => (Bool :* (a :* a)) `k` a
+
+-- The ClosedCat constraint is unfortunate here. I need ProductCat for the
+-- product Muxy instance and ClosedCat for the function Muxy instance.
+-- TODO: Find an alternative. Maybe Muxy k a.
+
+instance Muxy Int  where mux = muxI
+instance Muxy Bool where mux = muxB
+
+instance (Muxy a, Muxy b) => Muxy (a :* b) where
+  mux = half exl &&& half exr
+   where
+     half f = mux . second (twiceP f)
+
+instance (Muxy a, Muxy b) => Muxy (a -> b) where
+ mux = curry (mux . (exl . exl &&& (half exl &&& half exr)))
+  where
+    half h = apply . first (h . exr)
+
+repMux :: (ClosedCat k, MuxCat k, RepCat k, HasRep a, Muxy (Rep a)) =>
+          (Bool :* (a :* a)) `k` a
+repMux = abstC . mux . second (twiceP reprC)
+
+-- I can't give a single instance around repMux, because it would overlap
+-- everything else. Instead, write instances via repMux. For instance,
+-- 
+--   instance Muxy a            => Muxy (Pair  a) where mux = repMux
+--   instance (IsNat n, Muxy a) => Muxy (Vec n a) where mux = repMux
+
+#endif
+
+#if 0
 
 class IfCat k a where ifA :: IfT k a
 
