@@ -25,6 +25,8 @@
 
 module Circat.RaggedTree (GTree(..),Tree,TU(..)) where
 
+import Prelude hiding (zipWith)
+
 import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
@@ -59,11 +61,12 @@ data GTree :: TU -> * -> * where
 
 type Tree = GTree
 
-deriving instance Eq a => Eq (Tree n a)
+deriving instance Eq  a => Eq  (Tree n a)
+deriving instance Ord a => Ord (Tree n a)
 
-instance Ord a => Ord (Tree n a) where
-  compare (L a  ) = \ (L a'   ) -> a     `compare` a'
-  compare (B u v) = \ (B u' v') -> (u,v) `compare` (u',v')
+-- instance Ord a => Ord (Tree n a) where
+--   compare (L a  ) = \ (L a'   ) -> a     `compare` a'
+--   compare (B u v) = \ (B u' v') -> (u,v) `compare` (u',v')
 
 -- TODO: Redo in 'case singT' style
 
@@ -182,13 +185,30 @@ instance HasSingT r => LScan (Tree r) where
 
 #endif
 
-instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) =>
-  HasIf (Tree n a) where if_then_else = repIf
+instance (HasIf (Rep (Tree r a)), HasRep (Tree r a)) =>
+  HasIf (Tree r a) where if_then_else = repIf
 
 --     Constraint is no smaller than the instance head
 --       in the constraint: HasIf (Rep (Vec n a))
 --     (Use UndecidableInstances to permit this)
 
+instance HasSingT r => Zippable (Tree r) where
+  zipWith = case (singT :: ST r) of
+              SL -> \ f (L  a ) (L  b ) -> L (f a b)
+              SB -> \ f (B u v) (B s t) -> B (zipWith f u s) (zipWith f v t)
+  {-# INLINE zipWith #-}
+
+#if 0
+B u v :: Tree (BU p q) a
+B s t :: Tree (BU p q) b
+u :: Tree p a
+v :: Tree q a
+s :: Tree p b
+t :: Tree q b
+zipWith f u s :: Tree p c
+zipWith f v t :: Tree q c
+B (zipWith f u s) (zipWith f v t) :: Tree (BU p q) c
+#endif
 
 #if 0
 {--------------------------------------------------------------------

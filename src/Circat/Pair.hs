@@ -79,8 +79,12 @@ instance Monad Pair where
 joinP :: Pair (Pair a) -> Pair a
 joinP ((a :# _) :# (_ :# d)) = a :# d
 
+-- instance Zippable Pair where
+--   (a :# b) `zip` (a' :# b') = (a,a') :# (b,b')
+
 instance Zippable Pair where
-  (a :# b) `zip` (a' :# b') = (a,a') :# (b,b')
+  zipWith f (a :# b) (a' :# b') = f a a' :# f b b'
+  {-# INLINE zipWith #-}
 
 -- so
 --

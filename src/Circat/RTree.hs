@@ -23,9 +23,9 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.RTree (Tree(..)) where
+module Circat.RTree (Tree(..),fromList) where
 
-import Prelude hiding (id,(.),uncurry,zip,reverse)
+import Prelude hiding (id,(.),uncurry,zipWith,reverse)
 
 import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$),(<$>))
@@ -320,11 +320,53 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
 -}
 
+#if 0
+
 instance Zippable (Tree Z) where
   L a `zip` L b = L (a,b)
+  {-# INLINE zipWith #-}
 
 instance Zippable (Tree n) => Zippable (Tree (S n)) where
   B u `zip` B v = B (uncurry zip <$> (u `zip` v))
+  {-# INLINE zipWith #-}
+
+#if 0
+B u :: Tree (S n) a
+B v :: Tree (S n) b
+u :: Pair (Tree n a)
+v :: Pair (Tree n b)
+u `zip` v :: Pair (Tree n a :* Tree n b)
+uncurry zip <$> (u `zip` v) :: Pair (Tree n (a :* b))
+B (uncurry zip <$> (u `zip` v)) :: Tree (S n) (a :* b)
+#endif
+
+#else
+
+instance Zippable (Tree Z) where
+  -- zipWith f = \ (L a) (L b) -> L (f a b)
+  -- zipWith f = inL2 f
+  zipWith = inL2
+  {-# INLINE zipWith #-}
+
+instance Zippable (Tree n) => Zippable (Tree (S n)) where
+  -- zipWith f = \ (B u) (B v) -> B (zipWith (zipWith f) u v)
+  -- zipWith f = inB2 (zipWith (zipWith f))
+  zipWith = inB2.zipWith.zipWith
+  {-# INLINE zipWith #-}
+
+#if 0
+f :: a -> b -> c
+B u :: Tree (S n) a
+B v :: Tree (S n) b
+u :: Pair (Tree n a)
+v :: Pair (Tree n b)
+zipWith f :: Tree n a -> Tree n b -> Tree n c
+zipWith (zipWith f) :: Pair (Tree n a) -> Pair (Tree n b) -> Pair (Tree n c)
+zipWith (zipWith f) u v :: Pair (Tree n c)
+B (zipWith (zipWith f) u v) :: Tree (S n) c
+#endif
+
+#endif
 
 #if 1
 instance LScan (Tree Z) where
@@ -375,6 +417,7 @@ fromList' :: Nat n -> [a] -> Tree n a
 fromList' Zero     [a] = L a
 fromList' Zero     _   = error "fromList': length mismatch"
 fromList' (Succ n) as  = B (fromList' n <$> halves as)
+{-# INLINE fromList' #-}
 
 halves :: [a] -> Pair [a]
 halves as = toP (splitAt (length as `div` 2) as)

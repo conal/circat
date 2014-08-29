@@ -23,9 +23,9 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.LTree (Tree(..)) where
+module Circat.LTree (Tree(..),fromList) where
 
-import Prelude hiding (id,(.),uncurry,zip,reverse)
+import Prelude hiding (id,(.),uncurry,zip,zipWith,reverse)
 
 import Data.Monoid (Monoid(..),(<>))
 import Data.Functor ((<$),(<$>))
@@ -299,13 +299,11 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
 #if 0
 instance Zippable (Tree Z) where
-  -- L a `zip` L b = L (a,b)
-  zip = inL2 (,)
+  zipWith = inL2
 
 instance Zippable (Tree n) => Zippable (Tree (S n)) where
-  -- B u `zip` B v = B (uncurry zip <$> (u `zip` v))
-  zip = inB2 (\ u v -> uncurry zip <$> zip u v)
-#else
+  zipWith = inB2.zipWith.zipWith
+#elsif 0
 instance IsNat n => Zippable (Tree n) where
   zip = zip' nat
 
@@ -313,13 +311,18 @@ zip' :: Nat n -> Tree n a -> Tree n b -> Tree n (a,b)
 zip' Zero     = inL2 (,)
 zip' (Succ m) = inB2 (\ u v -> uncurry zip <$> zip' m u v)
 {-# INLINE zip' #-}
-#endif
--- TODO: rewrite via inL2, inB2.
+#else
+instance IsNat n => Zippable (Tree n) where
+  zipWith = zipWith' nat
 
--- u :: Tree n (f a)
--- v :: Tree n (f b)
--- zip (u,v) :: Tree n (f a, f b) 
--- zip <$> zip (u,v) :: Tree n (f (a,b))
+zipWith' :: Nat n -> (a -> b -> c) -> Tree n a -> Tree n b -> Tree n c
+zipWith' Zero     h = inL2 h
+zipWith' (Succ m) h = inB2 (zipWith' m (zipWith h))
+{-# INLINE zipWith' #-}
+#endif
+
+-- TODO: Rewrite zipWith more elegantly after changing to Nat without explicit
+-- predecessor argument.
 
 #if 0
 instance LScan (Tree Z) where
@@ -347,7 +350,6 @@ instance Reversible (Tree n) where
   reverse (L a)  = L a
   reverse (B ts) = B (reverse (reverse <$> ts))
   {-# INLINE reverse #-}
-
 
 fromList :: IsNat n => [a] -> Tree n a
 fromList = fromList' nat
