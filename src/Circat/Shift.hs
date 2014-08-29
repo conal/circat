@@ -89,6 +89,8 @@ shiftR = accumR id
 shiftLF :: (Traversable f, Traversable g) => f a :* g a -> g a :* f a
 shiftLF = accumR shiftL
 
+-- | Shift @g a@ rightward through @f a@, maintaining order. Displaced rightmost
+-- values from @f a@ accumulate in a new @g a@ on the right.
 shiftRF :: (Traversable f, Traversable g) => g a :* f a -> f a :* g a
 shiftRF = accumL shiftR
 
