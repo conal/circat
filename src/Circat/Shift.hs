@@ -17,7 +17,7 @@
 -- Shift values through structures
 ----------------------------------------------------------------------
 
-module Circat.Shift (accumL, accumR, shiftL, shiftR) where
+module Circat.Shift (accumL, accumR, shiftL, shiftR, shiftLF, shiftRF) where
 
 import Prelude hiding (zip,unzip,zipWith)
 
@@ -83,6 +83,22 @@ shiftR = accumR id
 
 -- Note id instead of swap, which I discovered in testing.
 -- To do: rethink.
+
+-- | Shift @g a@ leftward through @f a@, maintaining order. Displaced leftmost
+-- values from @f a@ accumulate in a new @g a@ on the left.
+shiftLF :: (Traversable f, Traversable g) => f a :* g a -> g a :* f a
+shiftLF = accumR shiftL
+
+shiftRF :: (Traversable f, Traversable g) => g a :* f a -> f a :* g a
+shiftRF = accumL shiftR
+
+#if 0
+accumL :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
+accumR :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
+
+shiftL :: Traversable t => t a :* a -> a :* t a
+shiftR :: Traversable t => a :* t a -> t a :* a
+#endif
 
 {--------------------------------------------------------------------
     From Data.Traversable
