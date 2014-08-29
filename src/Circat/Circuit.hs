@@ -47,6 +47,7 @@ module Circat.Circuit
   -- , (|||*), fromBool, toBool
   , Comp', CompNum, Width, toG, outGWith, outG
   , simpleComp, runC, tagged
+  , systemSuccess
   ) where
 
 import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
