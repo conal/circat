@@ -108,6 +108,7 @@ WrapRep(Sum a,a,Sum)
 WrapRep(Product a,a,Product)
 WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)
+WrapRep(Dual a,a,Dual)
 WrapRep(Endo a,a->a,Endo)
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
