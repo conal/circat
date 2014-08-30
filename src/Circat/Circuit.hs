@@ -438,6 +438,18 @@ instance MuxCat (:>) where
   muxB = namedC "mux"
   muxI = namedC "mux"
 
+-- TODO: add the following simplifications:
+-- 
+--   mux (False,(a,_)) = a
+--   mux (True ,(_,b)) = b
+--   mux (_    ,(a,a)) = a
+--   mux (c,(a,not a)) = c `xor` a
+--
+-- The first three simplifications are for Int and Bool, while the last is just
+-- for Bool.
+--
+-- Test with CRC.
+
 #else
 
 -- instance GenBuses t => HasIf (:>) t where
@@ -562,7 +574,7 @@ systemSuccess cmd =
   do status <- system cmd
      case status of
        ExitSuccess -> return ()
-       _ -> printf "command \"%s\" failed."
+       _ -> printf "command \"%s\" failed.\n" cmd
 
 outG :: GenBuses a => String -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
