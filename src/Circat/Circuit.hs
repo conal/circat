@@ -55,7 +55,7 @@ import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
 
 import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..),liftA2)
+import Control.Applicative (Applicative(..),Alternative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 import Data.Typeable                    -- TODO: imports
@@ -115,7 +115,7 @@ newPinId = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
 newBus :: Width -> CircuitM Bus
 newBus w = flip Bus w <$> newPinId
 
-data Source = BusS Bus | BoolS Bool | IntS Int deriving Show
+data Source = BusS Bus | BoolS Bool | IntS Int deriving (Eq,Show)
 
 newSource :: Width -> CircuitM Source
 newSource w = BusS <$> newBus w
@@ -137,6 +137,22 @@ data Buses :: * -> * where
 
 -- -- Alternatively,
 -- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
+
+#if 0
+-- Equality. Easy hack: derive Eq, but say that circuits are never equal.
+-- TODO: reconsider.
+deriving instance Eq (Buses a)
+instance Eq (a :> b) where _ == _ = False
+#else
+instance Eq (Buses a) where
+  UnitB     == UnitB        = True
+  BoolB s   == BoolB s'     = s == s'
+  IntB s    == IntB s'      = s == s'
+  PairB a b == PairB a' b'  = a == a' && b == b'
+  IsoB r    == IsoB r'      = r == r'
+  FunB _    == FunB _       = False             -- TODO: reconsider
+  _         == _            = False
+#endif
 
 deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
@@ -287,6 +303,9 @@ type Opt  a b = Buses a -> Maybe (Buses b)
 noOpt :: Opt a b
 noOpt = const Nothing
 
+orOpt :: Binop (Opt a b)
+orOpt f g a = f a <|> g a
+
 namedOptC :: GenBuses b => String -> OptC a b -> a :> b
 #ifdef OptimizeCircuit
 namedOptC name opt =
@@ -429,45 +448,6 @@ uncurryK (arr (unC . unFunB) . f) . arr unPairB == h
 
 #endif
 
--- muxC :: IsSourceP c => Bool :* (c :* c) :> c
--- muxC = namedC "mux"
-
-#if 1
-
-instance MuxCat (:>) where
-  muxB = namedC "mux"
-  muxI = namedC "mux"
-
--- TODO: add the following simplifications:
--- 
---   mux (False,(a,_)) = a
---   mux (True ,(_,b)) = b
---   mux (_    ,(a,a)) = a
---   mux (c,(a,not a)) = c `xor` a
---
--- The first three simplifications are for Int and Bool, while the last is just
--- for Bool.
---
--- Test with CRC.
-
-#else
-
--- instance GenBuses t => HasIf (:>) t where
---   ifA = namedC "mux"
-
--- or
-
-instance IfCat (:>) Bool where ifA = namedC "mux"
-instance IfCat (:>) Int  where ifA = namedC "mux32"
-
-instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
-  ifA = prodIf
-
-instance IfCat (:>) b => IfCat (:>) (a -> b) where
-  ifA = funIf
-
-#endif
-
 instance TerminalCat (:>) where
   it = C (const UnitB . it)
 
@@ -540,6 +520,79 @@ instance NumCat (:>) Int where
 
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
+
+-- muxC :: IsSourceP c => Bool :* (c :* c) :> c
+-- muxC = namedC "mux"
+
+#if 1
+
+#if 0
+instance MuxCat (:>) where
+  muxB = namedC "mux"
+  muxI = namedC "mux"
+
+-- TODO: add the following simplifications:
+-- 
+--   mux (False,(a,_))    = a
+--   mux (True ,(_,b))    = b
+--   mux (c,(False,True)) = c
+--   mux (c,(True,False)) = c
+--   mux (_    ,(a,a))    = a
+--   mux (c,(a,not a))    = c `xor` a
+--
+-- The first three simplifications are for Int and Bool, while the last is just
+-- for Bool.
+--
+-- Test with CRC.
+
+#else
+
+type OptMux  a = Buses Bool :* (Buses a :* Buses a) ->           Maybe (Buses a)
+type OptMuxC a = Buses Bool :* (Buses a :* Buses a) -> CircuitM (Maybe (Buses a))
+
+muxArgsB :: Buses (Bool :* (a :* a)) -> Buses Bool :* (Buses a :* Buses a)
+muxArgsB (PairB c (PairB a a')) = (c,(a,a'))
+muxArgsB _ = isoErr "muxArgsB"
+
+namedOptMux  :: GenBuses a => String -> OptMux  a -> Bool :* (a :* a) :> a
+namedOptMux  name opt = namedOpt name (opt . muxArgsB)
+
+namedOptMuxC :: GenBuses a => String -> OptMuxC a -> Bool :* (a :* a) :> a
+namedOptMuxC name opt = namedOptC name (opt . muxArgsB)
+
+muxOptC :: OptMuxC a
+muxOptC (FalseS,(a,_))          = return $ Just a
+muxOptC ( TrueS,(_,b))          = return $ Just b
+muxOptC (_     ,(a,b)) | a == b = return $ Just a
+muxOptC (c,(FalseS,TrueS))      = return $ Just c
+muxOptC (c,(TrueS,FalseS))      = Just <$> unmkCK not c
+muxOptC _                       = return $ Nothing           
+
+-- orOpt
+
+instance MuxCat (:>) where
+  muxB = namedOptMuxC "mux" muxOptC
+  muxI = namedOptMuxC "mux" muxOptC
+
+#endif
+
+#else
+
+-- instance GenBuses t => HasIf (:>) t where
+--   ifA = namedC "mux"
+
+-- or
+
+instance IfCat (:>) Bool where ifA = namedC "mux"
+instance IfCat (:>) Int  where ifA = namedC "mux32"
+
+instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
+  ifA = prodIf
+
+instance IfCat (:>) b => IfCat (:>) (a -> b) where
+  ifA = funIf
+
+#endif
 
 instance GenBuses a => Show (a :> b) where
   show = show . runC
