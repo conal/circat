@@ -561,12 +561,23 @@ namedOptMuxC :: GenBuses a => String -> OptMuxC a -> Bool :* (a :* a) :> a
 namedOptMuxC name opt = namedOptC name (opt . muxArgsB)
 
 muxOptC :: OptMuxC a
-muxOptC (FalseS,(a,_))          = return $ Just a
-muxOptC ( TrueS,(_,b))          = return $ Just b
-muxOptC (_     ,(a,b)) | a == b = return $ Just a
-muxOptC (c,(FalseS,TrueS))      = return $ Just c
-muxOptC (c,(TrueS,FalseS))      = Just <$> unmkCK not c
-muxOptC _                       = return $ Nothing           
+muxOptC (FalseS,(a,_))      = return $ Just a
+muxOptC ( TrueS,(_,b))      = return $ Just b
+muxOptC (_ ,(a,b)) | a == b = return $ Just a
+muxOptC (c,(FalseS,TrueS))  = return $ Just c
+muxOptC (c,(TrueS,FalseS))  = Just <$> unmkCK not c
+muxOptC _                   = return $ Nothing           
+
+#if 0
+
+-- Alternative notation:
+
+#define Sat(pred) ((pred) -> True)
+#define Eql(x) Sat(==(x))
+
+muxOptC (_ ,(a,Eql(a))) = return $ Just a
+
+#endif
 
 -- orOpt
 
