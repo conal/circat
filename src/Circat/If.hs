@@ -60,24 +60,11 @@ instance (HasIf s, HasIf t) => HasIf (s,t) where
   if_then_else c (s,t) (s',t') = (if_then_else c s s', if_then_else c t t')
   {-# INLINE if_then_else #-}
 
-#if 0
--- We'll get triples and quadruples via HasRep
 instance (HasIf s, HasIf t, HasIf u) => HasIf (s,t,u) where
-  if_then_else c (s,t,u) (s',t',u') =
-    ( if_then_else c s s'
-    , if_then_else c t t'
-    , if_then_else c u u' )
-  {-# INLINE if_then_else #-}
+  if_then_else = repIf
 
 instance (HasIf s, HasIf t, HasIf u, HasIf v) => HasIf (s,t,u,v) where
-  if_then_else c (s,t,u,v) (s',t',u',v') =
-    ( if_then_else c s s'
-    , if_then_else c t t'
-    , if_then_else c u u'
-    , if_then_else c v v'
-    )
-  {-# INLINE if_then_else #-}
-#endif
+  if_then_else = repIf
 
 instance (HasIf s, HasIf t) => HasIf (s -> t) where
   if_then_else c f f' = \ s -> if_then_else c (f s) (f' s)
@@ -95,3 +82,4 @@ instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) => HasIf (Vec n a) where
 
 -- instance HasIf (Vec Z a) where if_then_else = repIf
 -- instance (HasIf (Vec n a), HasIf a) => HasIf (Vec (S n) a) where if_then_else = repIf
+
