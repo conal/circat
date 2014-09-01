@@ -680,7 +680,13 @@ toG :: GenBuses a => String -> (a :> b) -> DGraph
 toG name cir = printf "digraph %s {\n%s}\n" (tweak <$> name)
                 (concatMap wrap (prelude ++ recordDots comps))
  where
-   prelude = ["rankdir=LR","node [shape=Mrecord]"{-, "ranksep=1"-}, "ratio=1"] -- maybe add fixedsize=true
+   prelude = [ "rankdir=LR"
+             , "node [shape=Mrecord]"
+             --, "ranksep=1"
+             , "bgcolor=transparent"
+             , "ratio=1"
+             -- , fixedsize=true
+             ]
    comps = simpleComp <$> runC cir
    wrap  = ("  " ++) . (++ ";\n")
    tweak '-' = '_'
