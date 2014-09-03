@@ -459,7 +459,8 @@ uncurryK (arr (unC . unFunB) . f) . arr unPairB == h
 
 instance TerminalCat (:>) where
   -- it = C (const UnitB . it)
-  it = mkCK (const (return UnitB))
+  -- it = mkCK (const (return UnitB))
+  it = C (arr (pure UnitB))
 
 -- instance ConstCat (:>) where
 --   type ConstKon (:>) a b = (Show b, GenBuses b)
