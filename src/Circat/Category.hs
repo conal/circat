@@ -31,9 +31,8 @@ module Circat.Category
   , ProductCat(..), twiceP, inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..), twiceC
   , DistribCat(..)
-  , ConstCat(..), ConstCatWith, ConstUCat
+  -- , ConstCat(..), ConstCatWith, ConstUCat, lconst, rconst
   , TerminalCat(..), lunit, runit
-  , lconst, rconst
   , StrongCat(..), ClosedCat(..)
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
@@ -49,7 +48,7 @@ module Circat.Category
   , Yes
   ) where
 
-import Prelude hiding (id,(.),const,curry,uncurry,sequence)
+import Prelude hiding (id,(.),curry,uncurry,sequence)
 import qualified Prelude as P
 
 import Control.Category
@@ -201,6 +200,7 @@ instance Monad m => DistribCat (Kleisli m) where
   distl = arr distl
   distr = arr distr
 
+#if 0
 -- | Category with constant morphisms
 class Category k => ConstCat k where
   type ConstKon k a b :: Constraint
@@ -216,6 +216,17 @@ instance ConstCat (->) where
 instance Monad m => ConstCat (Kleisli m) where
   type ConstKon (Kleisli m) a b = ()  -- why necessary?
   const a = arr (const a)
+
+type ConstUCat k b = (TerminalCat k, ConstCatWith k () b)
+
+-- | Inject a constant on the left
+lconst :: ConstUCat k a => a -> (b `k` (a :* b))
+lconst a = first  (const a) . lunit
+
+-- | Inject a constant on the right
+rconst :: ConstUCat k b => b -> (a `k` (a :* b))
+rconst b = second (const b) . runit
+#endif
 
 class ProductCat k => TerminalCat k where
   it :: a `k` Unit
@@ -234,16 +245,6 @@ instance TerminalCat (->) where
 
 instance Monad m => TerminalCat (Kleisli m) where
   it = arr it
-
-type ConstUCat k b = (TerminalCat k, ConstCatWith k () b)
-
--- | Inject a constant on the left
-lconst :: ConstUCat k a => a -> (b `k` (a :* b))
-lconst a = first  (const a) . lunit
-
--- | Inject a constant on the right
-rconst :: ConstUCat k b => b -> (a `k` (a :* b))
-rconst b = second (const b) . runit
 
 class ProductCat k => StrongCat k f where
   type StrongKon k f a b :: Constraint

@@ -45,12 +45,12 @@ module Circat.Circuit
   , namedC, constS, constC
   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
-  , Comp', CompNum, Width, toG, outGWith, outG
+  , Comp', CompNum, Width, outGWith, outG
   , simpleComp, runC, tagged
   , systemSuccess
   ) where
 
-import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
+import Prelude hiding (id,(.),not,and,or,curry,uncurry,sequence)
 -- import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>),Sum)
@@ -59,6 +59,7 @@ import Control.Applicative (Applicative(..),Alternative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 import Data.Typeable                    -- TODO: imports
+import Data.Function (on)
 import Data.Coerce                      -- TODO: imports
 import Unsafe.Coerce -- experiment
 
@@ -104,7 +105,16 @@ type PinSupply = [PinId]
 type Width = Int
 
 -- | Data bus with given width
-data Bus = Bus PinId Width deriving Eq
+data Bus = Bus PinId Width
+#if 1
+  deriving Eq
+#else
+busId :: Bus -> PinId
+busId (Bus m _) = m
+
+instance Eq  Bus where (==) = (==) `on` busId
+instance Ord Bus where compare = compare `on` busId
+#endif
 
 instance Show Bus where
   show (Bus i w) = "B" ++ show i ++ ":" ++ show w
@@ -332,7 +342,6 @@ namedOpt2C name opt = namedOptC name (opt . unPairB)
 namedOpt2 :: GenBuses c => String -> Opt2 a b c -> a :* b :> c
 namedOpt2 name opt = namedOpt name (opt . unPairB)
 
-
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
 constSM mkB = mkCK (const mkB)
@@ -449,11 +458,12 @@ uncurryK (arr (unC . unFunB) . f) . arr unPairB == h
 #endif
 
 instance TerminalCat (:>) where
-  it = C (const UnitB . it)
+  -- it = C (const UnitB . it)
+  it = mkCK (const (return UnitB))
 
-instance ConstCat (:>) where
-  type ConstKon (:>) a b = (Show b, GenBuses b)
-  const = constC
+-- instance ConstCat (:>) where
+--   type ConstKon (:>) a b = (Show b, GenBuses b)
+--   const = constC
 
 -- instance BoolCat (:>) where
 --   not = namedC "not"
@@ -492,6 +502,9 @@ instance BoolCat (:>) where
           (TrueS,y )  -> Just <$> unmkCK not y
           (x,TrueS )  -> Just <$> unmkCK not x
           _           -> return $ Nothing
+
+-- TODO: Drop the constant/constant (BoolB2S) cases, since they're covered in
+-- the other cases (constant/y and x/constant).
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
@@ -657,7 +670,7 @@ outGWith (outType,res) name circ =
      -- putStrLn "outGWith: here goes!!"
      -- printf "Circuit: %d components\n" (length (runC circ))
      -- print (simpleComp <$> runC circ)
-     writeFile (outFile "dot") (toG name circ)
+     writeFile (outFile "dot") (circuitDot name circ)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
@@ -674,23 +687,30 @@ outGWith (outType,res) name circ =
 -- TODO: Instead of failing, emit a message about the generated file. Perhaps
 -- simply use "echo".
 
-type DGraph = String
+type DGraph = [Comp']
 
-toG :: GenBuses a => String -> (a :> b) -> DGraph
-toG name cir = printf "digraph %s {\n%s}\n" (tweak <$> name)
-                (concatMap wrap (prelude ++ recordDots comps))
+type Dot = String
+
+circuitGraph :: GenBuses a => (a :> b) -> DGraph
+circuitGraph = map simpleComp . runC
+
+graphDot :: String -> DGraph -> Dot
+graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
+                        (concatMap wrap (prelude ++ recordDots comps))
  where
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
-             --, "ranksep=1"
              , "bgcolor=transparent"
              , "ratio=1"
+             --, "ranksep=1"
              -- , fixedsize=true
              ]
-   comps = simpleComp <$> runC cir
    wrap  = ("  " ++) . (++ ";\n")
    tweak '-' = '_'
    tweak c   = c
+
+circuitDot :: GenBuses a => String -> (a :> b) -> Dot
+circuitDot name circ = graphDot name (circuitGraph circ)
 
 type Statement = String
 
@@ -700,7 +720,6 @@ type Outputs = [Source]
 type Comp' = (String,Inputs,Outputs)
 
 simpleComp :: Comp -> Comp'
--- simpleComp (Comp prim a b) = (show prim, flattenB a, flattenB b)
 simpleComp (Comp prim a b) = (name, flat a, flat b)
  where
    name = show prim
