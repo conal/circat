@@ -31,41 +31,41 @@ import Circat.Rep
 -- Utilities
 
 -- | Swap domain
-swapD :: (a :* b -> c) -> (b :* a -> c)
-swapD = (. swap)
+swapDom :: (a :* b -> c) -> (b :* a -> c)
+swapDom = (. swap)
 
 -- | Swap range
-swapR :: (a -> b :* c) -> (a -> c :* b)
-swapR = (swap .)
+swapRan :: (a -> b :* c) -> (a -> c :* b)
+swapRan = (swap .)
 
 -- | Accumulate rightward
 accumR :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
-accumR = swapR . uncurry . mapAccumL . curry . swapR
+accumR = swapRan . uncurry . mapAccumL . curry . swapRan
 
 #if 0
 mapAccumL :: Traversable t => (a -> b -> a :* c) -> a -> t b -> a :* t c
 
 h :: a :* b -> c :* a
-swapR h :: a :* b -> a :* c
-curry (swapR h) :: a -> b -> a :* c
-mapAccumL (curry (swapR h)) :: a -> t b -> a :* t c
-uncurry (mapAccumL (curry (swapR h))) :: a :* t b -> a :* t c
-swapR uncurry (mapAccumL (curry (swapR h))) :: a :* t b -> t c :* a
+swapRan h :: a :* b -> a :* c
+curry (swapRan h) :: a -> b -> a :* c
+mapAccumL (curry (swapRan h)) :: a -> t b -> a :* t c
+uncurry (mapAccumL (curry (swapRan h))) :: a :* t b -> a :* t c
+swapRan uncurry (mapAccumL (curry (swapRan h))) :: a :* t b -> t c :* a
 #endif
 
 -- | Accumulate leftward
 accumL :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
-accumL = swapD . uncurry . mapAccumR . curry . swapD
+accumL = swapDom . uncurry . mapAccumR . curry . swapDom
 
 #if 0
 mapAccumR :: Traversable t => (a -> c -> a :* b) -> a -> t c -> a :* t b
 
 h :: c :* a -> a :* b
-swapD h :: a :* c -> a :* b
-curry (swapD h) :: a -> c -> a :* b
-mapAccumR (curry (swapD h)) :: a -> t c -> a :* t b
-uncurry (mapAccumR (curry (swapD h))) :: a :* t c -> a :* t b
-swapD (uncurry (mapAccumR (curry (swapD h)))) :: t c :* a -> a :* t b
+swapDom h :: a :* c -> a :* b
+curry (swapDom h) :: a -> c -> a :* b
+mapAccumR (curry (swapDom h)) :: a -> t c -> a :* t b
+uncurry (mapAccumR (curry (swapDom h))) :: a :* t c -> a :* t b
+swapDom (uncurry (mapAccumR (curry (swapDom h)))) :: t c :* a -> a :* t b
 #endif
 
 -- accumL = (inSwapD.inCurry) mapAccumR
