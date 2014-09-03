@@ -17,7 +17,7 @@
 -- Shift values through structures
 ----------------------------------------------------------------------
 
-module Circat.Shift (accumL, accumR, shiftL, shiftR, shiftLF, shiftRF) where
+module Circat.Shift (accumL, accumR, shiftR, shiftL, shiftRF, shiftLF) where
 
 import Prelude hiding (zip,unzip,zipWith)
 
@@ -38,9 +38,9 @@ swapDom = (. swap)
 swapRan :: (a -> b :* c) -> (a -> c :* b)
 swapRan = (swap .)
 
--- | Accumulate rightward
-accumR :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
-accumR = swapRan . uncurry . mapAccumL . curry . swapRan
+-- | Accumulate from left (rightward)
+accumL :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
+accumL = swapRan . uncurry . mapAccumL . curry . swapRan
 
 #if 0
 mapAccumL :: Traversable t => (a -> b -> a :* c) -> a -> t b -> a :* t c
@@ -53,9 +53,9 @@ uncurry (mapAccumL (curry (swapRan h))) :: a :* t b -> a :* t c
 swapRan uncurry (mapAccumL (curry (swapRan h))) :: a :* t b -> t c :* a
 #endif
 
--- | Accumulate leftward
-accumL :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
-accumL = swapDom . uncurry . mapAccumR . curry . swapDom
+-- | Accumulate from right (leftward)
+accumR :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
+accumR = swapDom . uncurry . mapAccumR . curry . swapDom
 
 #if 0
 mapAccumR :: Traversable t => (a -> c -> a :* b) -> a -> t c -> a :* t b
@@ -68,38 +68,38 @@ uncurry (mapAccumR (curry (swapDom h))) :: a :* t c -> a :* t b
 swapDom (uncurry (mapAccumR (curry (swapDom h)))) :: t c :* a -> a :* t b
 #endif
 
--- accumL = (inSwapD.inCurry) mapAccumR
--- accumR = (inSwapR.inCurry) mapAccumL
-
--- | Shift a value leftward (from the right)
-shiftL :: Traversable t => t a :* a -> a :* t a
-shiftL = accumL id
--- shiftL (as,a') = mapAccumR (flip (,)) a' as
+-- accumR = (inSwapD.inCurry) mapAccumR
+-- accumL = (inSwapR.inCurry) mapAccumL
 
 -- | Shift a value rightward (from the left)
-shiftR :: Traversable t => a :* t a -> t a :* a
+shiftL :: Traversable t => a :* t a -> t a :* a
+shiftL = accumL id
+-- shiftL (a',as) = swap (mapAccumL (flip (,)) a' as)
+
+-- | Shift a value leftward (from the right)
+shiftR :: Traversable t => t a :* a -> a :* t a
 shiftR = accumR id
--- shiftR (a',as) = swap (mapAccumL (flip (,)) a' as)
+-- shiftR (as,a') = mapAccumR (flip (,)) a' as
 
 -- Note id instead of swap, which I discovered in testing.
 -- To do: rethink.
 
 -- | Shift @g a@ leftward through @f a@, maintaining order. Displaced leftmost
 -- values from @f a@ accumulate in a new @g a@ on the left.
-shiftLF :: (Traversable f, Traversable g) => f a :* g a -> g a :* f a
-shiftLF = accumR shiftL
+shiftRF :: (Traversable f, Traversable g) => f a :* g a -> g a :* f a
+shiftRF = accumL shiftR
 
 -- | Shift @g a@ rightward through @f a@, maintaining order. Displaced rightmost
 -- values from @f a@ accumulate in a new @g a@ on the right.
-shiftRF :: (Traversable f, Traversable g) => g a :* f a -> f a :* g a
-shiftRF = accumL shiftR
+shiftLF :: (Traversable f, Traversable g) => g a :* f a -> f a :* g a
+shiftLF = accumR shiftL
 
 #if 0
-accumL :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
-accumR :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
+accumR :: Traversable t => (c :* a -> a :* b) -> (t c :* a -> a :* t b)
+accumL :: Traversable t => (a :* b -> c :* a) -> (a :* t b -> t c :* a)
 
-shiftL :: Traversable t => t a :* a -> a :* t a
-shiftR :: Traversable t => a :* t a -> t a :* a
+shiftR :: Traversable t => t a :* a -> a :* t a
+shiftL :: Traversable t => a :* t a -> t a :* a
 #endif
 
 {--------------------------------------------------------------------
