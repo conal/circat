@@ -35,7 +35,7 @@ import Control.Applicative (liftA2)
 import TypeUnary.Vec (Vec,IsNat)
 
 import Circat.Misc (Unop,(:*))
-import Circat.Shift (shiftL)
+import Circat.Shift (shiftR)
 
 type LScanTy f = forall a. Monoid a => f a -> f a :* a
 
@@ -84,7 +84,7 @@ lscanComp = lscanComp' lscan lscan
 --    adjust (p,t)  = (p <>) <$> t
 
 lscanInc :: (LScan f, Traversable f, Monoid b) => Unop (f b)
-lscanInc = snd . shiftL . lscan
+lscanInc = snd . shiftR . lscan
 
 -- lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums :: (LScan f, Num b) => f b -> (f b, b)
@@ -96,11 +96,11 @@ lproducts = (fmap getProduct *** getProduct) . lscan . fmap Product
 -- Variants 
 
 lsums' :: (LScan f, Traversable f, Num b) => Unop (f b)
-lsums' = snd . shiftL . lsums
+lsums' = snd . shiftR . lsums
 -- lsums' = fmap getSum . lscanInc . fmap Sum
 
 lproducts' :: (LScan f, Traversable f, Num b) => Unop (f b)
-lproducts' = snd . shiftL . lproducts
+lproducts' = snd . shiftR . lproducts
 -- lproducts' = fmap getProduct . lscanInc . fmap Product
 
 class Functor f => Zippable f where
