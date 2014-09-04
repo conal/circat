@@ -39,13 +39,13 @@
 -- #define TaggedSums
 -- #define ChurchSums
 
-module Circat.Circuit 
+module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Bus(..), Source(..), GenBuses
+  , PinId, Width, Bus(..), Source(..), GenBuses
   , namedC, constS, constC
-  , litUnit, litBool, litInt
+--   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
-  , Comp', CompNum, Width, outGWith, outG
+  , Comp', CompNum, DGraph, circuitGraph, outGWith, outG
   , simpleComp, runC, tagged
   , systemSuccess
   ) where
@@ -104,20 +104,31 @@ type PinSupply = [PinId]
 -- | Bus width
 type Width = Int
 
--- | Data bus with given width
+-- Data bus: Id, bit width, prim name, arguments, output index
 data Bus = Bus PinId Width
-#if 1
-  deriving Eq
-#else
+
+data Source = Source Bus PrimName [Source] Int
+
+sourceBus :: Source -> Bus
+sourceBus (Source b _ _ _) = b
+
 busId :: Bus -> PinId
-busId (Bus m _) = m
+busId (Bus i _) = i
+
+sourceId :: Source -> PinId
+sourceId = busId . sourceBus
 
 instance Eq  Bus where (==) = (==) `on` busId
 instance Ord Bus where compare = compare `on` busId
-#endif
+
+instance Eq  Source where (==) = (==) `on` sourceId
+instance Ord Source where compare = compare `on` sourceId
 
 instance Show Bus where
   show (Bus i w) = "B" ++ show i ++ ":" ++ show w
+
+instance Show Source where
+  show (Source b prim ins o) = printf "Source %s %s %s %d" (show b) (show prim) (show ins) o
 
 newPinId :: CircuitM PinId
 newPinId = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
@@ -125,10 +136,8 @@ newPinId = do { (p:ps') <- Mtl.get ; Mtl.put ps' ; return p }
 newBus :: Width -> CircuitM Bus
 newBus w = flip Bus w <$> newPinId
 
-data Source = BusS Bus | BoolS Bool | IntS Int deriving (Eq,Show)
-
-newSource :: Width -> CircuitM Source
-newSource w = BusS <$> newBus w
+newSource ::  Width -> String -> [Source] -> Int -> CircuitM Source
+newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
 
 {--------------------------------------------------------------------
     Buses representing a given type
@@ -179,13 +188,25 @@ instance Show (Buses a) where
 
 -- TODO: Improve to Show instance with showsPrec
 
-class GenBuses a where genBuses :: CircuitM (Buses a)
+genBuses :: GenBuses b => Prim a b -> [Source] -> CircuitM (Buses b)
+genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
-instance GenBuses Unit   where genBuses = return UnitB
-instance GenBuses Bool where genBuses = BoolB <$> newSource 1
-instance GenBuses Int  where genBuses = IntB  <$> newSource 32
+class GenBuses a where
+  genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+
+genBus :: (Source -> Buses a) -> Width
+       -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
+genBus wrap w prim ins o = do src <- newSource w prim ins o
+                              return (wrap src,o+1)
+
+instance GenBuses Unit where genBuses' _ _ o = return (UnitB,o)
+instance GenBuses Bool where genBuses' = genBus BoolB  1
+instance GenBuses Int  where genBuses' = genBus IntB  32
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
-  genBuses = liftA2 PairB genBuses genBuses
+  genBuses' prim ins o =
+    do (a,oa) <- genBuses' prim ins o
+       (b,ob) <- genBuses' prim ins oa
+       return (PairB a b, ob)
 
 flattenB :: String -> Buses a -> [Source]
 flattenB name = flip flat []
@@ -235,10 +256,12 @@ reprB b = error ("repB: non-IsoB: " ++ show b)
     The circuit monad
 --------------------------------------------------------------------}
 
--- | Primitive of type @a -> b@
-newtype Prim a b = Prim String
+type PrimName = String
 
-instance Show (Prim a b) where show (Prim str) = str
+-- | Primitive of type @a -> b@
+newtype Prim a b = Prim { primName :: PrimName }
+
+instance Show (Prim a b) where show = primName
 
 -- Component: primitive instance with inputs & outputs
 data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
@@ -252,21 +275,24 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
 genComp :: GenBuses b => Prim a b -> BCirc a b
-genComp prim a = do b <- genBuses
+genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
                     tell (singleton (Comp prim a b))
                     return b
 
+constComp' :: GenBuses b => String -> CircuitM (Buses b)
+constComp' str = genComp (Prim str) UnitB
+
 constComp :: GenBuses b => String -> BCirc a b
-constComp str _ = do b <- genBuses
-                     tell (singleton (Comp (Prim str) UnitB b))
-                     return b
+constComp str = const (constComp' str)
 
 -- TODO: eliminate constComp in favor of a more restrictive version in which a
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM :: (Show b, GenBuses b) =>
-          b -> BCirc a b
+constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+constM' b = constComp' (show b)
+
+constM :: (Show b, GenBuses b) => b -> BCirc a b
 constM b = constComp (show b)
 
 {--------------------------------------------------------------------
@@ -306,41 +332,48 @@ namedC :: GenBuses b => String -> a :> b
 -- namedC = primC . Prim
 namedC name = namedOpt name noOpt
 
-type OptC a b = Buses a -> CircuitM (Maybe (Buses b))
+type Opt b = [Source] -> CircuitM (Maybe (Buses b))
 
-type Opt  a b = Buses a -> Maybe (Buses b)
+just :: Applicative f => a -> f (Maybe a)
+just = pure . Just
 
-noOpt :: Opt a b
-noOpt = const Nothing
+nothing :: Applicative f => f (Maybe a)
+nothing = pure Nothing
 
-orOpt :: Binop (Opt a b)
-orOpt f g a = f a <|> g a
+newComp :: (a :> b) -> Buses a -> CircuitM (Maybe (Buses b))
+newComp cir = fmap Just . unmkCK cir
 
-namedOptC :: GenBuses b => String -> OptC a b -> a :> b
+newComp1 :: SourceToBuses a => (a :> b) -> Source -> CircuitM (Maybe (Buses b))
+newComp1 cir a = newComp cir (toBuses a)
+
+newComp2 :: (SourceToBuses a, SourceToBuses b) =>
+            (a :* b :> c) -> Source -> Source -> CircuitM (Maybe (Buses c))
+newComp2 cir a b = newComp cir (PairB (toBuses a) (toBuses b))
+
+newComp3 :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
+            ((a :* b) :* c :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
+newComp3 cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses c))
+
+newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
+newVal b = Just <$> constM' b
+
+noOpt :: Opt b
+noOpt = const nothing
+
+orOpt :: Binop (Opt b)
+
+orOpt f g a = do mb <- f a
+                 case mb of
+                   Nothing -> g a
+                   Just _  -> return mb
+
+namedOpt :: GenBuses b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
-namedOptC name opt =
-  mkCK $ \ a -> opt a >>= maybe (genComp (Prim name) a) return
+namedOpt name opt =
+  mkCK $ \ a -> opt (flattenB "namedOpt" a) >>= maybe (genComp (Prim name) a) return
 #else
-namedOptC name _ = mkCK (genComp (Prim name))
+namedOpt name _ = mkCK (genComp (Prim name))
 #endif
-
-namedOpt :: GenBuses b => String -> Opt a b -> a :> b
-namedOpt name opt = namedOptC name (return . opt)
-
--- namedOptC name opt = mkCK $ \ a ->
---   maybe (genComp (Prim name) a) return (opt a)
-
--- Convenient variations
-
-type Opt2C a b c = Buses a :* Buses b -> CircuitM (Maybe (Buses c))
-
-type Opt2  a b c = Buses a :* Buses b -> Maybe (Buses c)
-
-namedOpt2C :: GenBuses c => String -> Opt2C a b c -> a :* b :> c
-namedOpt2C name opt = namedOptC name (opt . unPairB)
-
-namedOpt2 :: GenBuses c => String -> Opt2 a b c -> a :* b :> c
-namedOpt2 name opt = namedOpt name (opt . unPairB)
 
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
@@ -358,6 +391,7 @@ constC = mkCK . constM
 pureC :: Buses b -> a :> b
 pureC = mkCK . pure . pure
 
+#if 0
 litUnit :: Unit -> a :> Unit
 litUnit = pureC . const UnitB
 
@@ -366,6 +400,7 @@ litInt = pureC . IntB . IntS
 
 litBool :: Bool -> a :> Bool
 litBool = pureC . BoolB . BoolS
+#endif
 
 inC :: (a :+> b -> a' :+> b') -> (a :> b -> a' :> b')
 inC = C <~ unC
@@ -472,65 +507,66 @@ instance TerminalCat (:>) where
 --   or  = namedC "or"
 --   xor = namedC "xor"
 
-pattern BoolBS a    = BoolB (BoolS a)
-pattern TrueS       = BoolBS True
-pattern FalseS      = BoolBS False
-pattern BoolB2S x y = ((BoolBS x,BoolBS y) :: (Buses Bool, Buses Bool))
--- See https://ghc.haskell.org/trac/ghc/ticket/8968 about the pattern signature.
+pattern ConstS name <- Source _ name [] 0
+pattern Val x     <- ConstS (reads -> [(x,"")])
+
+pattern TrueS    <- ConstS "True"
+pattern FalseS   <- ConstS "False"
+pattern NotS a   <- Source _ "not" [a] 0
+pattern XorS a b <- Source _ "xor" [a,b] 0
+
+class SourceToBuses a where toBuses :: Source -> Buses a
+instance SourceToBuses Bool where toBuses = BoolB
+instance SourceToBuses Int  where toBuses = IntB
+
+sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
+sourceB = just . toBuses
 
 instance BoolCat (:>) where
   not = namedOpt "not" $ \ case
-          BoolBS x    -> Just (BoolBS (not x))
-          _           -> Nothing
-  and = namedOpt2 "and" $ \ case
-          BoolB2S x y -> Just (BoolBS (x && y))
-          (TrueS ,y)  -> Just y
-          (x,TrueS )  -> Just x
-          (FalseS,_)  -> Just FalseS
-          (_,FalseS)  -> Just FalseS
-          _           -> Nothing
-  or  = namedOpt2 "or"  $ \ case
-          BoolB2S x y -> Just (BoolBS (x || y))
-          (FalseS,y)  -> Just y
-          (x,FalseS)  -> Just x
-          (TrueS ,_)  -> Just TrueS
-          (_,TrueS )  -> Just TrueS
-          _           -> Nothing
-  xor = namedOpt2C "xor" $ \ case
-          BoolB2S x y -> return $ Just (BoolBS (x /= y))
-          (FalseS,y)  -> return $ Just y
-          (x,FalseS)  -> return $ Just x
-          (TrueS,y )  -> Just <$> unmkCK not y
-          (x,TrueS )  -> Just <$> unmkCK not x
-          _           -> return $ Nothing
-
--- TODO: Drop the constant/constant (BoolB2S) cases, since they're covered in
--- the other cases (constant/y and x/constant).
+          [NotS a]     -> sourceB a
+          [Val x]      -> newVal (not x)
+          _            -> nothing
+  and = namedOpt "and" $ \ case
+          [TrueS ,y]   -> sourceB y
+          [x,TrueS ]   -> sourceB x
+          [x@FalseS,_] -> sourceB x
+          [_,y@FalseS] -> sourceB y
+          _            -> nothing
+  or  = namedOpt "or"  $ \ case
+          [FalseS,y]   -> sourceB y
+          [x,FalseS]   -> sourceB x
+          [x@TrueS ,_] -> sourceB x
+          [_,y@TrueS ] -> sourceB y
+          _            -> nothing
+  xor = namedOpt "xor" $ \ case
+          [FalseS,y]   -> sourceB y
+          [x,FalseS]   -> sourceB x
+          [TrueS,y ]   -> newComp1 not y
+          [x,TrueS ]   -> newComp1 not x
+          _            -> nothing
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
-pattern IntBS a    = IntB (IntS a)
-pattern ZeroS      = IntBS 0
-pattern OneS       = IntBS 1
-pattern IntB2S x y = ((IntBS x,IntBS y) :: (Buses Int, Buses Int))
--- See https://ghc.haskell.org/trac/ghc/ticket/8968 about the pattern signature.
+pattern ZeroS <- ConstS "0"
+pattern OneS  <- ConstS "1"
 
 instance NumCat (:>) Int where
- add = namedOpt2 "add" $ \ case
-         IntB2S x y -> Just (IntBS (x+y))
-         (ZeroS,y)  -> Just y
-         (x,ZeroS)  -> Just x
-         _          -> Nothing
- mul = namedOpt2 "mul" $ \ case
-         IntB2S x y -> Just (IntBS (x*y))
-         (OneS ,y)  -> Just y
-         (x,OneS )  -> Just x
-         (ZeroS,_)  -> Just ZeroS
-         (_,ZeroS)  -> Just ZeroS
-         _          -> Nothing
+ add = namedOpt "add" $ \ case
+         [Val x, Val y] -> newVal (x+y)
+         [ZeroS,y]      -> sourceB y
+         [x,ZeroS]      -> sourceB x
+         _              -> nothing
+ mul = namedOpt "mul" $ \ case
+         [Val x, Val y] -> newVal (x*y)
+         [OneS ,y]      -> sourceB y
+         [x,OneS ]      -> sourceB x
+         [x@ZeroS,_]    -> sourceB x
+         [_,y@ZeroS]    -> sourceB y
+         _              -> nothing
 
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
@@ -547,12 +583,14 @@ instance MuxCat (:>) where
 
 -- TODO: add the following simplifications:
 -- 
---   mux (False,(a,_))    = a
---   mux (True ,(_,b))    = b
---   mux (c,(False,True)) = c
---   mux (c,(True,False)) = c
---   mux (_    ,(a,a))    = a
---   mux (c,(a,not a))    = c `xor` a
+--   mux (False,(a,_))     = a
+--   mux (True ,(_,b))     = b
+--   mux (c,(False,True))  = c
+--   mux (c,(True,False))  = c
+--   mux (_    ,(a,a))     = a
+--   mux (c,(a,not a))     = c `xor` a
+--   mux (c,(not a,a))     = c `xor` not a
+--   mux (b,(a,c `xor` a)) = (b && c) `xor` a
 --
 -- The first three simplifications are for Int and Bool, while the last is just
 -- for Bool.
@@ -561,26 +599,25 @@ instance MuxCat (:>) where
 
 #else
 
-type OptMux  a = Buses Bool :* (Buses a :* Buses a) ->           Maybe (Buses a)
-type OptMuxC a = Buses Bool :* (Buses a :* Buses a) -> CircuitM (Maybe (Buses a))
+muxOpt :: SourceToBuses a => Opt a
+muxOpt = \ case
+  [FalseS,a,_]       -> sourceB a
+  [ TrueS,_,b]       -> sourceB b
+  [_,a,a'] | a == a' -> sourceB a
+  _                  -> nothing
 
-muxArgsB :: Buses (Bool :* (a :* a)) -> Buses Bool :* (Buses a :* Buses a)
-muxArgsB (PairB c (PairB a a')) = (c,(a,a'))
-muxArgsB _ = isoErr "muxArgsB"
+muxOptB :: Opt Bool
+muxOptB = \ case
+  [c,FalseS,TrueS]            -> sourceB c
+  [c,TrueS,FalseS]            -> newComp1 not c
+  [c,a,NotS a']     | a == a' -> newComp2 xor c a
+  [c,b@(NotS a),a'] | a == a' -> newComp2 xor c b
+  [b,a,c `XorS` a'] | a == a' -> newComp3 andXor b c a
+  _                           -> nothing
 
-namedOptMux  :: GenBuses a => String -> OptMux  a -> Bool :* (a :* a) :> a
-namedOptMux  name opt = namedOpt name (opt . muxArgsB)
-
-namedOptMuxC :: GenBuses a => String -> OptMuxC a -> Bool :* (a :* a) :> a
-namedOptMuxC name opt = namedOptC name (opt . muxArgsB)
-
-muxOptC :: OptMuxC a
-muxOptC (FalseS,(a,_))      = return $ Just a
-muxOptC ( TrueS,(_,b))      = return $ Just b
-muxOptC (_ ,(a,b)) | a == b = return $ Just a
-muxOptC (c,(FalseS,TrueS))  = return $ Just c
-muxOptC (c,(TrueS,FalseS))  = Just <$> unmkCK not c
-muxOptC _                   = return $ Nothing           
+-- andXor ((b,c),a) = (b && c) `xor` a
+andXor :: ((Bool :* Bool) :* Bool) :> Bool
+andXor = xor . first and
 
 #if 0
 
@@ -589,15 +626,15 @@ muxOptC _                   = return $ Nothing
 #define Sat(pred) ((pred) -> True)
 #define Eql(x) Sat(==(x))
 
-muxOptC (_ ,(a,Eql(a))) = return $ Just a
+muxOpt (_ ,(a,Eql(a))) = just $ wrap a
 
 #endif
 
 -- orOpt
 
 instance MuxCat (:>) where
-  muxB = namedOptMuxC "mux" muxOptC
-  muxI = namedOptMuxC "mux" muxOptC
+  muxB = namedOpt "mux" (muxOpt `orOpt` muxOptB)
+  muxI = namedOpt "mux" muxOpt
 
 #endif
 
@@ -715,17 +752,17 @@ circuitDot name circ = graphDot name (circuitGraph circ)
 
 type Statement = String
 
-type Inputs  = [Source]
-type Outputs = [Source]
+type Input  = Bus
+type Output = Bus
 
-type Comp' = (String,Inputs,Outputs)
+type Comp' = (String,[Input],[Output])
 
 simpleComp :: Comp -> Comp'
 simpleComp (Comp prim a b) = (name, flat a, flat b)
  where
    name = show prim
-   flat :: forall t. Buses t -> [Source]
-   flat = flattenB name
+   flat :: forall t. Buses t -> [Bus]
+   flat = map sourceBus . flattenB name
 
 data Dir = In | Out deriving Show
 type PortNum = Int
@@ -750,13 +787,14 @@ recordDots comps = nodes ++ edges
        where
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
-         labs :: Dir -> [Source] -> String
+         labs :: Dir -> [Bus] -> String
          labs dir bs = intercalate "|" (portSticker <$> tagged bs)
           where
-            portSticker :: (Int,Source) -> String
-            portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
-            portSticker (_,BoolS x) = show x  -- or showBool x
-            portSticker (_,IntS  x) = show x
+            portSticker :: (Int,Bus) -> String
+            portSticker (p, _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
+--             portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
+--             portSticker (_,BoolS x) = show x  -- or showBool x
+--             portSticker (_,IntS  x) = show x
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
@@ -765,14 +803,14 @@ recordDots comps = nodes ++ edges
     where
       compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
        where
-         edge (ni, BusS (Bus i width)) =
+         edge (ni, Bus i width) =
            printf "%s -> %s %s"
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
             label 1 = ""
             label w = printf "[label=\"%d\",fontsize=10]" w
-         edge (ni, BoolS x) = litComment ni x
-         edge (ni, IntS  x) = litComment ni x
+--          edge (ni, BoolS x) = litComment ni x
+--          edge (ni, IntS  x) = litComment ni x
          litComment :: Show a => CompNum -> a -> String
          litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
    port :: Dir -> (Width,CompNum,PortNum) -> String
@@ -794,7 +832,7 @@ type SourceMap = Map PinId (Width,CompNum,PortNum)
 
 sourceMap :: [(CompNum,Comp')] -> SourceMap
 sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
-              M.fromList [(p,(wid,nc,np)) | (np,BusS (Bus p wid)) <- tagged outs ]
+              M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
 
 {-
 
@@ -1288,13 +1326,15 @@ instance DistribCat (:>) where
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
- genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs))))
+  genBuses' prim ins o = \
+    first abstB <$> (genBuses' prim ins o :: CircuitM (Buses (Rep (abs)),Int))
 
 #else
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
- { genBuses = abstB <$> (genBuses :: CircuitM (Buses (Rep (abs)))) }; \
+ { genBuses' prim ins o = \
+    first abstB <$> (genBuses' prim ins o :: CircuitM (Buses (Rep (abs)),Int)) }; \
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifA = repIf }
 
 #endif
