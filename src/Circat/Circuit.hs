@@ -605,20 +605,16 @@ muxOpt = \ case
 
 muxOptB :: Opt Bool
 muxOptB = \ case
-  [c,FalseS,TrueS]            -> sourceB c
-  [c,TrueS,FalseS]            -> newComp1 not c
-  [a,FalseS,b]                -> newComp2 and a b
-  [a,b,TrueS ]                -> newComp2 or  a b
-  [a,b,FalseS]                -> newComp2 (and . first not) a b -- not a && b
-  [a,TrueS ,b]                -> newComp2 (or  . first not) a b -- not a || b
-  [c,a,NotS a']     | a == a' -> newComp2 xor c a
-  [c,b@(NotS a),a'] | a == a' -> newComp2 xor c b
-  [b,a,c `XorS` a'] | a == a' -> newComp3 andXor b c a
-  _                           -> nothing
-
--- andXor ((b,c),a) = (b && c) `xor` a
-andXor :: ((Bool :* Bool) :* Bool) :> Bool
-andXor = xor . first and
+  [c,FalseS,TrueS]      -> sourceB c
+  [c,TrueS,FalseS]      -> newComp1 not c
+  [a,FalseS,b]          -> newComp2 and a b
+  [a,b,TrueS ]          -> newComp2 or  a b
+  [a,b,FalseS]          -> newComp2 (and . first not) a b -- not a && b
+  [a,TrueS ,b]          -> newComp2 (or  . first not) a b -- not a || b
+  [c,a,NotS Eql(a)]     -> newComp2 xor c a
+  [c,b@(NotS a),Eql(a)] -> newComp2 xor c b
+  [b,a,c `XorS` Eql(a)] -> newComp3 (xor . first and) b c a -- (b && c) `xor` a
+  _                     -> nothing
 
 #if 0
 
