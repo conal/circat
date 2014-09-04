@@ -45,7 +45,7 @@ module Circat.Circuit
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
-  , Comp', CompNum, DGraph, circuitGraph, outGWith, outG
+  , CompS(..), CompNum, DGraph, circuitGraph, outGWith, outG
   , simpleComp, runC, tagged
   , systemSuccess
   ) where
@@ -586,9 +586,9 @@ instance NumCat (:>) Int where
 -- 
 --   mux (c,(False,True))  = c
 --   mux (c,(True,False))  = c
---   mux (a,(False,b))     = a && b
---   mux (a,(b ,True))     = a || b
+--   mux (a,(False,b))     =     a && b
 --   mux (a,(b,False))     = not a && b
+--   mux (a,(b ,True))     =     a || b
 --   mux (a,(True,b ))     = not a || b
 --   mux (c,(a,not a))     = c `xor` a
 --   mux (c,(not a,a))     = c `xor` not a
@@ -609,8 +609,8 @@ muxOptB = \ case
   [c,FalseS,TrueS]      -> sourceB c
   [c,TrueS,FalseS]      -> newComp1 not c
   [a,FalseS,b]          -> newComp2 and a b
-  [a,b,TrueS ]          -> newComp2 or  a b
   [a,b,FalseS]          -> newComp2 (and . first not) a b -- not a && b
+  [a,b,TrueS ]          -> newComp2 or  a b
   [a,TrueS ,b]          -> newComp2 (or  . first not) a b -- not a || b
   [c,a,NotS Eql(a)]     -> newComp2 xor c a
   [c,b@(NotS a),Eql(a)] -> newComp2 xor c b
@@ -718,12 +718,33 @@ outGWith (outType,res) name circ =
 -- TODO: Instead of failing, emit a message about the generated file. Perhaps
 -- simply use "echo".
 
-type DGraph = [Comp']
+type Input  = Bus
+type Output = Bus
+
+data CompS = CompS CompNum String [Input] [Output] deriving Show
+
+compNum :: CompS -> CompNum
+compNum (CompS n _ _ _) = n
+
+instance Eq CompS where (==) = (==) `on` compNum
+instance Ord CompS where compare = compare `on` compNum
+
+type DGraph = [CompS]
 
 type Dot = String
 
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
-circuitGraph = map simpleComp . tagged . runC
+circuitGraph = trimDGraph . map simpleComp . tagged . runC
+
+-- Remove unused components
+trimDGraph :: Unop DGraph
+trimDGraph = id
+
+type SourceComps = Map Bus CompNum
+
+sourceComps :: [CompS] -> SourceComps
+sourceComps = foldMap (\ (CompS nc _ _ outs) -> M.fromList [(o,nc) | o <- outs])
+
 
 graphDot :: String -> DGraph -> Dot
 graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
@@ -745,13 +766,8 @@ circuitDot name circ = graphDot name (circuitGraph circ)
 
 type Statement = String
 
-type Input  = Bus
-type Output = Bus
-
-type Comp' = (Int,String,[Input],[Output])
-
-simpleComp :: (Int,Comp) -> Comp'
-simpleComp (compNum, Comp prim a b) = (compNum, name, flat a, flat b)
+simpleComp :: (Int,Comp) -> CompS
+simpleComp (n, Comp prim a b) = CompS n name (flat a) (flat b)
  where
    name = show prim
    flat :: forall t. Buses t -> [Bus]
@@ -764,15 +780,15 @@ type CompNum = Int
 tagged :: [a] -> [(Int,a)]
 tagged = zip [0 ..]
 
-recordDots :: [Comp'] -> [Statement]
+recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
  where
    nodes = node <$> comps
     where
-      node :: Comp' -> String
+      node :: CompS -> String
       -- -- drop if no ins or outs
       -- node (_,prim,[],[]) = "// removed disconnected " ++ prim
-      node (nc,prim,ins,outs) =
+      node (CompS nc prim ins outs) =
         printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
@@ -792,7 +808,7 @@ recordDots comps = nodes ++ edges
    srcMap = sourceMap comps
    edges = concatMap compEdges comps
     where
-      compEdges (snkComp,_,ins,_) = edge <$> tagged ins
+      compEdges (CompS snkComp _ ins _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
            printf "%s -> %s %s"
@@ -821,8 +837,8 @@ type SourceMap = Map PinId (Width,CompNum,PortNum)
 -- data SourceInfo = BusInfo Width CompNum PortNum
 --                 | LitInfo String
 
-sourceMap :: [Comp'] -> SourceMap
-sourceMap = foldMap $ \ (nc,_,_,outs) ->
+sourceMap :: [CompS] -> SourceMap
+sourceMap = foldMap $ \ (CompS nc _ _ outs) ->
               M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
 
 {-

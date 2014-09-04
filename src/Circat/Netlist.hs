@@ -29,8 +29,8 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), GenBuses, Comp', circuitGraph, tagged
-  , Width, CompNum, PinId, Bus(..) )
+  ( (:>), GenBuses, CompS(..), circuitGraph, tagged
+  , Width, PinId, Bus(..) )
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Range(..)
@@ -61,12 +61,11 @@ toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
 toNetlist :: GenBuses a => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
   where comps       = circuitGraph cir
-        ncomps      = tagged comps
         (p2wM,ins)  = modulePorts (portComp "In"  comps)
         (_,outs)    = modulePorts (portComp "Out" comps)
-        (p2wI,nets) = moduleNets ncomps
+        (p2wI,nets) = moduleNets comps
         p2w         = M.fromList (p2wM ++ p2wI)
-        assigns     = moduleAssigns p2w ncomps 
+        assigns     = moduleAssigns p2w comps
 
 type PinMap = Map PinId PinDesc
 
@@ -74,14 +73,14 @@ type PinMap = Map PinId PinDesc
 -- Assign statements bind the result of a function (and,or,add etc.)
 -- to a variable name which is a wire in verilog parlance
 -- eg. w_xor_I1 = In_0 ^ In_1 // (`^` is xor)
-moduleAssigns :: PinMap -> [(CompNum,Comp')] -> [Decl]
+moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
-moduleAssign :: PinMap -> (CompNum,Comp') -> [Decl]
+moduleAssign :: PinMap -> CompS -> [Decl]
 -- "In" comps are never assigned
-moduleAssign _ (_,("In",_,_)) = [] 
+moduleAssign _ (CompS _ "In" _ _) = [] 
 -- binary operations
-moduleAssign p2w (_,(name,[i0,i1],[o])) = 
+moduleAssign p2w (CompS _ name [i0,i1] [o]) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
   where
     i0E = sourceExp p2w i0
@@ -100,12 +99,12 @@ moduleAssign p2w (_,(name,[i0,i1],[o])) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
-moduleAssign p2w (_,("mux",[a,b,c],[o])) =
+moduleAssign p2w (CompS _ "mux" [a,b,c] [o]) =
   [NetAssign (busName p2w o)
     (ExprCond (sourceExp p2w a) (sourceExp p2w b) (sourceExp p2w c))]
 
 -- unary operations                                                  
-moduleAssign p2w c@(_,(name,[i],[o])) = 
+moduleAssign p2w c@(CompS _ name [i] [o]) = 
   [NetAssign (busName p2w o) (ExprUnary unaryOp iE)]
   where
     iE = sourceExp p2w i
@@ -133,14 +132,14 @@ moduleAssign p2w (_,(name,[],[o])) =
 #endif
 
 -- output assignments
-moduleAssign p2w (_,("Out",ps,[])) =
+moduleAssign p2w (CompS _ "Out" ps []) =
   map (\ (n,p) -> NetAssign (outPortName n) (sourceExp p2w p)) (tagged ps)
   where
      outPortName = portName "Out" ps
 
 -- HACK: Catch-all
-moduleAssign _ (_,("()",[],[])) = []
-moduleAssign p2w (_,(name,is,os)) = 
+moduleAssign _ (CompS _ "()" [] []) = []
+moduleAssign p2w (CompS _ name is os) = 
   [InstDecl name "inst" [] (port "i" is) (port "o" os)]
   where
     port s pins = [(s ++ show i, sourceExp p2w p) | p <- pins | i <- [0::Int ..]]
@@ -167,13 +166,13 @@ busName p2w (Bus i _) = snd (lw p2w i)
 
 -- | Generates a wire declaration for all Comp outputs along with 
 -- a map from PinId to wire name
-moduleNets :: [(CompNum,Comp')] -> ([PinToWireDesc],[Decl])
+moduleNets :: [CompS] -> ([PinToWireDesc],[Decl])
 moduleNets = unzip . concatMap moduleNet
 
-moduleNet :: (CompNum,Comp') -> [(PinToWireDesc,Decl)]
-moduleNet (_,("In",_,_))      = []
-moduleNet (_,("Out",_,_))     = []
-moduleNet c@(_,(_,_,outs)) = 
+moduleNet :: CompS -> [(PinToWireDesc,Decl)]
+moduleNet (CompS _ "In" _ _)      = []
+moduleNet (CompS _ "Out" _ _)     = []
+moduleNet c@(CompS _ _ _ outs) = 
   [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
   | (i,Bus o wid) <- tagged outs ]
   where
@@ -184,17 +183,17 @@ busRange wid = Range (lit 0) (lit (wid - 1))
  where
    lit = ExprLit Nothing . ExprNum . fromIntegral
 
-instName :: (CompNum,Comp') -> String
-instName (num,(name,_,_)) = name ++"_I"++show num
+instName :: CompS -> String
+instName (CompS num name _ _) = name ++"_I"++show num
 
 -- | Generates a bit-blasted list of primary inputs of
 -- the module.
-modulePorts :: Comp' -> ([PinToWireDesc],[(Ident, Maybe Range)])
+modulePorts :: CompS -> ([PinToWireDesc],[(Ident, Maybe Range)])
 modulePorts comp' = 
   case comp' of 
-    ("In", [], outs) -> unzip (ports "In" outs)
-    ("Out",ins,[])   -> ([],map snd $ ports "Out" ins) 
-    _                -> 
+    (CompS _  "In"  []  outs) -> unzip (ports "In" outs)
+    (CompS _  "Out" ins [])   -> ([],map snd $ ports "Out" ins) 
+    _                   -> 
       error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
                ++ " not recognized." 
   where
@@ -209,16 +208,16 @@ portName :: Show b => String -> [a] -> b  -> String
 portName dir ps i = 
   dir++if length ps == 1 then "" else "_" ++ show i
 
--- | Given a list of simple Comps (Comp'), retrieve 
+-- | Given a list of simple Comps (CompS), retrieve 
 -- the comp named dir. `dir` can have the values of 
 -- "In" or "Out"
-portComp :: String -> [Comp'] -> Comp'
+portComp :: String -> [CompS] -> CompS
 portComp dir comps
   | dir /= "In" && dir /= "Out" = error eIllegalDir 
   | length fC == 1              = head fC
   | otherwise                   = error eIncorrectComps
   where 
-    fC = filter (\ (n,_,_) -> n == dir) comps
+    fC = filter (\ (CompS _ n _ _) -> n == dir) comps
     floc = "Circat.Netlist.gPortComp"
     eIllegalDir = 
       floc ++ ": Illegal value for dir " ++ dir
