@@ -594,14 +594,15 @@ instance NumCat (:>) Int where
 --   mux (c,(not a,a))     = c `xor` not a
 --   mux (b,(a,c `xor` a)) = (b && c) `xor` a
 
+#define Sat(pred) ((pred) -> True)
+#define Eql(x) Sat(==(x))
+
 muxOpt :: SourceToBuses a => Opt a
 muxOpt = \ case
-  [FalseS,a,_]       -> sourceB a
-  [ TrueS,_,b]       -> sourceB b
-  [_,a,a'] | a == a' -> sourceB a
-  _                  -> nothing
-
-#define Eql(x) ((==(x)) -> True)
+  [FalseS,a,_] -> sourceB a
+  [ TrueS,_,b] -> sourceB b
+  [_,a,Eql(a)] -> sourceB a
+  _            -> nothing
 
 muxOptB :: Opt Bool
 muxOptB = \ case
@@ -619,9 +620,6 @@ muxOptB = \ case
 #if 0
 
 -- Alternative notation:
-
-#define Sat(pred) ((pred) -> True)
-#define Eql(x) Sat(==(x))
 
 muxOpt (_ ,(a,Eql(a))) = just $ wrap a
 
