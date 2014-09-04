@@ -576,28 +576,23 @@ instance NumCat (:>) Int where
 
 #if 1
 
-#if 0
-instance MuxCat (:>) where
-  muxB = namedC "mux"
-  muxI = namedC "mux"
-
--- TODO: add the following simplifications:
+-- Simplifications for all types:
 -- 
 --   mux (False,(a,_))     = a
 --   mux (True ,(_,b))     = b
+--   mux (_    ,(a,a))     = a
+--
+-- Simplifications for Bool values:
+-- 
 --   mux (c,(False,True))  = c
 --   mux (c,(True,False))  = c
---   mux (_    ,(a,a))     = a
+--   mux (a,(False,b))     = a && b
+--   mux (a,(b ,True))     = a || b
+--   mux (a,(b,False))     = not a && b
+--   mux (a,(True,b ))     = not a || b
 --   mux (c,(a,not a))     = c `xor` a
 --   mux (c,(not a,a))     = c `xor` not a
 --   mux (b,(a,c `xor` a)) = (b && c) `xor` a
---
--- The first three simplifications are for Int and Bool, while the last is just
--- for Bool.
---
--- Test with CRC.
-
-#else
 
 muxOpt :: SourceToBuses a => Opt a
 muxOpt = \ case
@@ -606,10 +601,16 @@ muxOpt = \ case
   [_,a,a'] | a == a' -> sourceB a
   _                  -> nothing
 
+#define Eql(x) ((==(x)) -> True)
+
 muxOptB :: Opt Bool
 muxOptB = \ case
   [c,FalseS,TrueS]            -> sourceB c
   [c,TrueS,FalseS]            -> newComp1 not c
+  [a,FalseS,b]                -> newComp2 and a b
+  [a,b,TrueS ]                -> newComp2 or  a b
+  [a,b,FalseS]                -> newComp2 (and . first not) a b -- not a && b
+  [a,TrueS ,b]                -> newComp2 (or  . first not) a b -- not a || b
   [c,a,NotS a']     | a == a' -> newComp2 xor c a
   [c,b@(NotS a),a'] | a == a' -> newComp2 xor c b
   [b,a,c `XorS` a'] | a == a' -> newComp3 andXor b c a
@@ -635,8 +636,6 @@ muxOpt (_ ,(a,Eql(a))) = just $ wrap a
 instance MuxCat (:>) where
   muxB = namedOpt "mux" (muxOpt `orOpt` muxOptB)
   muxI = namedOpt "mux" muxOpt
-
-#endif
 
 #else
 
@@ -730,7 +729,7 @@ type DGraph = [Comp']
 type Dot = String
 
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
-circuitGraph = map simpleComp . runC
+circuitGraph = map simpleComp . tagged . runC
 
 graphDot :: String -> DGraph -> Dot
 graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
@@ -755,10 +754,10 @@ type Statement = String
 type Input  = Bus
 type Output = Bus
 
-type Comp' = (String,[Input],[Output])
+type Comp' = (Int,String,[Input],[Output])
 
-simpleComp :: Comp -> Comp'
-simpleComp (Comp prim a b) = (name, flat a, flat b)
+simpleComp :: (Int,Comp) -> Comp'
+simpleComp (compNum, Comp prim a b) = (compNum, name, flat a, flat b)
  where
    name = show prim
    flat :: forall t. Buses t -> [Bus]
@@ -774,14 +773,12 @@ tagged = zip [0 ..]
 recordDots :: [Comp'] -> [Statement]
 recordDots comps = nodes ++ edges
  where
-   ncomps :: [(CompNum,Comp')] -- numbered comps
-   ncomps = tagged comps
-   nodes = node <$> ncomps
+   nodes = node <$> comps
     where
-      node :: (CompNum,Comp') -> String
-      -- drop if no ins or outs
-      node (_,(prim,[],[])) = "// removed disconnected " ++ prim
-      node (nc,(prim,ins,outs)) =
+      node :: Comp' -> String
+      -- -- drop if no ins or outs
+      -- node (_,prim,[],[]) = "// removed disconnected " ++ prim
+      node (nc,prim,ins,outs) =
         printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
@@ -798,10 +795,10 @@ recordDots comps = nodes ++ edges
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
-   srcMap = sourceMap ncomps
-   edges = concatMap compEdges ncomps
+   srcMap = sourceMap comps
+   edges = concatMap compEdges comps
     where
-      compEdges (snkComp,(_,ins,_)) = edge <$> tagged ins
+      compEdges (snkComp,_,ins,_) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
            printf "%s -> %s %s"
@@ -830,8 +827,8 @@ type SourceMap = Map PinId (Width,CompNum,PortNum)
 -- data SourceInfo = BusInfo Width CompNum PortNum
 --                 | LitInfo String
 
-sourceMap :: [(CompNum,Comp')] -> SourceMap
-sourceMap = foldMap $ \ (nc,(_,_,outs)) ->
+sourceMap :: [Comp'] -> SourceMap
+sourceMap = foldMap $ \ (nc,_,_,outs) ->
               M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
 
 {-
