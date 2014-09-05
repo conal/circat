@@ -60,6 +60,7 @@ import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 import Data.Typeable                    -- TODO: imports
 import Data.Function (on)
+import Data.Maybe (fromMaybe)
 import Data.Coerce                      -- TODO: imports
 import Unsafe.Coerce -- experiment
 
@@ -68,15 +69,18 @@ import System.Process (system) -- ,readProcess
 import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 
+import Control.Monad (unless)
 import Data.List (intercalate)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Sequence (Seq,singleton)
 import Text.Printf (printf)
 import Debug.Trace (trace)
 
 -- mtl
-import Control.Monad.State (State,evalState,MonadState)
+import Control.Monad.State (State,evalState,execState,MonadState)
 import qualified Control.Monad.State as Mtl
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
@@ -585,7 +589,7 @@ instance NumCat (:>) Int where
 -- Simplifications for Bool values:
 -- 
 --   mux (c,(False,True))  = c
---   mux (c,(True,False))  = c
+--   mux (c,(True,False))  = not c
 --   mux (a,(False,b))     =     a && b
 --   mux (a,(b,False))     = not a && b
 --   mux (a,(b ,True))     =     a || b
@@ -615,6 +619,7 @@ muxOptB = \ case
   [c,a,NotS Eql(a)]     -> newComp2 xor c a
   [c,b@(NotS a),Eql(a)] -> newComp2 xor c b
   [b,a,c `XorS` Eql(a)] -> newComp3 (xor . first and) b c a -- (b && c) `xor` a
+  [b,a,Eql(a) `XorS` c] -> newComp3 (xor . first and) b c a -- ''
   _                     -> nothing
 
 #if 0
@@ -736,15 +741,27 @@ type Dot = String
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
--- Remove unused components
+-- Remove unused components.
+-- Depth-first search from the "Out" component.
 trimDGraph :: Unop DGraph
-trimDGraph = id
-
-type SourceComps = Map Bus CompNum
-
-sourceComps :: [CompS] -> SourceComps
-sourceComps = foldMap (\ (CompS nc _ _ outs) -> M.fromList [(o,nc) | o <- outs])
-
+trimDGraph g = S.toList (execState (searchComp out) S.empty)
+ where
+   searchComp :: CompS -> State (Set CompS) ()
+   searchComp c@(CompS _ _ ins _) = do seen <- Mtl.get
+                                       unless (c `S.member` seen) $
+                                         do Mtl.put (S.insert c seen)
+                                            mapM_ searchOut ins
+   searchOut :: Output -> State (Set CompS) ()
+   searchOut o = searchComp (fromMaybe (error "trimDGraph: mystery output")
+                                       (M.lookup o sourceComps))
+   out :: CompS
+   out = case filter (\ (CompS _ name _ _) -> name == "Out") g of
+           [c] -> c
+           cs  -> error ("trimDGraph: " ++ show cs)
+   sourceComps :: Map Output CompS
+   sourceComps = foldMap (\ c@(CompS _ _ _ os) -> M.fromList [(o,c) | o <- os]) g
+   comps :: Map CompNum CompS
+   comps = M.fromList [(compNum c,c) | c <- g]
 
 graphDot :: String -> DGraph -> Dot
 graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
