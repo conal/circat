@@ -701,10 +701,10 @@ runC = runU . unitize
 -- runU = fst . runU'
 
 runU :: (Unit :> Unit) -> ([Comp],Map PrimName Int)
-runU cir = (toList comps,elimd)
+runU cir = (toList comps,reused)
  where
-   comps :: Seq Comp; elimd :: Map PrimName Int
-   ((UnitB,comps),(_,(_,elimd))) =
+   comps :: Seq Comp; reused :: Map PrimName Int
+   ((UnitB,comps),(_,(_,reused))) =
      runWS (unmkCK cir UnitB) (PinId <$> [0 ..],(M.empty,M.empty))
 
 -- type CompInfo = (Map (PrimName,[Source]) Comp, Map PrimName Int)
@@ -751,16 +751,16 @@ outGWith (outType,res) name circ =
      writeFile (outFile "dot") (graphDot name graph)
      printf "Circuit summary: %s.%s\n"
        (summary graph)
-       (if M.null elimd then ""
-        else printf " Eliminated: %s." (showCounts (M.toList elimd)))
+       (if M.null reused then ""
+        else printf " Reused: %s." (showCounts (M.toList reused)))
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-   elimd :: Map PrimName Int
-   (graph,elimd) = circuitGraph' circ
+   reused :: Map PrimName Int
+   (graph,reused) = circuitGraph' circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
