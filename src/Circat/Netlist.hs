@@ -29,7 +29,7 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), GenBuses', CompS(..), circuitGraph, tagged
+  ( (:>), GenBuses, CompS(..), circuitGraph, tagged
   , Width, PinId, Bus(..) )
 
 import Language.Netlist.AST
@@ -45,7 +45,7 @@ type PinDesc = (Width,String)
 
 type PinToWireDesc = (PinId,PinDesc) 
 
-outV :: GenBuses' a => String -> (a :> b) -> IO ()
+outV :: GenBuses a => String -> (a :> b) -> IO ()
 outV cirName cir = 
   do createDirectoryIfMissing False outDir
      writeFile filePath (toV cirName cir)
@@ -54,11 +54,11 @@ outV cirName cir =
     outDir   = "out"
     filePath = outDir ++ "/" ++ cirName ++ ".v.txt"
 
-toV :: GenBuses' a => String -> (a :> b) -> String
+toV :: GenBuses a => String -> (a :> b) -> String
 toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
 
 -- | Converts a Circuit to a Module
-toNetlist :: GenBuses' a => String -> (a :> b) -> Module
+toNetlist :: GenBuses a => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
   where comps       = circuitGraph cir
         (p2wM,ins)  = modulePorts (portComp "In"  comps)

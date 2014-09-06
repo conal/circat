@@ -4,7 +4,7 @@
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
-{-# LANGUAGE DeriveDataTypeable #-}
+-- {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE PatternSynonyms #-}
@@ -43,7 +43,7 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses, GenBuses'
+  , PinId, Width, Bus(..), Source(..), GenBuses
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -60,7 +60,7 @@ import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),Alternative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
-import Data.Typeable                    -- TODO: imports
+-- import Data.Typeable                    -- TODO: imports
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
 import Data.Coerce                      -- TODO: imports
@@ -179,7 +179,7 @@ instance Eq (Buses a) where
   _         == _            = False
 #endif
 
-deriving instance Typeable Buses
+-- deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
 
 -- Deriving would need GenBuses a.
@@ -199,8 +199,6 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
-
--- The Typeable superclass reduces the number of explicit 'Typeable' constraints.
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
@@ -272,7 +270,7 @@ newtype Prim a b = Prim { primName :: PrimName }
 instance Show (Prim a b) where show = primName
 
 -- Component: primitive instance with inputs & outputs
-data Comp = forall a b. Typeable b => Comp (Prim a b) (Buses a) (Buses b)
+data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 
 deriving instance Show Comp
 
@@ -281,18 +279,15 @@ type CircuitM = WriterT (Seq Comp) (State (PinSupply, Map (PrimName,[Source]) Co
 
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
--- Experiment: see where we need GenBuses but not Typeable
-type GenBuses' b = (Typeable b, GenBuses b)
-
 -- Instantiate a 'Prim'
-genComp :: GenBuses' b => Prim a b -> BCirc a b
+genComp :: GenBuses b => Prim a b -> BCirc a b
 
 -- type CircuitM = WriterT (Seq Comp) (State (PinSupply, Map (PrimName,[Source]) Comp))
 
 #ifdef HashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
-                      Just (Comp _ _ (cast -> Just b)) -> return b
+                      Just (Comp _ _ b') -> return (unsafeCoerce b')
                       _ ->
                         do b <- genBuses prim ins
                            let comp = Comp prim a b
@@ -310,20 +305,20 @@ genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
                     return b
 #endif
 
-constComp' :: GenBuses' b => String -> CircuitM (Buses b)
+constComp' :: GenBuses b => String -> CircuitM (Buses b)
 constComp' str = genComp (Prim str) UnitB
 
-constComp :: GenBuses' b => String -> BCirc a b
+constComp :: GenBuses b => String -> BCirc a b
 constComp str = const (constComp' str)
 
 -- TODO: eliminate constComp in favor of a more restrictive version in which a
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM' :: (Show b, GenBuses' b) => b -> CircuitM (Buses b)
+constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 constM' b = constComp' (show b)
 
-constM :: (Show b, GenBuses' b) => b -> BCirc a b
+constM :: (Show b, GenBuses b) => b -> BCirc a b
 constM b = constComp (show b)
 
 {--------------------------------------------------------------------
@@ -356,10 +351,10 @@ inCK2 :: (BCirc a a' -> BCirc b b' -> BCirc c c')
       -> ((a :> a') -> (b :> b') -> (c :> c'))
 inCK2 = inCK <~ unmkCK
 
-primC :: GenBuses' b => Prim a b -> a :> b
+primC :: GenBuses b => Prim a b -> a :> b
 primC = mkCK . genComp
 
-namedC :: GenBuses' b => String -> a :> b
+namedC :: GenBuses b => String -> a :> b
 -- namedC = primC . Prim
 namedC name = namedOpt name noOpt
 
@@ -385,7 +380,7 @@ newComp3 :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
             ((a :* b) :* c :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
 newComp3 cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses c))
 
-newVal :: (Show b, GenBuses' b) => b -> CircuitM (Maybe (Buses b))
+newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
 noOpt :: Opt b
@@ -398,7 +393,7 @@ orOpt f g a = do mb <- f a
                    Nothing -> g a
                    Just _  -> return mb
 
-namedOpt :: GenBuses' b => String -> Opt b -> a :> b
+namedOpt :: GenBuses b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
 namedOpt name opt =
   mkCK $ \ a -> opt (flattenB "namedOpt" a) >>= maybe (genComp (Prim name) a) return
@@ -414,7 +409,7 @@ constSM mkB = mkCK (const mkB)
 constS :: Buses b -> (a :> b)
 constS b = constSM (return b)
 
-constC :: (Show b, GenBuses' b) => b -> a :> b
+constC :: (Show b, GenBuses b) => b -> a :> b
 constC = mkCK . constM
 
 -- Phasing out constC
@@ -681,7 +676,7 @@ instance IfCat (:>) b => IfCat (:>) (a -> b) where
 
 #endif
 
-instance GenBuses' a => Show (a :> b) where
+instance GenBuses a => Show (a :> b) where
   show = show . runC
 
 --     Application is no smaller than the instance head
@@ -692,14 +687,14 @@ evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: GenBuses' a => (a :> b) -> [Comp]
+runC :: GenBuses a => (a :> b) -> [Comp]
 runC = runU . unitize
 
 runU :: (Unit :> Unit) -> [Comp]
 runU cir = toList (exr (evalWS (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)))
 
 -- Wrap a circuit with fake input and output
-unitize :: GenBuses' a => (a :> b) -> (Unit :> Unit)
+unitize :: GenBuses a => (a :> b) -> (Unit :> Unit)
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -716,7 +711,7 @@ systemSuccess cmd =
        ExitSuccess -> return ()
        _ -> printf "command \"%s\" failed.\n" cmd
 
-outG :: GenBuses' a => String -> (a :> b) -> IO ()
+outG :: GenBuses a => String -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
 
 -- Some options:
@@ -726,7 +721,7 @@ outG = outGWith ("pdf","")
 -- ("png","-Gdpi=200")
 -- ("jpg","-Gdpi=200")
 
-outGWith :: GenBuses' a => (String,String) -> String -> (a :> b) -> IO ()
+outGWith :: GenBuses a => (String,String) -> String -> (a :> b) -> IO ()
 outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
      -- writeFile (outFile "graph") (show (simpleComp <$> runC circ))
@@ -765,7 +760,7 @@ type DGraph = [CompS]
 
 type Dot = String
 
-circuitGraph :: GenBuses' a => (a :> b) -> DGraph
+circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 -- Remove unused components.
@@ -805,7 +800,7 @@ graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
    tweak '-' = '_'
    tweak c   = c
 
-circuitDot :: GenBuses' a => String -> (a :> b) -> Dot
+circuitDot :: GenBuses a => String -> (a :> b) -> Dot
 circuitDot name circ = graphDot name (circuitGraph circ)
 
 type Statement = String
