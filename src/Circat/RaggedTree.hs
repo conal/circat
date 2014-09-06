@@ -2,7 +2,7 @@
 {-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures, ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE StandaloneDeriving, DeriveDataTypeable #-}
 -- {-# LANGUAGE InstanceSigs #-} -- experiment
 -- {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}  -- See below
@@ -32,6 +32,7 @@ import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Data.Foldable (Foldable(..))
 import Data.Traversable (Traversable(..))
+import Data.Typeable (Typeable)
 
 import Circat.Misc ((:*))
 import Circat.Show (showsApp1,showsApp2)
@@ -43,6 +44,9 @@ import Circat.Scan
 
 -- | Tree shape data kind, simplified from non-indexed Tree ()
 data TU = LU | BU TU TU
+
+deriving instance Typeable LU
+deriving instance Typeable BU
 
 -- Singleton type. 
 -- TODO: Use the singletons package
@@ -58,6 +62,8 @@ instance (HasSingT p, HasSingT q) => HasSingT (BU p q) where singT = SB
 data GTree :: TU -> * -> * where
   L :: a -> Tree LU a
   B :: Tree p a -> Tree q a -> Tree (BU p q) a
+
+deriving instance Typeable GTree
 
 type Tree = GTree
 
