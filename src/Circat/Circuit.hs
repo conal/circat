@@ -745,12 +745,12 @@ outGWith :: GenBuses a => (String,String) -> String -> (a :> b) -> IO ()
 outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (graphDot name graph)
-     printf "Circuit summary: %s.%s\n"
+     printf "Components: %s.%s\n"
        (summary graph)
 #ifdef HashCons
        (case showCounts (M.toList reused) of
           ""  -> ""
-          str -> printf " Reused: %s." str)
+          str -> printf " Reuses: %s." str)
 #else
        ""
 #endif
@@ -774,7 +774,7 @@ outGWith (outType,res) name circ =
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
-           . map (\ (nm,num) -> printf "%s=%d" nm num)
+           . map (\ (nm,num) -> printf "%s (%d)" nm num)
            . (\ ps -> if length ps <= 1 then ps
                        else ps ++ [("total",sum (snd <$> ps))])
            . filter (\ (nm,n) -> n > 0 && nm `notElem` ["In","Out"])
