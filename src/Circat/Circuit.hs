@@ -275,8 +275,12 @@ data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 deriving instance Show Comp
 
 type Reuses = Int
+#ifdef HashCons
 -- Tracks prim applications and reuses per component.
 type CompInfo = Map (PrimName,[Source]) (Comp,Reuses)
+#else
+type CompInfo = [Comp]
+#endif
 
 -- The circuit monad.
 type CircuitM = State (PinSupply,CompInfo)
@@ -301,13 +305,9 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
    name = primName prim
    key  = (name,ins)
 #else
-genComp prim a = do b <- genBuses prim ins
-                    let comp = Comp prim a b
-                    Mtl.modify (second (M.insert key (comp,0)))
+genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
+                    Mtl.modify (second (Comp prim a b :))
                     return b
- where
-   ins  = flattenB "genComp" a
-   key  = (primName prim,ins)
 #endif
 
 constComp' :: GenBuses b => String -> CircuitM (Buses b)
@@ -689,17 +689,22 @@ instance GenBuses a => Show (a :> b) where
 --     (Use -XUndecidableInstances to permit this)
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: GenBuses a => (a :> b) -> [(Comp,Int)]
+runC :: GenBuses a => (a :> b) -> [(Comp,Reuses)]
 runC = runU . unitize
 
 -- runU :: (Unit :> Unit) -> [Comp]
 -- runU = fst . runU'
 
-runU :: (Unit :> Unit) -> [(Comp,Int)]
-runU cir = M.elems compInfo
+runU :: (Unit :> Unit) -> [(Comp,Reuses)]
+runU cir = getComps compInfo
  where
    compInfo :: CompInfo
-   (_,compInfo) = execState (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)
+   (_,compInfo) = execState (unmkCK cir UnitB) (PinId <$> [0 ..],mempty)
+#ifdef HashCons
+   getComps = M.elems 
+#else
+   getComps = map (,0)
+#endif
 
 -- type CompInfo = Map (PrimName,[Source]) (Comp,Int)
 -- type CircuitM = State (PinSupply, CompInfo)
@@ -742,17 +747,23 @@ outGWith (outType,res) name circ =
      writeFile (outFile "dot") (graphDot name graph)
      printf "Circuit summary: %s.%s\n"
        (summary graph)
+#ifdef HashCons
        (case showCounts (M.toList reused) of
           ""  -> ""
           str -> printf " Reused: %s." str)
+#else
+       ""
+#endif
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
+#ifdef HashCons
    reused :: Map PrimName Reuses
    reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
+#endif
    graph = circuitGraph circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
@@ -834,7 +845,7 @@ graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
              , "bgcolor=transparent"
-             , "ratio=1"
+             -- , "ratio=1"
              --, "ranksep=1"
              -- , fixedsize=true
              ]
