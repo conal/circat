@@ -72,7 +72,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 
 import Control.Monad (unless)
-import Data.List (intercalate)
+import Data.List (intercalate,group,sort)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -728,19 +728,31 @@ outGWith (outType,res) name circ =
      -- putStrLn "outGWith: here goes!!"
      -- printf "Circuit: %d components\n" (length (runC circ))
      -- print (simpleComp <$> runC circ)
-     writeFile (outFile "dot") (circuitDot name circ)
+     writeFile (outFile "dot") (graphDot name graph)
+     printf "Circuit summary: %s\n" (summary graph)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
+   graph = circuitGraph circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
+
+summary :: DGraph -> String
+summary = intercalate ", "
+        . map (\ (nm,num) -> printf "%s: %d" nm num)
+        . filter (\ (nm,_) -> nm `notElem` ["In","Out"])
+        . histogram
+        . map (\ (CompS _ compName _ _) -> compName)
+
+histogram :: Ord a => [a] -> [(a,Int)]
+histogram = map (head &&& length) . group . sort
 
 -- TODO: Instead of failing, emit a message about the generated file. Perhaps
 -- simply use "echo".
@@ -799,9 +811,6 @@ graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
    wrap  = ("  " ++) . (++ ";\n")
    tweak '-' = '_'
    tweak c   = c
-
-circuitDot :: GenBuses a => String -> (a :> b) -> Dot
-circuitDot name circ = graphDot name (circuitGraph circ)
 
 type Statement = String
 
