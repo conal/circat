@@ -48,7 +48,7 @@ module Circat.Circuit
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
   , CompS(..), CompNum, DGraph, circuitGraph, outGWith, outG
-  , simpleComp, runC, tagged
+  , simpleComp, tagged
   , systemSuccess
   ) where
 
@@ -82,7 +82,7 @@ import Text.Printf (printf)
 import Debug.Trace (trace)
 
 -- mtl
-import Control.Monad.State (State,evalState,execState,MonadState)
+import Control.Monad.State (State,evalState,execState,runState,MonadState)
 import qualified Control.Monad.State as Mtl
 import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
@@ -274,29 +274,33 @@ data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 
 deriving instance Show Comp
 
--- The circuit monad:
-type CircuitM = WriterT (Seq Comp) (State (PinSupply, Map (PrimName,[Source]) Comp))
+-- Tracks prim applications and consolidations per prim.
+type CompInfo = (Map (PrimName,[Source]) Comp, Map PrimName Int)
+
+-- The circuit monad.
+type CircuitM = WriterT (Seq Comp) (State (PinSupply, CompInfo))
 
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
 genComp :: GenBuses b => Prim a b -> BCirc a b
 
--- type CircuitM = WriterT (Seq Comp) (State (PinSupply, Map (PrimName,[Source]) Comp))
-
 #ifdef HashCons
-genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
+genComp prim a = do mb <- Mtl.gets (M.lookup key . fst . snd)
                     case mb of
-                      Just (Comp _ _ b') -> return (unsafeCoerce b')
-                      _ ->
+                      Just (Comp _ _ b') ->
+                        do Mtl.modify (second (second (M.insertWith (+) name 1)))
+                           return (unsafeCoerce b')
+                      _                  ->
                         do b <- genBuses prim ins
                            let comp = Comp prim a b
                            tell (singleton comp)
-                           Mtl.modify (second (M.insert key comp))
+                           Mtl.modify (second (first (M.insert key comp)))
                            return b
  where
-   ins = flattenB "genComp" a
-   key = (primName prim,ins)
+   ins  = flattenB "genComp" a
+   name = primName prim
+   key  = (name,ins)
 
 #else
 
@@ -686,12 +690,28 @@ instance GenBuses a => Show (a :> b) where
 evalWS :: WriterT o (State s) b -> s -> (b,o)
 evalWS w s = evalState (runWriterT w) s
 
+runWS :: WriterT o (State s) b -> s -> ((b,o),s)
+runWS w s = runState (runWriterT w) s
+
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: GenBuses a => (a :> b) -> [Comp]
+runC :: GenBuses a => (a :> b) -> ([Comp],Map PrimName Int)
 runC = runU . unitize
 
-runU :: (Unit :> Unit) -> [Comp]
-runU cir = toList (exr (evalWS (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)))
+-- runU :: (Unit :> Unit) -> [Comp]
+-- runU = fst . runU'
+
+runU :: (Unit :> Unit) -> ([Comp],Map PrimName Int)
+runU cir = (toList comps,elimd)
+ where
+   comps :: Seq Comp; elimd :: Map PrimName Int
+   ((UnitB,comps),(_,(_,elimd))) =
+     runWS (unmkCK cir UnitB) (PinId <$> [0 ..],(M.empty,M.empty))
+
+-- type CompInfo = (Map (PrimName,[Source]) Comp, Map PrimName Int)
+
+
+-- TODO: Eliminate the writer, since the state tells more.
+
 
 -- Wrap a circuit with fake input and output
 unitize :: GenBuses a => (a :> b) -> (Unit :> Unit)
@@ -729,14 +749,18 @@ outGWith (outType,res) name circ =
      -- printf "Circuit: %d components\n" (length (runC circ))
      -- print (simpleComp <$> runC circ)
      writeFile (outFile "dot") (graphDot name graph)
-     printf "Circuit summary: %s\n" (summary graph)
+     printf "Circuit summary: %s.%s\n"
+       (summary graph)
+       (if M.null elimd then ""
+        else printf " Eliminated: %s." (showCounts (M.toList elimd)))
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-   graph = circuitGraph circ
+   elimd :: Map PrimName Int
+   (graph,elimd) = circuitGraph' circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
@@ -744,9 +768,14 @@ outGWith (outType,res) name circ =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
+showCounts :: [(String,Int)] -> String
+showCounts = intercalate ", "
+           . map (\ (nm,num) -> printf "%s=%d" nm num)
+           . (\ ps -> if length ps <= 1 then ps
+                       else ps ++ [("total",sum (snd <$> ps))])
+
 summary :: DGraph -> String
-summary = intercalate ", "
-        . map (\ (nm,num) -> printf "%s: %d" nm num)
+summary = showCounts
         . filter (\ (nm,_) -> nm `notElem` ["In","Out"])
         . histogram
         . map (\ (CompS _ compName _ _) -> compName)
@@ -772,8 +801,11 @@ type DGraph = [CompS]
 
 type Dot = String
 
+circuitGraph' :: GenBuses a => (a :> b) -> (DGraph,Map PrimName Int)
+circuitGraph' = first (trimDGraph . map simpleComp . tagged) . runC
+
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
-circuitGraph = trimDGraph . map simpleComp . tagged . runC
+circuitGraph = fst . circuitGraph'
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
