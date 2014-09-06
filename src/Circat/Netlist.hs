@@ -29,7 +29,7 @@ import qualified Data.Map as M
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), GenBuses, CompS(..), circuitGraph, tagged
+  ( (:>), GenBuses, CompS(..), compName, compOuts, circuitGraph, tagged
   , Width, PinId, Bus(..) )
 
 import Language.Netlist.AST
@@ -137,8 +137,10 @@ moduleAssign p2w (CompS _ "Out" ps [] _) =
   where
      outPortName = portName "Out" ps
 
+-- We now remove components with unused outputs, including ()
+-- moduleAssign _ (CompS _ "()" [] [] _) = []
+
 -- HACK: Catch-all
-moduleAssign _ (CompS _ "()" [] [] _) = []
 moduleAssign p2w (CompS _ name is os _) = 
   [InstDecl name "inst" [] (port "i" is) (port "o" os)]
   where
@@ -170,12 +172,12 @@ moduleNets :: [CompS] -> ([PinToWireDesc],[Decl])
 moduleNets = unzip . concatMap moduleNet
 
 moduleNet :: CompS -> [(PinToWireDesc,Decl)]
-moduleNet (CompS _ "In" _ _ _)      = []
-moduleNet (CompS _ "Out" _ _ _)     = []
-moduleNet c@(CompS _ _ _ outs _) = 
+moduleNet c | compName c `elem` ["In","Out"] = []
+moduleNet c = 
   [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
   | (i,Bus o wid) <- tagged outs ]
   where
+    outs = compOuts c
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
 busRange :: Width -> Range
@@ -217,13 +219,13 @@ portComp dir comps
   | length fC == 1              = head fC
   | otherwise                   = error eIncorrectComps
   where 
-    fC = filter (\ (CompS _ n _ _ _) -> n == dir) comps
-    floc = "Circat.Netlist.gPortComp"
+    fC = filter ((== dir) . compName) comps
+    floc = "Circat.Netlist.portComp"
     eIllegalDir = 
       floc ++ ": Illegal value for dir " ++ dir
            ++ ". Valid values are In or Out"            
     eIncorrectComps = 
-      floc ++ ": Incorrect number of comps named " ++ dir 
+      floc ++ ": Incorrect number of comps named " ++ show dir
            ++ " found in the list of comps. "
            ++ if length fC > 1 then " Multiple comps found " ++ show fC 
               else " No comps found."

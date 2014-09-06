@@ -47,7 +47,8 @@ module Circat.Circuit
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
-  , CompS(..), CompNum, DGraph, circuitGraph, outGWith, outG
+  , CompS(..), compNum, compName, compIns, compOuts
+  , CompNum, DGraph, circuitGraph, outGWith, outG
   , simpleComp, tagged
   , systemSuccess
   ) where
@@ -130,7 +131,7 @@ instance Eq  Source where (==) = (==) `on` sourceId
 instance Ord Source where compare = compare `on` sourceId
 
 instance Show Bus where
-  show (Bus i w) = "B" ++ show i ++ ":" ++ show w
+  show (Bus (PinId i) w) = "B" ++ show i ++ (if w /= 1 then ":" ++ show w else "")
 
 instance Show Source where
   show (Source b prim ins o) = printf "Source %s %s %s %d" (show b) (show prim) (show ins) o
@@ -284,7 +285,6 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
 genComp :: GenBuses b => Prim a b -> BCirc a b
-
 #ifdef HashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
@@ -300,12 +300,14 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
    ins  = flattenB "genComp" a
    name = primName prim
    key  = (name,ins)
-
 #else
-
-genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
-                    tell (singleton (Comp prim a b))
+genComp prim a = do b <- genBuses prim ins
+                    let comp = Comp prim a b
+                    Mtl.modify (second (M.insert key (comp,0)))
                     return b
+ where
+   ins  = flattenB "genComp" a
+   key  = (primName prim,ins)
 #endif
 
 constComp' :: GenBuses b => String -> CircuitM (Buses b)
@@ -722,7 +724,7 @@ systemSuccess cmd =
   do status <- system cmd
      case status of
        ExitSuccess -> return ()
-       _ -> printf "command \"%s\" failed.\n" cmd
+       _ -> fail (printf "command \"%s\" failed." cmd)
 
 outG :: GenBuses a => String -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
@@ -769,7 +771,7 @@ showCounts = intercalate ", "
 summary :: DGraph -> String
 summary = showCounts
         . histogram
-        . map (\ (CompS _ compName _ _ _) -> compName)
+        . map compName
 
 histogram :: Ord a => [a] -> [(a,Int)]
 histogram = map (head &&& length) . group . sort
@@ -780,11 +782,16 @@ histogram = map (head &&& length) . group . sort
 type Input  = Bus
 type Output = Bus
 
--- Component with index, name, inputs, outputs, and reuses
-data CompS = CompS CompNum String [Input] [Output] Reuses deriving Show
+data CompS = CompS CompNum PrimName [Input] [Output] Reuses deriving Show
 
 compNum :: CompS -> CompNum
 compNum (CompS n _ _ _ _) = n
+compName :: CompS -> PrimName
+compName (CompS _ nm _ _ _) = nm
+compIns :: CompS -> [Input]
+compIns (CompS _ _ ins _ _) = ins
+compOuts :: CompS -> [Output]
+compOuts (CompS _ _ _ outs _) = outs
 
 instance Eq CompS where (==) = (==) `on` compNum
 instance Ord CompS where compare = compare `on` compNum
@@ -798,23 +805,25 @@ circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
+-- Explicitly include "In" as well, in case it's ignored.
 trimDGraph :: Unop DGraph
-trimDGraph g = S.toList (execState (searchComp out) S.empty)
+trimDGraph g =
+  S.toList (execState (mapM_ searchComp startComps) S.empty)
  where
+   startComps = filter ((`elem` ["In","Out"]) . compName) g
    searchComp :: CompS -> State (Set CompS) ()
-   searchComp c@(CompS _ _ ins _ _) = do seen <- Mtl.get
-                                         unless (c `S.member` seen) $
-                                           do Mtl.put (S.insert c seen)
-                                              mapM_ searchOut ins
-   searchOut :: Output -> State (Set CompS) ()
-   searchOut o = searchComp (fromMaybe (error "trimDGraph: mystery output")
-                                       (M.lookup o sourceComps))
-   out :: CompS
-   out = case filter (\ (CompS _ name _ _ _) -> name == "Out") g of
-           [c] -> c
-           cs  -> error ("trimDGraph: " ++ show cs)
+   searchComp c = do seen <- Mtl.gets (S.member c)
+                     unless seen $
+                       do Mtl.modify (S.insert c)
+                          mapM_ searchOut (compIns c)
+    where
+      searchOut :: Output -> State (Set CompS) ()
+      searchOut o = searchComp (fromMaybe (error msg) (M.lookup o sourceComps))
+       where
+         msg = printf "trimDGraph: mystery output %s in comp #%d. Graph: %s."
+                       (show o) (compNum c) (show g)
    sourceComps :: Map Output CompS
-   sourceComps = foldMap (\ c@(CompS _ _ _ os _) -> M.fromList [(o,c) | o <- os]) g
+   sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
    comps :: Map CompNum CompS
    comps = M.fromList [(compNum c,c) | c <- g]
 
