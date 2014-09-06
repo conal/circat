@@ -34,10 +34,10 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
-outGV :: GenBuses a => String -> (a :> b) -> IO ()
-outGV name cir = 
-  do outG name cir
-     outG name cir
+outGV :: GenBuses a => String -> Attrs -> (a :> b) -> IO ()
+outGV name attrs cir =
+  do outG name attrs cir
+     outV name       cir
 
 -- outG = outGWith ("pdf","")  -- change as desired.
 
@@ -74,14 +74,17 @@ c7 = constC False
 
 outSimples :: IO ()
 outSimples = 
-  do outGV "c0" c0
-     outGV "c1" c1
-     outGV "c2" c2
-     outGV "c3" c3
-     outGV "c4" c4
-     outGV "c5" c5
-     outGV "c6" c6
-     outGV "c7" c7
+  do out "c0" c0
+     out "c1" c1
+     out "c2" c2
+     out "c3" c3
+     out "c4" c4
+     out "c5" c5
+     out "c6" c6
+     out "c7" c7
+ where
+   out :: GenBuses a => String -> (a :> b) -> IO ()
+   out = flip outGV []
 
 {- For instance,
 

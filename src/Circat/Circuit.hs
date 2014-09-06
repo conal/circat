@@ -48,7 +48,7 @@ module Circat.Circuit
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
   , CompS(..), compNum, compName, compIns, compOuts
-  , CompNum, DGraph, circuitGraph, outGWith, outG
+  , CompNum, DGraph, circuitGraph, outGWith, outG, Attrs
   , simpleComp, tagged
   , systemSuccess
   ) where
@@ -731,7 +731,10 @@ systemSuccess cmd =
        ExitSuccess -> return ()
        _ -> fail (printf "command \"%s\" failed." cmd)
 
-outG :: GenBuses a => String -> (a :> b) -> IO ()
+
+type Attrs = [(String,String)]
+
+outG :: GenBuses a => String -> Attrs -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
 
 -- Some options:
@@ -741,10 +744,10 @@ outG = outGWith ("pdf","")
 -- ("png","-Gdpi=200")
 -- ("jpg","-Gdpi=200")
 
-outGWith :: GenBuses a => (String,String) -> String -> (a :> b) -> IO ()
-outGWith (outType,res) name circ = 
+outGWith :: GenBuses a => (String,String) -> String -> Attrs -> (a :> b) -> IO ()
+outGWith (outType,res) name attrs circ = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (graphDot name graph)
+     writeFile (outFile "dot") (graphDot name attrs graph)
      printf "Components: %s.%s\n"
        (summary graph)
 #ifdef HashCons
@@ -838,9 +841,10 @@ trimDGraph g =
    comps :: Map CompNum CompS
    comps = M.fromList [(compNum c,c) | c <- g]
 
-graphDot :: String -> DGraph -> Dot
-graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
-                        (concatMap wrap (prelude ++ recordDots comps))
+graphDot :: String -> Attrs -> DGraph -> Dot
+graphDot name attrs comps =
+  printf "digraph %s {\n%s}\n" (tweak <$> name)
+         (concatMap wrap (prelude ++ recordDots comps))
  where
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
@@ -848,7 +852,7 @@ graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
              -- , "ratio=1"
              --, "ranksep=1"
              -- , fixedsize=true
-             ]
+             ] ++ [a ++ "=" ++ show v | (a,v) <- attrs]
    wrap  = ("  " ++) . (++ ";\n")
    tweak '-' = '_'
    tweak c   = c
