@@ -34,6 +34,8 @@
 
 #define OptimizeCircuit
 
+#define HashCons
+
 #define NoSums
 -- #define StaticSums
 -- #define TaggedSums
@@ -287,24 +289,26 @@ genComp :: GenBuses' b => Prim a b -> BCirc a b
 
 -- type CircuitM = WriterT (Seq Comp) (State (PinSupply, Map (PrimName,[Source]) Comp))
 
--- memoize
-genComp prim a = do (pins,comps) <- Mtl.get
-                    case M.lookup key comps of
+#ifdef HashCons
+genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
+                    case mb of
                       Just (Comp _ _ (cast -> Just b)) -> return b
                       _ ->
                         do b <- genBuses prim ins
                            let comp = Comp prim a b
                            tell (singleton comp)
-                           Mtl.put (pins, M.insert key comp comps)
+                           Mtl.modify (second (M.insert key comp))
                            return b
  where
    ins = flattenB "genComp" a
    key = (primName prim,ins)
 
--- -- Doesn't memoize:
--- genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
---                     tell (singleton (Comp prim a b))
---                     return b
+#else
+
+genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
+                    tell (singleton (Comp prim a b))
+                    return b
+#endif
 
 constComp' :: GenBuses' b => String -> CircuitM (Buses b)
 constComp' str = genComp (Prim str) UnitB
