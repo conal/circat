@@ -274,8 +274,9 @@ data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 
 deriving instance Show Comp
 
--- Tracks prim applications and consolidations per prim.
-type CompInfo = (Map (PrimName,[Source]) Comp, Map PrimName Int)
+type Reuses = Int
+-- Tracks prim applications and reuses per component.
+type CompInfo = Map (PrimName,[Source]) (Comp,Reuses)
 
 -- The circuit monad.
 type CircuitM = WriterT (Seq Comp) (State (PinSupply, CompInfo))
@@ -286,16 +287,16 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 genComp :: GenBuses b => Prim a b -> BCirc a b
 
 #ifdef HashCons
-genComp prim a = do mb <- Mtl.gets (M.lookup key . fst . snd)
+genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
-                      Just (Comp _ _ b') ->
-                        do Mtl.modify (second (second (M.insertWith (+) name 1)))
+                      Just (Comp _ _ b', _) ->
+                        do Mtl.modify (second (M.adjust (second succ) key))
                            return (unsafeCoerce b')
                       _                  ->
                         do b <- genBuses prim ins
                            let comp = Comp prim a b
                            tell (singleton comp)
-                           Mtl.modify (second (first (M.insert key comp)))
+                           Mtl.modify (second (M.insert key (comp,0)))
                            return b
  where
    ins  = flattenB "genComp" a
@@ -694,20 +695,21 @@ runWS :: WriterT o (State s) b -> s -> ((b,o),s)
 runWS w s = runState (runWriterT w) s
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: GenBuses a => (a :> b) -> ([Comp],Map PrimName Int)
+runC :: GenBuses a => (a :> b) -> [(Comp,Int)]
 runC = runU . unitize
 
 -- runU :: (Unit :> Unit) -> [Comp]
 -- runU = fst . runU'
 
-runU :: (Unit :> Unit) -> ([Comp],Map PrimName Int)
-runU cir = (toList comps,reused)
+runU :: (Unit :> Unit) -> [(Comp,Int)]
+runU cir = M.elems compInfo
  where
-   comps :: Seq Comp; reused :: Map PrimName Int
-   ((UnitB,comps),(_,(_,reused))) =
-     runWS (unmkCK cir UnitB) (PinId <$> [0 ..],(M.empty,M.empty))
+   compInfo :: CompInfo
+   ((UnitB,_),(_,compInfo)) =
+     runWS (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)
 
--- type CompInfo = (Map (PrimName,[Source]) Comp, Map PrimName Int)
+-- type CompInfo = Map (PrimName,[Source]) (Comp,Int)
+-- type CircuitM = WriterT (Seq Comp) (State (PinSupply, CompInfo))
 
 
 -- TODO: Eliminate the writer, since the state tells more.
@@ -759,8 +761,9 @@ outGWith (outType,res) name circ =
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-   reused :: Map PrimName Int
-   (graph,reused) = circuitGraph' circ
+   reused :: Map PrimName Reuses
+   reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
+   graph = circuitGraph circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
@@ -768,17 +771,17 @@ outGWith (outType,res) name circ =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
-showCounts :: [(String,Int)] -> String
+showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
            . map (\ (nm,num) -> printf "%s=%d" nm num)
            . (\ ps -> if length ps <= 1 then ps
                        else ps ++ [("total",sum (snd <$> ps))])
+           . filter (\ (nm,n) -> n > 0 && nm `notElem` ["In","Out"])
 
 summary :: DGraph -> String
 summary = showCounts
-        . filter (\ (nm,_) -> nm `notElem` ["In","Out"])
         . histogram
-        . map (\ (CompS _ compName _ _) -> compName)
+        . map (\ (CompS _ compName _ _ _) -> compName)
 
 histogram :: Ord a => [a] -> [(a,Int)]
 histogram = map (head &&& length) . group . sort
@@ -789,10 +792,11 @@ histogram = map (head &&& length) . group . sort
 type Input  = Bus
 type Output = Bus
 
-data CompS = CompS CompNum String [Input] [Output] deriving Show
+-- Component with index, name, inputs, outputs, and reuses
+data CompS = CompS CompNum String [Input] [Output] Reuses deriving Show
 
 compNum :: CompS -> CompNum
-compNum (CompS n _ _ _) = n
+compNum (CompS n _ _ _ _) = n
 
 instance Eq CompS where (==) = (==) `on` compNum
 instance Ord CompS where compare = compare `on` compNum
@@ -801,11 +805,8 @@ type DGraph = [CompS]
 
 type Dot = String
 
-circuitGraph' :: GenBuses a => (a :> b) -> (DGraph,Map PrimName Int)
-circuitGraph' = first (trimDGraph . map simpleComp . tagged) . runC
-
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
-circuitGraph = fst . circuitGraph'
+circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
@@ -813,19 +814,19 @@ trimDGraph :: Unop DGraph
 trimDGraph g = S.toList (execState (searchComp out) S.empty)
  where
    searchComp :: CompS -> State (Set CompS) ()
-   searchComp c@(CompS _ _ ins _) = do seen <- Mtl.get
-                                       unless (c `S.member` seen) $
-                                         do Mtl.put (S.insert c seen)
-                                            mapM_ searchOut ins
+   searchComp c@(CompS _ _ ins _ _) = do seen <- Mtl.get
+                                         unless (c `S.member` seen) $
+                                           do Mtl.put (S.insert c seen)
+                                              mapM_ searchOut ins
    searchOut :: Output -> State (Set CompS) ()
    searchOut o = searchComp (fromMaybe (error "trimDGraph: mystery output")
                                        (M.lookup o sourceComps))
    out :: CompS
-   out = case filter (\ (CompS _ name _ _) -> name == "Out") g of
+   out = case filter (\ (CompS _ name _ _ _) -> name == "Out") g of
            [c] -> c
            cs  -> error ("trimDGraph: " ++ show cs)
    sourceComps :: Map Output CompS
-   sourceComps = foldMap (\ c@(CompS _ _ _ os) -> M.fromList [(o,c) | o <- os]) g
+   sourceComps = foldMap (\ c@(CompS _ _ _ os _) -> M.fromList [(o,c) | o <- os]) g
    comps :: Map CompNum CompS
    comps = M.fromList [(compNum c,c) | c <- g]
 
@@ -846,8 +847,8 @@ graphDot name comps = printf "digraph %s {\n%s}\n" (tweak <$> name)
 
 type Statement = String
 
-simpleComp :: (Int,Comp) -> CompS
-simpleComp (n, Comp prim a b) = CompS n name (flat a) (flat b)
+simpleComp :: (CompNum,(Comp,Reuses)) -> CompS
+simpleComp (n, (Comp prim a b,reuses)) = CompS n name (flat a) (flat b) reuses
  where
    name = show prim
    flat :: forall t. Buses t -> [Bus]
@@ -868,7 +869,7 @@ recordDots comps = nodes ++ edges
       node :: CompS -> String
       -- -- drop if no ins or outs
       -- node (_,prim,[],[]) = "// removed disconnected " ++ prim
-      node (CompS nc prim ins outs) =
+      node (CompS nc prim ins outs _) =
         printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
@@ -888,7 +889,7 @@ recordDots comps = nodes ++ edges
    srcMap = sourceMap comps
    edges = concatMap compEdges comps
     where
-      compEdges (CompS snkComp _ ins _) = edge <$> tagged ins
+      compEdges (CompS snkComp _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
            printf "%s -> %s %s"
@@ -918,7 +919,7 @@ type SourceMap = Map PinId (Width,CompNum,PortNum)
 --                 | LitInfo String
 
 sourceMap :: [CompS] -> SourceMap
-sourceMap = foldMap $ \ (CompS nc _ _ outs) ->
+sourceMap = foldMap $ \ (CompS nc _ _ outs _) ->
               M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
 
 {-
