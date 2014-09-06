@@ -84,7 +84,6 @@ import Debug.Trace (trace)
 -- mtl
 import Control.Monad.State (State,evalState,execState,runState,MonadState)
 import qualified Control.Monad.State as Mtl
-import Control.Monad.Writer (MonadWriter(..),WriterT,runWriterT)
 
 import TypeUnary.Vec hiding (get)
 
@@ -279,7 +278,7 @@ type Reuses = Int
 type CompInfo = Map (PrimName,[Source]) (Comp,Reuses)
 
 -- The circuit monad.
-type CircuitM = WriterT (Seq Comp) (State (PinSupply, CompInfo))
+type CircuitM = State (PinSupply,CompInfo)
 
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
@@ -295,7 +294,6 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                       _                  ->
                         do b <- genBuses prim ins
                            let comp = Comp prim a b
-                           tell (singleton comp)
                            Mtl.modify (second (M.insert key (comp,0)))
                            return b
  where
@@ -688,12 +686,6 @@ instance GenBuses a => Show (a :> b) where
 --       in the type family application: RepT :> a
 --     (Use -XUndecidableInstances to permit this)
 
-evalWS :: WriterT o (State s) b -> s -> (b,o)
-evalWS w s = evalState (runWriterT w) s
-
-runWS :: WriterT o (State s) b -> s -> ((b,o),s)
-runWS w s = runState (runWriterT w) s
-
 -- Turn a circuit into a list of components, including fake In & Out.
 runC :: GenBuses a => (a :> b) -> [(Comp,Int)]
 runC = runU . unitize
@@ -705,11 +697,10 @@ runU :: (Unit :> Unit) -> [(Comp,Int)]
 runU cir = M.elems compInfo
  where
    compInfo :: CompInfo
-   ((UnitB,_),(_,compInfo)) =
-     runWS (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)
+   (_,compInfo) = execState (unmkCK cir UnitB) (PinId <$> [0 ..],M.empty)
 
 -- type CompInfo = Map (PrimName,[Source]) (Comp,Int)
--- type CircuitM = WriterT (Seq Comp) (State (PinSupply, CompInfo))
+-- type CircuitM = State (PinSupply, CompInfo)
 
 
 -- TODO: Eliminate the writer, since the state tells more.
@@ -746,15 +737,12 @@ outG = outGWith ("pdf","")
 outGWith :: GenBuses a => (String,String) -> String -> (a :> b) -> IO ()
 outGWith (outType,res) name circ = 
   do createDirectoryIfMissing False outDir
-     -- writeFile (outFile "graph") (show (simpleComp <$> runC circ))
-     -- putStrLn "outGWith: here goes!!"
-     -- printf "Circuit: %d components\n" (length (runC circ))
-     -- print (simpleComp <$> runC circ)
      writeFile (outFile "dot") (graphDot name graph)
      printf "Circuit summary: %s.%s\n"
        (summary graph)
-       (if M.null reused then ""
-        else printf " Reused: %s." (showCounts (M.toList reused)))
+       (case showCounts (M.toList reused) of
+          ""  -> ""
+          str -> printf " Reused: %s." str)
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
@@ -958,8 +946,6 @@ type (:->) = StateFun (:>) Bool
 
 {-
 newtype a :> b = Circ (Kleisli CircuitM (Buses a) (Buses b))
-
-type CircuitM = WriterT (Seq Comp) (State PinSupply)
 
 apply   :: ((a :->: b) :* a) :> b
 curry   :: ((a :* b) :> c) -> (a :> (b :->: c))
