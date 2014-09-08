@@ -43,12 +43,12 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses
+  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep'
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
   , CompS(..), compNum, compName, compIns, compOuts
-  , CompNum, DGraph, circuitGraph, outGWith, outG, Attrs
+  , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
   , simpleComp, tagged
   , systemSuccess
   ) where
@@ -732,9 +732,9 @@ systemSuccess cmd =
        _ -> fail (printf "command \"%s\" failed." cmd)
 
 
-type Attrs = [(String,String)]
+type Attr = (String,String)
 
-outG :: GenBuses a => String -> Attrs -> (a :> b) -> IO ()
+outG :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
 
 -- Some options:
@@ -744,19 +744,12 @@ outG = outGWith ("pdf","")
 -- ("png","-Gdpi=200")
 -- ("jpg","-Gdpi=200")
 
-outGWith :: GenBuses a => (String,String) -> String -> Attrs -> (a :> b) -> IO ()
+outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
 outGWith (outType,res) name attrs circ = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (graphDot name attrs graph)
-     printf "Components: %s.%s\n"
-       (summary graph)
-#ifdef HashCons
-       (case showCounts (M.toList reused) of
-          ""  -> ""
-          str -> printf " Reuses: %s." str)
-#else
-       ""
-#endif
+     writeFile (outFile "dot") (graphDot name attrs graph
+                               ++ "\n// "++ report)
+     putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
@@ -774,6 +767,16 @@ outGWith (outType,res) name attrs circ =
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
+   report = printf "Components: %s.%s\n"
+              (summary graph)
+#ifdef HashCons
+              (case showCounts (M.toList reused) of
+                 ""  -> ""
+                 str -> printf " Reuses: %s." str)
+#else
+              ""
+#endif
+
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
@@ -841,7 +844,7 @@ trimDGraph g =
    comps :: Map CompNum CompS
    comps = M.fromList [(compNum c,c) | c <- g]
 
-graphDot :: String -> Attrs -> DGraph -> Dot
+graphDot :: String -> [Attr] -> DGraph -> Dot
 graphDot name attrs comps =
   printf "digraph %s {\n%s}\n" (tweak <$> name)
          (concatMap wrap (prelude ++ recordDots comps))
@@ -1420,19 +1423,22 @@ instance DistribCat (:>) where
 -- GenBuses needed for data types appearing the external interfaces (and hence
 -- not removed during compilation).
 
+genBusesRep' :: GenBuses (Rep a) =>
+                String -> [Source] -> Int -> CircuitM (Buses a,Int)
+genBusesRep' prim ins o = first abstB <$> (genBuses' prim ins o)
+
 #if 1
 
+-- class GenBuses a where
+--   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+
 #define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  genBuses' prim ins o = \
-    first abstB <$> (genBuses' prim ins o :: CircuitM (Buses (Rep (abs)),Int))
+instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #else
 
 #define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where \
- { genBuses' prim ins o = \
-    first abstB <$> (genBuses' prim ins o :: CircuitM (Buses (Rep (abs)),Int)) }; \
+instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'; \
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifA = repIf }
 
 #endif
