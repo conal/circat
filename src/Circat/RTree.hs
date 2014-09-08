@@ -23,7 +23,10 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.RTree (Tree(..),fromList) where
+module Circat.RTree
+  ( RTree(..),Tree,fromList
+  , tree0, tree1, tree2, tree3, tree4
+  ) where
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
 
@@ -50,9 +53,11 @@ import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
-data Tree :: * -> * -> * where
+data RTree :: * -> * -> * where
   L :: a -> Tree Z a
   B :: Pair (Tree n a) -> Tree (S n) a
+
+type Tree = RTree
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
@@ -421,6 +426,28 @@ fromList' (Succ n) as  = B (fromList' n <$> halves as)
 
 halves :: [a] -> Pair [a]
 halves as = toP (splitAt (length as `div` 2) as)
+
+{--------------------------------------------------------------------
+    Construction (for examples)
+--------------------------------------------------------------------}
+
+tree0 :: a -> Tree N0 a
+tree0 = L
+
+tree1 :: a -> a -> Tree N1 a
+tree1 a b = B (tree0 a :# tree0 b)
+
+tree2 :: a -> a -> a -> a -> Tree N2 a
+tree2 a b c d = B (tree1 a b :# tree1 c d)
+
+tree3 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree N3 a
+tree3 a b c d e f g h = B (tree2 a b c d :# tree2 e f g h)
+
+tree4 :: a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> Tree N4 a
+tree4 a b c d e f g h i j k l m n o p =
+  B (tree3 a b c d e f g h :# tree3 i j k l m n o p)
 
 
 {--------------------------------------------------------------------

@@ -1,4 +1,6 @@
 {-# LANGUAGE CPP #-}
+-- #define Testing
+
 {-# LANGUAGE TypeFamilies, FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE DataKinds, GADTs, KindSignatures, ScopedTypeVariables #-}
 {-# LANGUAGE TypeOperators #-}
@@ -9,8 +11,10 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
+#ifdef Testing
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+#endif
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -23,7 +27,10 @@
 -- Shape-typed ragged trees
 ----------------------------------------------------------------------
 
-module Circat.RaggedTree (GTree(..),Tree,TU(..)) where
+module Circat.RaggedTree
+  ( GTree(..),Tree,TU(..)
+  , R1, R2, R3, R4, R5, R8, R13, tree1, tree2, tree3, tree4, tree5, tree8, tree13,
+  ) where
 
 import Prelude hiding (zipWith)
 
@@ -216,21 +223,61 @@ zipWith f v t :: Tree q c
 B (zipWith f u s) (zipWith f v t) :: Tree (BU p q) c
 #endif
 
-#if 0
+{--------------------------------------------------------------------
+    Construction (for examples)
+--------------------------------------------------------------------}
+
+type R1  = LU
+type R2  = BU R1 R1
+type R3  = BU R2 R1
+type R4  = BU R2 R2
+type R5  = BU R3 R2
+type R8  = BU R3 R5
+type R13 = BU R8 R5
+
+-- type R8'  = BU R4  R4
+-- type R13' = BU R8' R3
+
+tree1 :: a -> Tree R1 a
+tree1 a = L a
+
+tree2 :: a -> a -> Tree R2 a
+tree2 a b = B (tree1 a) (tree1 b)
+
+tree3 :: a -> a -> a -> Tree R3 a
+tree3 a b c = B (tree2 a b) (tree1 c)
+
+tree4 :: a -> a -> a -> a -> Tree R4 a
+tree4 a b c d = B (tree2 a b) (tree2 c d)
+
+tree5 :: a -> a -> a -> a -> a -> Tree R5 a
+tree5 a b c d e = B (tree3 a b c) (tree2 d e)
+
+tree8 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree R8 a
+tree8 a b c d e f g h = B (tree3 a b c) (tree5 d e f g h)
+
+tree13 :: a -> a -> a -> a -> a -> a -> a -> a
+       -> a -> a -> a -> a -> a
+       -> Tree R13 a
+tree13 a b c d e f g h i j k l m =
+  B (tree8 a b c d e f g h) (tree5 i j k l m)
+
+#ifdef Testing
+
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
 
-t1 :: Tree LU Bool
+t1 :: Tree R1 Bool
 t1 = L False
 
-t2 :: Tree (BU LU LU) Bool
+t2 :: Tree R2 Bool
 t2 = B (L False) (L True)
 
-t3 :: Tree (BU LU (BU LU LU)) Bool
-t3 = B t1 t2
+t3 :: Tree R3 Bool
+t3 = B t2 t1
 
-t4 :: Tree (BU LU (BU LU LU)) Bool
+t4 :: Tree R3 Bool
 t4 = not <$> t3
 
 #endif

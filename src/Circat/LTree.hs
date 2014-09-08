@@ -23,7 +23,10 @@
 -- Right-folded trees. For now, just binary.
 ----------------------------------------------------------------------
 
-module Circat.LTree (Tree(..),fromList) where
+module Circat.LTree
+  ( LTree(..),Tree,fromList
+  , tree0, tree1, tree2, tree3, tree4
+  ) where
 
 import Prelude hiding (id,(.),uncurry,zip,zipWith,reverse)
 
@@ -49,9 +52,11 @@ import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
-data Tree :: * -> * -> * where
+data LTree :: * -> * -> * where
   L :: a -> Tree Z a
   B :: Tree n (Pair a) -> Tree (S n) a
+
+type Tree = LTree
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
@@ -364,6 +369,28 @@ consecs [] = []
 consecs [_] = error "Circat.LTree.consecs: odd number of elements"
 consecs (a:b:as) = (a :# b) : consecs as
 
+{--------------------------------------------------------------------
+    Construction (for examples)
+--------------------------------------------------------------------}
+
+tree0 :: a -> Tree N0 a
+tree0 = L
+
+tree1 :: a -> a -> Tree N1 a
+tree1 a b = B (tree0 (a :# b))
+
+tree2 :: a -> a -> a -> a -> Tree N2 a
+tree2 a b c d = B (tree1 (a :# b) (c :# d))
+
+tree3 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree N3 a
+tree3 a b c d e f g h = B (tree2 (a :# b) (c :# d) (e :# f) (g :# h))
+
+tree4 :: a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> Tree N4 a
+tree4 a b c d e f g h i j k l m n o p =
+  B (tree3 (a :# b) (c :# d) (e :# f) (g :# h)
+           (i :# j) (k :# l) (m :# n) (o :# p))
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package
