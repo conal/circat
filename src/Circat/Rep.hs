@@ -21,6 +21,10 @@
 module Circat.Rep (Rep,HasRep(..)) where
 
 import Data.Monoid
+import Control.Applicative (WrappedMonad(..))
+
+import Control.Monad.Trans.State (StateT(..))
+import Data.Functor.Identity (Identity(..))
 -- TODO: more
 
 -- import Data.Constraint
@@ -110,6 +114,9 @@ WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)
 WrapRep(Dual a,a,Dual)
 WrapRep(Endo a,a->a,Endo)
+WrapRep(WrappedMonad m a,m a,WrapMonad)
+WrapRep(Identity a,a,Identity)
+WrapRep(StateT s m a, s -> m (a,s), StateT)
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
