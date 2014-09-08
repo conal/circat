@@ -34,7 +34,7 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
-outGV :: GenBuses a => String -> Attrs -> (a :> b) -> IO ()
+outGV :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
 outGV name attrs cir =
   do outG name attrs cir
      outV name       cir
