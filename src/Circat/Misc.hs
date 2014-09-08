@@ -23,6 +23,9 @@ module Circat.Misc where
 import Prelude hiding (id,(.))
 
 import Control.Category (Category(..))
+import Control.Applicative (Applicative)
+import Data.Traversable (Traversable(sequenceA))
+
 import Control.Newtype
 
 -- | Unary transformation
@@ -61,6 +64,9 @@ infixl 1 <~
 -- | Compose list of unary transformations
 compose :: [Unop a] -> Unop a
 compose = foldr (.) id
+
+transpose :: (Traversable t, Applicative f) => t (f a) -> f (t a)
+transpose = sequenceA
 
 -- TODO: Maybe generalize the type of compose to Unop' (~>) a
 
