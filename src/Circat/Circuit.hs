@@ -62,6 +62,7 @@ import Control.Applicative (Applicative(..),Alternative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
+import Data.Tuple (swap)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
 import Data.Coerce                      -- TODO: imports
@@ -767,14 +768,14 @@ outGWith (outType,res) (renameC -> name) attrs circ =
    reused :: Map PrimName Reuses
    reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
 #endif
-   graph = circuitGraph circ
+   (graph,depth) = circuitGraph circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
-   report = printf "Components: %s.%s\n"
+   report = printf "Components: %s.%s Depth: %d.\n"
               (summary graph)
 #ifdef HashCons
               (case showCounts (M.toList reused) of
@@ -783,11 +784,11 @@ outGWith (outType,res) (renameC -> name) attrs circ =
 #else
               ""
 #endif
-
+              depth
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
-           . map (\ (nm,num) -> printf "%s (%d)" nm num)
+           . map (\ (nm,num) -> printf "%s: %d" nm num)
            . (\ ps -> if length ps <= 1 then ps
                        else ps ++ [("total",sum (snd <$> ps))])
            . filter (\ (nm,n) -> n > 0 && nm `notElem` ["In","Out"])
@@ -824,24 +825,37 @@ type DGraph = [CompS]
 
 type Dot = String
 
-circuitGraph :: GenBuses a => (a :> b) -> DGraph
-circuitGraph = trimDGraph . map simpleComp . tagged . runC
+circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
+circuitGraph = trimDGraph' . map simpleComp . tagged . runC
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
 -- Explicitly include "In" as well, in case it's ignored.
 trimDGraph :: Unop DGraph
-trimDGraph g =
-  S.toList (execState (mapM_ searchComp startComps) S.empty)
+trimDGraph = fst . trimDGraph'
+
+type Depth = Int
+
+type TrimM = State (Map CompS Depth)
+
+trimDGraph' :: DGraph -> (DGraph, Depth)
+trimDGraph' g =
+  (M.keys *** pred . maximum) . swap $
+    runState (mapM searchComp startComps) M.empty
  where
    startComps = filter ((`elem` ["In","Out"]) . compName) g
-   searchComp :: CompS -> State (Set CompS) ()
-   searchComp c = do seen <- Mtl.gets (S.member c)
-                     unless seen $
-                       do Mtl.modify (S.insert c)
-                          mapM_ searchOut (compIns c)
+   searchComp :: CompS -> TrimM Depth
+   searchComp c =
+    do mb <- Mtl.gets (M.lookup c)
+       case mb of
+         Nothing ->
+           do depths <- mapM searchOut (compIns c)
+              let depth = if null depths then 0 else 1 + maximum depths
+              Mtl.modify (M.insert c depth)
+              return depth
+         Just depth -> return depth
     where
-      searchOut :: Output -> State (Set CompS) ()
+      searchOut :: Output -> TrimM Depth
       searchOut o = searchComp (fromMaybe (error msg) (M.lookup o sourceComps))
        where
          msg = printf "trimDGraph: mystery output %s in comp #%d. Graph: %s."
@@ -850,6 +864,8 @@ trimDGraph g =
    sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
    comps :: Map CompNum CompS
    comps = M.fromList [(compNum c,c) | c <- g]
+
+-- The pred eliminates counting both In (constants) *and* Out.
 
 graphDot :: String -> [Attr] -> DGraph -> Dot
 graphDot name attrs comps =

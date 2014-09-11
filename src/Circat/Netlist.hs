@@ -60,7 +60,7 @@ toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
 -- | Converts a Circuit to a Module
 toNetlist :: GenBuses a => String -> (a :> b) -> Module
 toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
-  where comps       = circuitGraph cir
+  where (comps,_)   = circuitGraph cir
         (p2wM,ins)  = modulePorts (portComp "In"  comps)
         (_,outs)    = modulePorts (portComp "Out" comps)
         (p2wI,nets) = moduleNets comps
