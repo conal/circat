@@ -18,7 +18,7 @@
 {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -229,9 +229,9 @@ flattenB name = flip flat []
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
 
-unUnitB :: Buses Unit -> Unit
-unUnitB UnitB = ()
-unUnitB (IsoB _) = isoErr "unUnitB"
+-- unUnitB :: Buses Unit -> Unit
+-- unUnitB UnitB = ()
+-- unUnitB (IsoB _) = isoErr "unUnitB"
 
 pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
@@ -357,8 +357,8 @@ inCK2 :: (BCirc a a' -> BCirc b b' -> BCirc c c')
       -> ((a :> a') -> (b :> b') -> (c :> c'))
 inCK2 = inCK <~ unmkCK
 
-primC :: GenBuses b => Prim a b -> a :> b
-primC = mkCK . genComp
+-- primC :: GenBuses b => Prim a b -> a :> b
+-- primC = mkCK . genComp
 
 namedC :: GenBuses b => String -> a :> b
 -- namedC = primC . Prim
@@ -420,8 +420,8 @@ constC = mkCK . constM
 
 -- Phasing out constC
 
-pureC :: Buses b -> a :> b
-pureC = mkCK . pure . pure
+-- pureC :: Buses b -> a :> b
+-- pureC = mkCK . pure . pure
 
 #if 0
 litUnit :: Unit -> a :> Unit
@@ -448,10 +448,10 @@ instance Category (:>) where
 exrB :: Buses (a :* b) -> Buses b
 exrB = snd . unPairB
 
-onPairBM :: Functor m =>
-            (Buses a :* Buses b -> m (Buses a' :* Buses b'))
-         -> (Buses (a :* b) -> m (Buses (a' :* b')))
-onPairBM f = fmap pairB . f . unPairB
+-- onPairBM :: Functor m =>
+--             (Buses a :* Buses b -> m (Buses a' :* Buses b'))
+--          -> (Buses (a :* b) -> m (Buses (a' :* b')))
+-- onPairBM f = fmap pairB . f . unPairB
 
 crossB :: Applicative m =>
           (Buses a -> m (Buses c)) -> (Buses b -> m (Buses d))
@@ -826,20 +826,17 @@ type DGraph = [CompS]
 type Dot = String
 
 circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
-circuitGraph = trimDGraph' . map simpleComp . tagged . runC
-
--- Remove unused components.
--- Depth-first search from the "Out" component.
--- Explicitly include "In" as well, in case it's ignored.
-trimDGraph :: Unop DGraph
-trimDGraph = fst . trimDGraph'
+circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 type Depth = Int
 
 type TrimM = State (Map CompS Depth)
 
-trimDGraph' :: DGraph -> (DGraph, Depth)
-trimDGraph' g =
+-- Remove unused components.
+-- Depth-first search from the "Out" component.
+-- Explicitly include "In" as well, in case it's ignored.
+trimDGraph :: DGraph -> (DGraph, Depth)
+trimDGraph g =
   (M.keys *** pred . maximum) . swap $
     runState (mapM searchComp startComps) M.empty
  where
@@ -862,8 +859,8 @@ trimDGraph' g =
                        (show o) (compNum c) (show g)
    sourceComps :: Map Output CompS
    sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
-   comps :: Map CompNum CompS
-   comps = M.fromList [(compNum c,c) | c <- g]
+--    comps :: Map CompNum CompS
+--    comps = M.fromList [(compNum c,c) | c <- g]
 
 -- The pred eliminates counting both In (constants) *and* Out.
 
@@ -937,8 +934,8 @@ recordDots comps = nodes ++ edges
             label w = printf "[label=\"%d\",fontsize=10]" w
 --          edge (ni, BoolS x) = litComment ni x
 --          edge (ni, IntS  x) = litComment ni x
-         litComment :: Show a => CompNum -> a -> String
-         litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
+--          litComment :: Show a => CompNum -> a -> String
+--          litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
    port :: Dir -> (Width,CompNum,PortNum) -> String
    -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
@@ -1153,7 +1150,7 @@ uncurry untrie :: ((Unpins a :->: b) :* Unpins a) -> b
 
 #if defined NoSums
 
-type BusSum a b = ()
+-- type BusSum a b = ()
 
 sumErr :: String -> a
 sumErr str = error (str ++ " for (:>): not defined. Sorry")
