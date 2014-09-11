@@ -744,8 +744,15 @@ outG = outGWith ("pdf","")
 -- ("png","-Gdpi=200")
 -- ("jpg","-Gdpi=200")
 
+renameC :: Unop String
+#ifdef OptimizeCircuit
+renameC = id
+#else
+renameC = (++"-unopt")
+#endif
+
 outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
-outGWith (outType,res) name attrs circ = 
+outGWith (outType,res) (renameC -> name) attrs circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (graphDot name attrs graph
                                ++ "\n// "++ report)
