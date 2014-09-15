@@ -24,7 +24,7 @@
 ----------------------------------------------------------------------
 
 module Circat.RTree
-  ( RTree(..),Tree,fromList
+  ( RTree(..),unB,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4
   ) where
 
