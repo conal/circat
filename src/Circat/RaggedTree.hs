@@ -29,7 +29,8 @@
 
 module Circat.RaggedTree
   ( GTree(..),Tree,TU(..)
-  , R1, R2, R3, R4, R5, R8, R13, tree1, tree2, tree3, tree4, tree5, tree8, tree13,
+  , R1, R2, R3, R4, R5, R8, R11, R13
+  , tree1, tree2, tree3, tree4, tree5, tree8, tree11, tree13,
   ) where
 
 import Prelude hiding (zipWith)
@@ -233,6 +234,7 @@ type R3  = BU R2 R1
 type R4  = BU R2 R2
 type R5  = BU R3 R2
 type R8  = BU R3 R5
+type R11 = BU R8 R3
 type R13 = BU R8 R5
 
 -- type R8'  = BU R4  R4
@@ -255,6 +257,12 @@ tree5 a b c d e = B (tree3 a b c) (tree2 d e)
 
 tree8 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree R8 a
 tree8 a b c d e f g h = B (tree3 a b c) (tree5 d e f g h)
+
+tree11 :: a -> a -> a -> a -> a -> a -> a -> a
+       -> a -> a -> a
+       -> Tree R11 a
+tree11 a b c d e f g h i j k =
+  B (tree8 a b c d e f g h) (tree3 i j k)
 
 tree13 :: a -> a -> a -> a -> a -> a -> a -> a
        -> a -> a -> a -> a -> a
