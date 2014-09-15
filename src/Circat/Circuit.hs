@@ -746,10 +746,12 @@ outG = outGWith ("pdf","")
 -- ("jpg","-Gdpi=200")
 
 renameC :: Unop String
-#ifdef OptimizeCircuit
 renameC = id
-#else
-renameC = (++"-unopt")
+#ifndef OptimizeCircuit
+        . (++"-unopt")
+#endif
+#ifndef HashCons
+        . (++"-nohash")
 #endif
 
 outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
@@ -788,7 +790,7 @@ outGWith (outType,res) (renameC -> name) attrs circ =
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
-           . map (\ (nm,num) -> printf "%s: %d" nm num)
+           . map (\ (nm,num) -> printf "%d %s" num nm)
            . (\ ps -> if length ps <= 1 then ps
                        else ps ++ [("total",sum (snd <$> ps))])
            . filter (\ (nm,n) -> n > 0 && nm `notElem` ["In","Out"])
