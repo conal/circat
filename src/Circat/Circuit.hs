@@ -777,16 +777,18 @@ outGWith (outType,res) (renameC -> name) attrs circ =
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
-   report = printf "Components: %s.%s Depth: %d.\n"
-              (summary graph)
+   report | depth == 0 = "No components.\n"  -- except In & Out
+          | otherwise  =
+              printf "Components: %s.%s Depth: %d.\n"
+                (summary graph)
 #ifdef HashCons
-              (case showCounts (M.toList reused) of
-                 ""  -> ""
-                 str -> printf " Reuses: %s." str)
-#else
-              ""
-#endif
-              depth
+                (case showCounts (M.toList reused) of
+                   ""  -> ""
+                   str -> printf " Reuses: %s." str)
+#else          
+                ""
+#endif         
+                depth
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
