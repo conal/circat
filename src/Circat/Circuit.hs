@@ -605,6 +605,10 @@ maybeCK n j (MaybeB a b) = undefined
 
 #endif
 
+instance BottomCat (:>) where
+  type BottomKon (:>) a = GenBuses a
+  bottom = mkCK (const (genBuses (Prim "bottom") []))
+
 -- instance BoolCat (:>) where
 --   not = namedC "not"
 --   and = namedC "and"

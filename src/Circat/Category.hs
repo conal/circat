@@ -45,7 +45,7 @@ module Circat.Category
   , CondCat(..),CondCat2, prodCond, funCond  -- experimental
   , guard, if_then_else  -- experimental
 #endif
-  , Yes
+  , Yes, Yes2
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)

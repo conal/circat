@@ -24,11 +24,12 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const,not,and,or,curry,uncurry)
+import Prelude hiding (id,(.),not,and,or,curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
+import GHC.Prim (Constraint)
 
-import Circat.Misc ((:*))
+import Circat.Misc ((:*),Unit)
 import Circat.Category
 
 -- | Category with boolean operations.
@@ -55,6 +56,28 @@ instance Num a => NumCat (->) a where
 instance (Monad m, Num a) => NumCat (Kleisli m) a where
   add = arr add
   mul = arr mul
+
+#if 0
+class MaybeCat k where
+  nothing :: Unit `k` Maybe a
+  just    :: a `k` Maybe a
+  maybe   :: (Unit `k` c) -> (a `k` c) -> (Maybe a `k` c)
+
+instance MaybeCat (->) where
+  nothing   = const Nothing
+  just      = Just
+  maybe n j = P.maybe (n ()) j
+
+--   maybe n _ Nothing  = n ()
+--   maybe _ j (Just a) = j a
+#endif
+
+class BottomCat k where
+  type BottomKon k a :: Constraint
+  type BottomKon k a = Yes a
+  bottom :: BottomKon k a => Unit `k`a
+
+instance BottomCat (->) where bottom = error "bottom"
 
 {--------------------------------------------------------------------
     Misc
