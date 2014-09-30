@@ -83,3 +83,4 @@ instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) => HasIf (Vec n a) where
 -- instance HasIf (Vec Z a) where if_then_else = repIf
 -- instance (HasIf (Vec n a), HasIf a) => HasIf (Vec (S n) a) where if_then_else = repIf
 
+instance HasIf a => HasIf (Maybe a) where if_then_else = repIf
