@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..)) where
+module Circat.Rep (Rep,HasRep(..),oops) where
 
 import Data.Monoid
 import Control.Applicative (WrappedMonad(..))
@@ -132,3 +132,19 @@ instance IsNat n => HasRep (Nat (S n)) where
   abst ((),n) = Succ n
 -- The IsNat constraint comes from Succ.
 -- TODO: See about eliminating that constructor constraint.
+
+-- Experimental treatment of Maybe
+type instance Rep (Maybe a) = a :* Bool
+instance HasRep (Maybe a) where
+  repr (Just a) = (a,True)
+  repr Nothing  = (oops,False) -- error "repr on Maybe: undefined value"
+  abst (a,True ) = (Just a)
+  abst (_,False) = Nothing 
+
+oops :: a
+oops = error "oops: Oops!"
+{-# NOINLINE oops #-}
+
+-- TODO: LambdaCCC.Prim has an OopsP primitive, which
+-- LambdaCCC.ReifySimple.primMap maps to oops. If the error ever occurs, add a
+-- string argument, and twak the reification.
