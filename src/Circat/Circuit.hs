@@ -53,8 +53,8 @@ module Circat.Circuit
   , systemSuccess
   ) where
 
-import Prelude hiding (id,(.),not,and,or,curry,uncurry,sequence)
--- import qualified Prelude as P
+import Prelude hiding (id,(.),not,and,or,curry,uncurry,sequence,maybe)
+import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
@@ -152,17 +152,19 @@ newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
 
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
 data Buses :: * -> * where
-  UnitB :: Buses Unit
-  BoolB :: Source -> Buses Bool
-  IntB  :: Source -> Buses Int
-  PairB :: Buses a -> Buses b -> Buses (a :* b)
-  FunB  :: (a :> b) -> Buses (a -> b)
+  UnitB  :: Buses Unit
+  BoolB  :: Source -> Buses Bool
+  IntB   :: Source -> Buses Int
+  PairB  :: Buses a -> Buses b -> Buses (a :* b)
+--   MaybeB :: Buses a -> Buses Bool -> Buses (Maybe a)
+  FunB   :: (a :> b) -> Buses (a -> b)
   -- | Isomorphic form. Note: b must not have one of the standard forms.
   -- If it does, we'll get a run-time error when consuming.
-  IsoB  :: Buses (Rep a) -> Buses a
-
+  IsoB   :: Buses (Rep a) -> Buses a
 -- -- Alternatively,
 -- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
+--   -- Undefined, for Nothing and perhaps more general sums
+--   BotB   :: Buses a
 
 #if 0
 -- Equality. Easy hack: derive Eq, but say that circuits are never equal.
@@ -186,12 +188,14 @@ instance Eq (Buses a) where
 -- Deriving would need GenBuses a.
 
 instance Show (Buses a) where
-  show UnitB       = "()"
-  show (BoolB b)   = show b
-  show (IntB b)    = show b
-  show (PairB a b) = "("++show a++","++show b++")"
-  show (FunB _)    = "<function>"
-  show (IsoB b)    = "IsoB ("++show b++")"
+  show UnitB        = "()"
+  show (BoolB b)    = show b
+  show (IntB b)     = show b
+  show (PairB a b)  = "("++show a++","++show b++")"
+--   show (MaybeB a b) = "(MaybeB "++show a++" "++show b++")"
+  show (FunB _)     = "<function>"
+  show (IsoB b)     = "IsoB ("++show b++")"
+--   show BotB         = "BotB"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -200,6 +204,8 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+
+-- TODO: Remember why I number outputs
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
@@ -214,6 +220,11 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
+-- instance GenBuses a => GenBuses (Maybe a) where
+--   genBuses' prim ins o =
+--     do (a,oa) <- genBuses' prim ins o
+--        (b,ob) <- genBuses' prim ins oa
+--        return (MaybeB a b, ob)
 
 flattenB :: String -> Buses a -> [Source]
 flattenB name = flip flat []
@@ -223,11 +234,14 @@ flattenB name = flip flat []
    flat (BoolB b)   = (b :)
    flat (IntB b)    = (b :)
    flat (PairB a b) = flat a . flat b
-   flat (FunB _)    = error $ "flattenB: FunB unhandled in " ++ name
    flat (IsoB b)    = flat b
+   flat b           = error $ "flattenB/"++name++": unhandled " ++ show b
 
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
+
+-- botErr :: String -> x
+-- botErr nm = error (nm ++ ": BotB")
 
 -- unUnitB :: Buses Unit -> Unit
 -- unUnitB UnitB = ()
@@ -239,10 +253,12 @@ pairB (a,b) = PairB a b
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 unPairB (PairB a b) = (a,b)
 unPairB (IsoB _)    = isoErr "unPairB"
+-- unPairB BotB        = botErr "unPairB"
 
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
-unFunB (IsoB _) = isoErr "unFunB"
+unFunB (IsoB _)    = isoErr "unFunB"
+-- unFunB BotB        = botErr "unFunB"
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -343,11 +359,15 @@ instance RepCat (:>) where
   reprC = C (arr reprB)
   abstC = C (arr abstB)
 
+-- pattern CK bc = C (Kleisli bc)
+
 mkCK :: BCirc a b -> (a :> b)
 mkCK = C . Kleisli
 
 unmkCK :: (a :> b) -> BCirc a b
 unmkCK = runKleisli . unC
+
+-- TODO: Eliminate mkCK in favor of CK
 
 inCK :: (BCirc a a' -> BCirc b b')
      -> ((a :> a') -> (b :> b'))
@@ -366,11 +386,11 @@ namedC name = namedOpt name noOpt
 
 type Opt b = [Source] -> CircuitM (Maybe (Buses b))
 
-just :: Applicative f => a -> f (Maybe a)
-just = pure . Just
+justA :: Applicative f => a -> f (Maybe a)
+justA = pure . Just
 
-nothing :: Applicative f => f (Maybe a)
-nothing = pure Nothing
+nothingA :: Applicative f => f (Maybe a)
+nothingA = pure Nothing
 
 newComp :: (a :> b) -> Buses a -> CircuitM (Maybe (Buses b))
 newComp cir = fmap Just . unmkCK cir
@@ -390,7 +410,7 @@ newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
 noOpt :: Opt b
-noOpt = const nothing
+noOpt = const nothingA
 
 orOpt :: Binop (Opt b)
 
@@ -399,12 +419,24 @@ orOpt f g a = do mb <- f a
                    Nothing -> g a
                    Just _  -> return mb
 
-namedOpt :: GenBuses b => String -> Opt b -> a :> b
+namedOpt, namedOptSort :: GenBuses b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
 namedOpt name opt =
-  mkCK $ \ a -> opt (flattenB "namedOpt" a) >>= maybe (genComp (Prim name) a) return
+  mkCK $ \ a -> opt (flattenB "namedOpt" a) >>= P.maybe (genComp (Prim name) a) return
+
+tryCommute :: a :> a
+tryCommute = mkCK try
+ where
+   try (PairB (BoolB a) (BoolB a')) | a > a' = return (PairB (BoolB a') (BoolB a))
+   try (PairB (IntB  a) (IntB  a')) | a > a' = return (PairB (IntB  a') (IntB  a))
+   try b = return b
+
+-- Like namedOpt, but sorts. Use for commutative operations to improve reuse
+-- (cache hits).
+namedOptSort name opt = namedOpt name opt . tryCommute
 #else
 namedOpt name _ = mkCK (genComp (Prim name))
+namedOptSort = namedOpt
 #endif
 
 -- | Constant circuit from source generator (experimental)
@@ -533,6 +565,46 @@ instance TerminalCat (:>) where
 --   type ConstKon (:>) a b = (Show b, GenBuses b)
 --   const = constC
 
+#if 0
+class MaybeCat k where
+  nothing :: Unit `k` Maybe a
+  just    :: a `k` Maybe a
+  maybe   :: (Unit `k` c) -> (a `k` c) -> (Maybe a `k` c)
+
+type Maybe a = a :* Bool
+
+nothing = (undefined,False)
+just a  = (a,True )
+
+maybe n j (a,p) = if p then n else j a
+
+newtype a :> b = C { unC :: a :+> b }
+type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
+
+constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+
+#endif
+
+#if 0
+instance MaybeCat (:>) where
+  just    = CK (\ a -> MaybeB a    <$> constM' True )
+  nothing = CK (\ _ -> MaybeB BotB <$> constM' False)
+  maybe = inCK2 maybeCK
+
+--   maybe (CK n) (CK j) = CK (maybeCK n j)
+--
+--     Pattern match(es) are non-exhaustive
+--     In an equation for ‘maybe’: Patterns not matched: _ _
+-- 
+-- GHC bug?
+
+maybeCK :: BCirc Unit c -> BCirc a c -> BCirc (Maybe a) c
+maybeCK n j (MaybeB a b) = undefined
+
+-- Oops! I don't know how to implement conditional over a
+
+#endif
+
 -- instance BoolCat (:>) where
 --   not = namedC "not"
 --   and = namedC "and"
@@ -552,31 +624,48 @@ instance SourceToBuses Bool where toBuses = BoolB
 instance SourceToBuses Int  where toBuses = IntB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
-sourceB = just . toBuses
+sourceB = justA . toBuses
+
+#define Sat(pred) ((pred) -> True)
+#define Eql(x) Sat(==(x))
 
 instance BoolCat (:>) where
   not = namedOpt "not" $ \ case
           [NotS a]     -> sourceB a
           [Val x]      -> newVal (not x)
-          _            -> nothing
-  and = namedOpt "and" $ \ case
+          _            -> nothingA
+  and = namedOptSort "and" $ \ case
           [TrueS ,y]   -> sourceB y
           [x,TrueS ]   -> sourceB x
           [x@FalseS,_] -> sourceB x
           [_,y@FalseS] -> sourceB y
-          _            -> nothing
-  or  = namedOpt "or"  $ \ case
+          [x,Eql(x)]   -> sourceB x
+          [x,NotS (Eql(x))] -> newVal False
+          [NotS x,Eql(x)]   -> newVal False
+          _            -> nothingA
+  or  = namedOptSort "or"  $ \ case
           [FalseS,y]   -> sourceB y
           [x,FalseS]   -> sourceB x
           [x@TrueS ,_] -> sourceB x
           [_,y@TrueS ] -> sourceB y
-          _            -> nothing
-  xor = namedOpt "xor" $ \ case
+          [x,Eql(x)]   -> sourceB x
+          [x,NotS (Eql(x))] -> newVal True
+          [NotS x,Eql(x)]   -> newVal True
+          -- not a || not b == not (a && b)
+          -- TODO: Handle more elegantly.
+          [NotS x, NotS y] -> do o <- unmkCK and (PairB (BoolB x) (BoolB y))
+                                 newComp not o
+          _            -> nothingA
+  xor = namedOptSort "xor" $ \ case
           [FalseS,y]   -> sourceB y
           [x,FalseS]   -> sourceB x
           [TrueS,y ]   -> newComp1 not y
           [x,TrueS ]   -> newComp1 not x
-          _            -> nothing
+          [x,Eql(x)]   -> newVal False
+          [x,NotS (Eql(x))] -> newVal True
+          [NotS x,Eql(x)]   -> newVal True
+          _            -> nothingA
+
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
@@ -587,18 +676,18 @@ pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
 
 instance NumCat (:>) Int where
- add = namedOpt "add" $ \ case
+ add = namedOptSort "add" $ \ case
          [Val x, Val y] -> newVal (x+y)
          [ZeroS,y]      -> sourceB y
          [x,ZeroS]      -> sourceB x
-         _              -> nothing
- mul = namedOpt "mul" $ \ case
+         _              -> nothingA
+ mul = namedOptSort "mul" $ \ case
          [Val x, Val y] -> newVal (x*y)
          [OneS ,y]      -> sourceB y
          [x,OneS ]      -> sourceB x
          [x@ZeroS,_]    -> sourceB x
          [_,y@ZeroS]    -> sourceB y
-         _              -> nothing
+         _              -> nothingA
 
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
@@ -626,15 +715,12 @@ instance NumCat (:>) Int where
 --   mux (c,(not a,a))     = c `xor` not a
 --   mux (b,(a,c `xor` a)) = (b && c) `xor` a
 
-#define Sat(pred) ((pred) -> True)
-#define Eql(x) Sat(==(x))
-
 muxOpt :: SourceToBuses a => Opt a
 muxOpt = \ case
   [FalseS,a,_] -> sourceB a
   [ TrueS,_,b] -> sourceB b
   [_,a,Eql(a)] -> sourceB a
-  _            -> nothing
+  _            -> nothingA
 
 muxOptB :: Opt Bool
 muxOptB = \ case
@@ -648,7 +734,7 @@ muxOptB = \ case
   [c,b@(NotS a),Eql(a)] -> newComp2 xor c b
   [b,a,c `XorS` Eql(a)] -> newComp3 (xor . first and) b c a -- (b && c) `xor` a
   [b,a,Eql(a) `XorS` c] -> newComp3 (xor . first and) b c a -- ''
-  _                     -> nothing
+  _                     -> nothingA
 
 #if 0
 
@@ -1469,6 +1555,7 @@ instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifA = repIf }
 
 AbsTy((a,b,c))
 AbsTy((a,b,c,d))
+AbsTy(Maybe a)
 AbsTy(Pair a)
 AbsTy(Vec Z a)
 AbsTy(Vec (S n) a)
