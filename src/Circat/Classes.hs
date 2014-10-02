@@ -27,7 +27,7 @@ module Circat.Classes where
 import Prelude hiding (id,(.),not,and,or,curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
-import GHC.Prim (Constraint)
+-- import GHC.Prim (Constraint)
 
 import Circat.Misc ((:*),Unit)
 import Circat.Category
@@ -72,10 +72,17 @@ instance MaybeCat (->) where
 --   maybe _ j (Just a) = j a
 #endif
 
+#if 0
 class BottomCat k where
   type BottomKon k a :: Constraint
   type BottomKon k a = Yes a
   bottom :: BottomKon k a => Unit `k`a
+-- The constraint is problematic for the HasUnitArrow instance on Prim in
+-- LambdaCCC.Prim. Drop the constraint, and add BotB in Circat.Circuit.
+#else
+class BottomCat k where
+  bottom :: Unit `k`a
+#endif
 
 instance BottomCat (->) where bottom = error "bottom"
 
