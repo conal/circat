@@ -164,7 +164,7 @@ data Buses :: * -> * where
 -- -- Alternatively,
 -- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
 --   -- Undefined, for Nothing and perhaps more general sums
---   BotB   :: Buses a
+  BotB   :: Buses a
 
 #if 0
 -- Equality. Easy hack: derive Eq, but say that circuits are never equal.
@@ -195,7 +195,7 @@ instance Show (Buses a) where
 --   show (MaybeB a b) = "(MaybeB "++show a++" "++show b++")"
   show (FunB _)     = "<function>"
   show (IsoB b)     = "IsoB ("++show b++")"
---   show BotB         = "BotB"
+  show BotB         = "BotB"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -240,8 +240,8 @@ flattenB name = flip flat []
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
 
--- botErr :: String -> x
--- botErr nm = error (nm ++ ": BotB")
+botErr :: String -> x
+botErr nm = error (nm ++ ": BotB")
 
 -- unUnitB :: Buses Unit -> Unit
 -- unUnitB UnitB = ()
@@ -253,12 +253,12 @@ pairB (a,b) = PairB a b
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 unPairB (PairB a b) = (a,b)
 unPairB (IsoB _)    = isoErr "unPairB"
--- unPairB BotB        = botErr "unPairB"
+unPairB BotB        = botErr "unPairB"
 
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
 unFunB (IsoB _)    = isoErr "unFunB"
--- unFunB BotB        = botErr "unFunB"
+unFunB BotB        = botErr "unFunB"
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -422,7 +422,8 @@ orOpt f g a = do mb <- f a
 namedOpt, namedOptSort :: GenBuses b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
 namedOpt name opt =
-  mkCK $ \ a -> opt (flattenB "namedOpt" a) >>= P.maybe (genComp (Prim name) a) return
+  mkCK $ \ a -> opt (flattenB ("namedOpt/"++name) a)
+                 >>= P.maybe (genComp (Prim name) a) return
 
 tryCommute :: a :> a
 tryCommute = mkCK try
@@ -605,9 +606,15 @@ maybeCK n j (MaybeB a b) = undefined
 
 #endif
 
+#if 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
   bottom = mkCK (const (genBuses (Prim "bottom") []))
+-- See the note at BottomCat
+#else
+instance BottomCat (:>) where
+  bottom = mkCK (const (return BotB))
+#endif
 
 -- instance BoolCat (:>) where
 --   not = namedC "not"
