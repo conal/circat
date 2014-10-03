@@ -64,45 +64,15 @@ instance HasRep (a,b,c,d) where
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
 
-#if 1
 type instance Rep (Vec Z a) = ()
 instance HasRep (Vec Z a) where
   repr ZVec = ()
   abst () = ZVec
 
-#if 1
-
 type instance Rep (Vec (S n) a) = a :* Vec n a
 instance HasRep (Vec (S n) a) where
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
-#else
--- Trickier encoding, avoiding () base case when possible.
-type instance Rep (Vec (S Z) a) = a
-instance HasRep (Vec (S Z) a) where
-  repr (a :< ZVec) = a
-  repr (_ :< _) = error "repr on Vec (S Z) a: bogus case"
-  abst a = (a :< ZVec)
-
-type instance Rep (Vec (S (S n)) a) = a :* Vec (S n) a
-instance HasRep (Vec (S (S n)) a) where
-  repr (a :< as) = (a, as)
-  abst (a, as) = (a :< as)
-#endif
-
-#else
-
-type instance Rep (Vec Z a) = ()
-type instance Rep (Vec (S n) a) = a :* Vec n a
-
-instance IsNat n => HasRep (Vec n a) where
-   repr = case (nat :: Nat n) of
-            Zero -> \ ZVec -> ()
-            Succ _ -> \ (a :< as) -> (a, as)
-   abst = case (nat :: Nat n) of
-            Zero -> \ () -> ZVec
-            Succ _ -> \ (a, as) -> (a :< as)
-#endif
 
 #define WrapRep(abstT,reprT,con) \
 type instance Rep (abstT) = reprT; \
@@ -138,7 +108,7 @@ type instance Rep (Maybe a) = a :* Bool
 instance HasRep (Maybe a) where
   repr (Just a) = (a,True)
   repr Nothing  = (oops,False) -- error "repr on Maybe: undefined value"
-  abst (a,True ) = (Just a)
+  abst (a,True ) = Just a
   abst (_,False) = Nothing 
 
 oops :: a
