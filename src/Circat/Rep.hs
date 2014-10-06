@@ -69,7 +69,7 @@ instance HasRep (Vec Z a) where
   repr ZVec = ()
   abst () = ZVec
 
-type instance Rep (Vec (S n) a) = a :* Vec n a
+type instance Rep (Vec (S n) a) = (a,Vec n a)
 instance HasRep (Vec (S n) a) where
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
@@ -110,6 +110,8 @@ instance HasRep (Maybe a) where
   repr Nothing  = (oops,False) -- error "repr on Maybe: undefined value"
   abst (a,True ) = Just a
   abst (_,False) = Nothing 
+
+-- TODO: Move the boolean flag to the left part of the representation.
 
 oops :: a
 oops = error "oops: Oops!"
