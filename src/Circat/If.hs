@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, FlexibleContexts #-}
+{-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
@@ -19,7 +19,7 @@
 
 module Circat.If (HasIf(..), muxBool, muxInt, repIf) where
 
-import TypeUnary.Vec (Vec) -- ,Z,S
+import TypeUnary.Vec (Vec,Z,S)
 
 import Circat.Classes (muxB,muxI)
 import Circat.Rep
@@ -72,9 +72,32 @@ instance (HasIf s, HasIf t) => HasIf (s -> t) where
 
 repIf :: (HasRep a, HasIf (Rep a)) => Bool -> a -> a -> a
 repIf c a a' = abst (if_then_else c (repr a) (repr a'))
+{-# INLINE repIf #-}
 
-instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) => HasIf (Vec n a) where
-  if_then_else = repIf
+#define RepIf(ab,re) \
+instance HasIf (re) => HasIf (ab) where \
+{ if_then_else c a a' = abst (if_then_else c (repr a) (repr a') :: re) ;\
+  {-# INLINE if_then_else #-} \
+}
+
+-- instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) => HasIf (Vec n a) where
+--   if_then_else = repIf
+
+-- instance HasIf a => HasIf (Maybe a) where
+--   if_then_else = repIf
+--   {-# INLINE if_then_else #-}
+
+RepIf(Vec Z a, ())
+RepIf(Vec (S n) a,(a,Vec n a))
+
+-- Sorry about the repeated information between the HasRep and HasIf instances!
+-- Can I get the compiler to try the Rep approach if it doesn't find a HasIf
+-- instance? Seems tricky, since some (many) of the explicit HasIf instances are
+-- recursive and so rely on there being other `HasIf` instances.
+--
+-- If before Rep?
+-- 
+-- What about a fundep in HasRep?
 
 --     Constraint is no smaller than the instance head
 --       in the constraint: HasIf (Rep (Vec n a))
@@ -83,4 +106,13 @@ instance (HasIf (Rep (Vec n a)), HasRep (Vec n a)) => HasIf (Vec n a) where
 -- instance HasIf (Vec Z a) where if_then_else = repIf
 -- instance (HasIf (Vec n a), HasIf a) => HasIf (Vec (S n) a) where if_then_else = repIf
 
-instance HasIf a => HasIf (Maybe a) where if_then_else = repIf
+RepIf(Maybe a,(a,Bool))
+
+-- instance HasIf a => HasIf (Maybe a) where
+-- #if 0
+--   if_then_else = repIf
+-- #else
+--   if_then_else c a a' = abst (if_then_else c (repr a) (repr a') :: (a,Bool))
+--   -- if_then_else c a a' = abst (if_then_else c ((repr :: Maybe a -> (a,Bool)) a) (repr a'))
+-- #endif
+--   {-# INLINE if_then_else #-}
