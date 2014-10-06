@@ -403,12 +403,31 @@ lscanS Zero (B (L a :# L b)) = (B
 {-# INLINE lscanS #-}
 #endif
 
+#if 0
 instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) => HasIf (Tree n a) where
   if_then_else = repIf
 
 --     Constraint is no smaller than the instance head
 --       in the constraint: HasIf (Rep (Vec n a))
 --     (Use UndecidableInstances to permit this)
+#else
+#define RepIf(ab,re) \
+instance HasIf (re) => HasIf (ab) where \
+{ if_then_else c a a' = abst (if_then_else c (repr a) (repr a') :: re) ;\
+  {-# INLINE if_then_else #-} \
+}
+RepIf(Tree Z a,a)
+-- RepIf(Tree (S n) a,Pair (Tree n a))
+-- Leaves behind some casts. See journal notes 2014-10-03.
+
+instance HasIf (Tree n a) => HasIf (Tree (S n) a) where
+  if_then_else c a a' =
+    (abst.abst) (if_then_else c ((repr.repr) a) ((repr.repr) a') :: (Tree n a,Tree n a))
+  {-# INLINE if_then_else #-}
+
+-- Works now, but breaks parametrizing out `Pair`.
+
+#endif
 
 instance Reversible (Tree n) where
   reverse (L a)  = L a
