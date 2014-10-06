@@ -45,6 +45,7 @@ Library
                     Circat.Scan
                     Circat.Circuit
                     Circat.Netlist
+                    Circat.Prim
   Other-Modules:
                     Circat.Examples
 
