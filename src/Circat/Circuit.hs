@@ -53,7 +53,7 @@ module Circat.Circuit
   , systemSuccess
   ) where
 
-import Prelude hiding (id,(.),not,and,or,curry,uncurry,sequence,maybe)
+import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
 import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>),Sum)
@@ -656,41 +656,41 @@ sourceB = justA . toBuses
 #define Eql(x) Sat(==(x))
 
 instance BoolCat (:>) where
-  not = primOpt "not" $ \ case
-          [NotS a]     -> sourceB a
-          [Val x]      -> newVal (not x)
-          _            -> nothingA
-  and = primOptSort "and" $ \ case
-          [TrueS ,y]   -> sourceB y
-          [x,TrueS ]   -> sourceB x
-          [x@FalseS,_] -> sourceB x
-          [_,y@FalseS] -> sourceB y
-          [x,Eql(x)]   -> sourceB x
-          [x,NotS (Eql(x))] -> newVal False
-          [NotS x,Eql(x)]   -> newVal False
-          _            -> nothingA
-  or  = primOptSort "or"  $ \ case
-          [FalseS,y]   -> sourceB y
-          [x,FalseS]   -> sourceB x
-          [x@TrueS ,_] -> sourceB x
-          [_,y@TrueS ] -> sourceB y
-          [x,Eql(x)]   -> sourceB x
-          [x,NotS (Eql(x))] -> newVal True
-          [NotS x,Eql(x)]   -> newVal True
-          -- not a || not b == not (a && b)
-          -- TODO: Handle more elegantly.
-          [NotS x, NotS y] -> do o <- unmkCK and (PairB (BoolB x) (BoolB y))
-                                 newComp not o
-          _            -> nothingA
-  xor = primOptSort "xor" $ \ case
-          [FalseS,y]   -> sourceB y
-          [x,FalseS]   -> sourceB x
-          [TrueS,y ]   -> newComp1 not y
-          [x,TrueS ]   -> newComp1 not x
-          [x,Eql(x)]   -> newVal False
-          [x,NotS (Eql(x))] -> newVal True
-          [NotS x,Eql(x)]   -> newVal True
-          _            -> nothingA
+  notC = primOpt "not" $ \ case
+           [NotS a]     -> sourceB a
+           [Val x]      -> newVal (not x)
+           _            -> nothingA
+  andC = primOptSort "and" $ \ case
+           [TrueS ,y]   -> sourceB y
+           [x,TrueS ]   -> sourceB x
+           [x@FalseS,_] -> sourceB x
+           [_,y@FalseS] -> sourceB y
+           [x,Eql(x)]   -> sourceB x
+           [x,NotS (Eql(x))] -> newVal False
+           [NotS x,Eql(x)]   -> newVal False
+           _            -> nothingA
+  orC  = primOptSort "or"  $ \ case
+           [FalseS,y]   -> sourceB y
+           [x,FalseS]   -> sourceB x
+           [x@TrueS ,_] -> sourceB x
+           [_,y@TrueS ] -> sourceB y
+           [x,Eql(x)]   -> sourceB x
+           [x,NotS (Eql(x))] -> newVal True
+           [NotS x,Eql(x)]   -> newVal True
+           -- not a || not b == not (a && b)
+           -- TODO: Handle more elegantly.
+           [NotS x, NotS y] -> do o <- unmkCK andC (PairB (BoolB x) (BoolB y))
+                                  newComp notC o
+           _            -> nothingA
+  xorC = primOptSort "xor" $ \ case
+           [FalseS,y]   -> sourceB y
+           [x,FalseS]   -> sourceB x
+           [TrueS,y ]   -> newComp1 notC y
+           [x,TrueS ]   -> newComp1 notC x
+           [x,Eql(x)]   -> newVal False
+           [x,NotS (Eql(x))] -> newVal True
+           [NotS x,Eql(x)]   -> newVal True
+           _            -> nothingA
 
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
@@ -751,15 +751,15 @@ muxOpt = \ case
 muxOptB :: Opt Bool
 muxOptB = \ case
   [c,FalseS,TrueS]      -> sourceB c
-  [c,TrueS,FalseS]      -> newComp1 not c
-  [a,FalseS,b]          -> newComp2 and a b
-  [a,b,FalseS]          -> newComp2 (and . first not) a b -- not a && b
-  [a,b,TrueS ]          -> newComp2 or  a b
-  [a,TrueS ,b]          -> newComp2 (or  . first not) a b -- not a || b
-  [c,a,NotS Eql(a)]     -> newComp2 xor c a
-  [c,b@(NotS a),Eql(a)] -> newComp2 xor c b
-  [b,a,c `XorS` Eql(a)] -> newComp3 (xor . first and) b c a -- (b && c) `xor` a
-  [b,a,Eql(a) `XorS` c] -> newComp3 (xor . first and) b c a -- ''
+  [c,TrueS,FalseS]      -> newComp1 notC c
+  [a,FalseS,b]          -> newComp2 andC a b
+  [a,b,FalseS]          -> newComp2 (andC . first notC) a b -- not a && b
+  [a,b,TrueS ]          -> newComp2 orC  a b
+  [a,TrueS ,b]          -> newComp2 (orC  . first notC) a b -- not a || b
+  [c,a,NotS Eql(a)]     -> newComp2 xorC c a
+  [c,b@(NotS a),Eql(a)] -> newComp2 xorC c b
+  [b,a,c `XorS` Eql(a)] -> newComp3 (xorC . first andC) b c a -- (b && c) `xor` a
+  [b,a,Eql(a) `XorS` c] -> newComp3 (xorC . first andC) b c a -- ''
   _                     -> nothingA
 
 #if 0

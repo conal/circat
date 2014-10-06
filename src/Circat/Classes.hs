@@ -24,7 +24,7 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),not,and,or,curry,uncurry)
+import Prelude hiding (id,(.),curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
 -- import GHC.Prim (Constraint)
@@ -34,16 +34,16 @@ import Circat.Category
 
 -- | Category with boolean operations.
 class ProductCat k => BoolCat k where
-  not :: Bool `k` Bool
-  and, or, xor :: (Bool :* Bool) `k` Bool
+  notC :: Bool `k` Bool
+  andC, orC, xorC :: (Bool :* Bool) `k` Bool
 
 -- The Category superclass is just for convenience.
 
 instance BoolCat (->) where
-  not = P.not
-  and = P.uncurry (&&)
-  or  = P.uncurry (||)
-  xor = P.uncurry (/=)
+  notC = not
+  andC = P.uncurry (&&)
+  orC  = P.uncurry (||)
+  xorC = P.uncurry (/=)
 
 -- HACK: generalize/replace/...
 class NumCat k a where

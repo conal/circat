@@ -16,7 +16,7 @@
 
 module Circat.Examples (outSimples,outAll,bc,outV) where
 
-import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
+import Prelude hiding (id,(.),const,curry,uncurry,sequence)
 #if 0
 import TypeUnary.Vec hiding (get)
 #endif
@@ -52,19 +52,19 @@ c0 :: BoolCat k => Bool `k` Bool
 c0 = id
 
 c1 :: BoolCat k => Bool `k` Bool
-c1 = not . not
+c1 = notC . notC
 
 c2 :: BoolCat k => (Bool :* Bool) `k` Bool
-c2 = not . and
+c2 = notC . andC
 
 c3 :: BoolCat k => (Bool :* Bool) `k` Bool
-c3 = not . and . (not *** not)
+c3 = notC . andC . (notC *** notC)
 
 c4 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
 c4 = swapP  -- no components
 
 c5 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
-c5 = xor &&& and   -- half-adder
+c5 = xorC &&& andC   -- half-adder
 
 c6 :: () :> Bool
 c6 = constC False

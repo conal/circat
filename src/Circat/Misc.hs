@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -26,7 +26,16 @@ import Control.Category (Category(..))
 import Control.Applicative (Applicative)
 import Data.Traversable (Traversable(sequenceA))
 
+import Unsafe.Coerce (unsafeCoerce)     -- see below
+
 import Control.Newtype
+import Data.Proof.EQ ((:=:)(..))
+
+infixr 3 `xor`
+
+xor :: Binop Bool
+xor = (/=)
+{-# NOINLINE xor #-}
 
 -- | Unary transformation
 type Unop a = a -> a
@@ -75,3 +84,33 @@ class Reversible f where
   -- Regrettable hack-around for single-method classes
   regrettable_hack_reverse :: f a
   regrettable_hack_reverse = undefined
+
+-- TODO: Remove Reversible?
+
+infix 4 ===, ==?
+
+-- | Equality when we don't know that the types match. Important requirement:
+-- when the result is True, then it must be that a and b are the same type.
+-- See '(==?)'.
+class Eq' a b where
+  (===) :: a -> b -> Bool
+
+-- TODO: Maybe make (==?) the method and drop (===), moving the type proofs into
+-- the instances and using unsafeCoerce only where necessary. Experiment in a
+-- new branch. Alternatively, make (===) and (==?) *both* be methods, with
+-- defaults defined in terms of each other.
+
+-- | Test for equality. If equal, generate a type equality proof. The proof
+-- generation is done with @unsafeCoerce@, so it's very important that equal
+-- terms really do have the same type.
+(==?) :: Eq' a b => a -> b -> Maybe (a :=: b)
+a ==? b | a === b   = unsafeCoerce (Just Refl)
+        | otherwise = Nothing
+
+{--------------------------------------------------------------------
+    Evaluation
+--------------------------------------------------------------------}
+
+class Evalable e where
+  type ValT e
+  eval :: e -> ValT e
