@@ -213,29 +213,37 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
                               return (wrap src,o+1)
 
 instance GenBuses Unit where genBuses' _ _ o = return (UnitB,o)
+
 instance GenBuses Bool where genBuses' = genBus BoolB  1
 instance GenBuses Int  where genBuses' = genBus IntB  32
+
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
+
 -- instance GenBuses a => GenBuses (Maybe a) where
 --   genBuses' prim ins o =
 --     do (a,oa) <- genBuses' prim ins o
 --        (b,ob) <- genBuses' prim ins oa
 --        return (MaybeB a b, ob)
 
-flattenB :: String -> Buses a -> [Source]
-flattenB name = flip flat []
+flattenMb :: Buses a -> Maybe [Source]
+flattenMb = fmap toList . flat
  where
-   flat :: Buses a -> Unop [Source]
-   flat UnitB       = id
-   flat (BoolB b)   = (b :)
-   flat (IntB b)    = (b :)
-   flat (PairB a b) = flat a . flat b
+   flat :: Buses a -> Maybe (Seq Source)
+   flat UnitB       = Just mempty
+   flat (BoolB b)   = Just (singleton b)
+   flat (IntB b)    = Just (singleton b)
+   flat (PairB a b) = flat a <> flat b
    flat (IsoB b)    = flat b
-   flat b           = error $ "flattenB/"++name++": unhandled " ++ show b
+   flat _           = Nothing
+
+flattenB :: String -> Buses a -> [Source]
+flattenB name b = fromMaybe err (flattenMb b)
+ where
+   err = error $ "flattenB/"++name++": unhandled " ++ show b
 
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
@@ -382,7 +390,7 @@ inCK2 = inCK <~ unmkCK
 
 namedC :: GenBuses b => String -> a :> b
 -- namedC = primC . Prim
-namedC name = namedOpt name noOpt
+namedC name = primOpt name noOpt
 
 type Opt b = [Source] -> CircuitM (Maybe (Buses b))
 
@@ -419,11 +427,18 @@ orOpt f g a = do mb <- f a
                    Nothing -> g a
                    Just _  -> return mb
 
-namedOpt, namedOptSort :: GenBuses b => String -> Opt b -> a :> b
+primOpt, primOptSort :: GenBuses b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
-namedOpt name opt =
-  mkCK $ \ a -> opt (flattenB ("namedOpt/"++name) a)
-                 >>= P.maybe (genComp (Prim name) a) return
+primOpt name opt =
+  mkCK $ \ a -> let plain = genComp (Prim name) a in
+                  case flattenMb a of
+                    Nothing   -> plain
+                    Just srcs -> opt srcs >>= P.maybe plain return
+
+-- primOpt name opt =
+--   mkCK $ \ a -> opt (flattenB ("primOpt/"++name) a)
+--                  >>= P.maybe (genComp (Prim name) a) return
+
 
 tryCommute :: a :> a
 tryCommute = mkCK try
@@ -432,12 +447,12 @@ tryCommute = mkCK try
    try (PairB (IntB  a) (IntB  a')) | a > a' = return (PairB (IntB  a') (IntB  a))
    try b = return b
 
--- Like namedOpt, but sorts. Use for commutative operations to improve reuse
+-- Like primOpt, but sorts. Use for commutative operations to improve reuse
 -- (cache hits).
-namedOptSort name opt = namedOpt name opt . tryCommute
+primOptSort name opt = primOpt name opt . tryCommute
 #else
-namedOpt name _ = mkCK (genComp (Prim name))
-namedOptSort = namedOpt
+primOpt name _ = mkCK (genComp (Prim name))
+primOptSort = primOpt
 #endif
 
 -- | Constant circuit from source generator (experimental)
@@ -641,11 +656,11 @@ sourceB = justA . toBuses
 #define Eql(x) Sat(==(x))
 
 instance BoolCat (:>) where
-  not = namedOpt "not" $ \ case
+  not = primOpt "not" $ \ case
           [NotS a]     -> sourceB a
           [Val x]      -> newVal (not x)
           _            -> nothingA
-  and = namedOptSort "and" $ \ case
+  and = primOptSort "and" $ \ case
           [TrueS ,y]   -> sourceB y
           [x,TrueS ]   -> sourceB x
           [x@FalseS,_] -> sourceB x
@@ -654,7 +669,7 @@ instance BoolCat (:>) where
           [x,NotS (Eql(x))] -> newVal False
           [NotS x,Eql(x)]   -> newVal False
           _            -> nothingA
-  or  = namedOptSort "or"  $ \ case
+  or  = primOptSort "or"  $ \ case
           [FalseS,y]   -> sourceB y
           [x,FalseS]   -> sourceB x
           [x@TrueS ,_] -> sourceB x
@@ -667,7 +682,7 @@ instance BoolCat (:>) where
           [NotS x, NotS y] -> do o <- unmkCK and (PairB (BoolB x) (BoolB y))
                                  newComp not o
           _            -> nothingA
-  xor = namedOptSort "xor" $ \ case
+  xor = primOptSort "xor" $ \ case
           [FalseS,y]   -> sourceB y
           [x,FalseS]   -> sourceB x
           [TrueS,y ]   -> newComp1 not y
@@ -687,12 +702,12 @@ pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
 
 instance NumCat (:>) Int where
- add = namedOptSort "add" $ \ case
+ add = primOptSort "add" $ \ case
          [Val x, Val y] -> newVal (x+y)
          [ZeroS,y]      -> sourceB y
          [x,ZeroS]      -> sourceB x
          _              -> nothingA
- mul = namedOptSort "mul" $ \ case
+ mul = primOptSort "mul" $ \ case
          [Val x, Val y] -> newVal (x*y)
          [OneS ,y]      -> sourceB y
          [x,OneS ]      -> sourceB x
@@ -758,8 +773,8 @@ muxOpt (_ ,(a,Eql(a))) = just $ wrap a
 -- orOpt
 
 instance MuxCat (:>) where
-  muxB = namedOpt "mux" (muxOpt `orOpt` muxOptB)
-  muxI = namedOpt "mux" muxOpt
+  muxB = primOpt "mux" (muxOpt `orOpt` muxOptB)
+  muxI = primOpt "mux" muxOpt
 
 #else
 
