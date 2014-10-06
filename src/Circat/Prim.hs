@@ -36,7 +36,6 @@ import Prelude hiding (id,(.),curry,uncurry)
 
 -- import Control.Arrow ((&&&))
 import Data.Constraint (Dict(..))
--- import Data.Typeable (Typeable)
 
 import Circat.Category
 import Circat.Classes (BoolCat(..),MuxCat(..),NumCat(..),BottomCat(..))
@@ -112,23 +111,10 @@ litGenBuses (IntL  _) = Dict
 
 #define LSo (litGenBuses -> Dict)
 
-#if 0
-litTypeable :: Lit a -> Dict (Typeable a)
-litTypeable (UnitL _) = Dict
-litTypeable (BoolL _) = Dict
-litTypeable (IntL  _) = Dict
-
-litSS :: Lit a -> (Dict (Typeable a, Show a, GenBuses a))
-litSS l | (Dict,Dict,Dict) <- (litTypeable l, litHasShow l,litGenBuses l) = Dict
-
-#define LS (litSS -> Dict)
-#else
--- Drop Typeable
-litSS :: Lit a -> (Dict (Show a, GenBuses a))
+litSS :: Lit a -> Dict (Show a, GenBuses a)
 litSS l | (Dict,Dict) <- (litHasShow l,litGenBuses l) = Dict
 
 #define LS (litSS -> Dict)
-#endif
 
 instance Evalable (Lit a) where
   type ValT (Lit a) = a
