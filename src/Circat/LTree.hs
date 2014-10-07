@@ -47,7 +47,7 @@ import Circat.Category
 import Circat.Classes
 import Circat.Pair
 import Circat.Rep
-import Circat.If
+-- import Circat.If
 import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
@@ -344,12 +344,14 @@ lscan' (Succ m) = \ (B ts) -> first B (lscanComp' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
 #endif
 
+#if 0
 instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) => HasIf (Tree n a) where
   if_then_else = repIf
 
 --     Constraint is no smaller than the instance head
 --       in the constraint: HasIf (Rep (Vec n a))
 --     (Use UndecidableInstances to permit this)
+#endif
 
 instance Reversible (Tree n) where
   reverse (L a)  = L a

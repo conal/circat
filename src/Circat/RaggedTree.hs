@@ -45,7 +45,7 @@ import Data.Typeable (Typeable)
 import Circat.Misc ((:*))
 import Circat.Show (showsApp1,showsApp2)
 import Circat.Rep
-import Circat.If
+-- import Circat.If
 import Circat.Scan
 
 -- data Tree a = L a | B (Tree a) (Tree a)
@@ -199,13 +199,14 @@ instance HasSingT r => LScan (Tree r) where
 
 #endif
 
+#if 0
 instance (HasIf (Rep (Tree r a)), HasRep (Tree r a)) =>
   HasIf (Tree r a) where if_then_else = repIf
 
 --     Constraint is no smaller than the instance head
 --       in the constraint: HasIf (Rep (Vec n a))
 --     (Use UndecidableInstances to permit this)
-
+#endif
 instance HasSingT r => Zippable (Tree r) where
   zipWith = case (singT :: ST r) of
               SL -> \ f (L  a ) (L  b ) -> L (f a b)

@@ -48,7 +48,7 @@ import Circat.Classes
 import Circat.Pair -- (Pair(..),PairCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
 import Circat.Rep
-import Circat.If
+-- import Circat.If
 import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
@@ -404,6 +404,8 @@ lscanS Zero (B (L a :# L b)) = (B
 #endif
 
 #if 0
+
+#if 0
 instance (HasIf (Rep (Tree n a)), HasRep (Tree n a)) => HasIf (Tree n a) where
   if_then_else = repIf
 
@@ -426,6 +428,8 @@ instance HasIf (Tree n a) => HasIf (Tree (S n) a) where
   {-# INLINE if_then_else #-}
 
 -- Works now, but breaks parametrizing out `Pair`.
+
+#endif
 
 #endif
 

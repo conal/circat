@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable, CPP #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE UndecidableInstances #-}  -- See below
+-- {-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -42,7 +42,7 @@ import Data.Data (Data)
 import Circat.Misc ((:*),Reversible(..))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
-import Circat.If
+-- import Circat.If
 import Circat.Scan
 
 {--------------------------------------------------------------------
@@ -104,6 +104,8 @@ instance Reversible Pair where
   reverse (a :# b) = b :# a
   {-# INLINE reverse #-}
 
+#if 0
+
 instance (HasIf (Rep (Pair a)), HasRep (Pair a)) => HasIf (Pair a) where
   if_then_else = repIf
 
@@ -111,6 +113,7 @@ instance (HasIf (Rep (Pair a)), HasRep (Pair a)) => HasIf (Pair a) where
 --       in the constraint: HasIf (Rep (Vec n a))
 --     (Use UndecidableInstances to permit this)
 
+#endif
 
 curryP :: (Pair a -> b) -> (a -> a -> b)
 curryP g = curry (g . toP)
