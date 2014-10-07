@@ -1,3 +1,5 @@
+#### No longer used
+
 {-# LANGUAGE CPP, FlexibleContexts, FlexibleInstances, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
