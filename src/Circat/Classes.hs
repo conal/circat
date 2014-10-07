@@ -90,6 +90,8 @@ instance BottomCat (->) where bottom = error "bottom"
     Misc
 --------------------------------------------------------------------}
 
+#if 0
+
 -- | One-bit mux
 class MuxCat k where
   muxB :: (Bool :* (Bool :* Bool)) `k` Bool
@@ -104,6 +106,8 @@ muxF (i,(e,t)) = if i then t else e
 instance MuxCat (->) where
   muxB = muxF
   muxI = muxF
+
+#endif
 
 #if 0
 
@@ -140,59 +144,60 @@ repMux = abstC . mux . second (twiceP reprC)
 
 #endif
 
-#if 0
+type IfT k a = (Bool :* (a :* a)) `k` a
 
-class IfCat k a where ifA :: IfT k a
+class IfCat k a where ifC :: IfT k a
 
 instance IfCat (->) a where
-  ifA (i,(t,e)) = if i then t else e
+  ifC (i,(t,e)) = if i then t else e
+
+unitIf :: TerminalCat k => IfT k ()
+unitIf = it
 
 prodIf :: forall k a b. (ProductCat k, IfCat k a, IfCat k b) => IfT k (a :* b)
 prodIf = half exl &&& half exr
   where
     half :: IfCat k c => (u `k` c) -> ((Bool :* (u :* u)) `k` c)
-    half f = ifA . second (twiceP f)
+    half f = ifC . second (twiceP f)
 
 #if 0
 
    prodIf
-== \ (c,((a,b),(a',b'))) -> (ifA (c,(a,a')), ifA (c,(b,b')))
-== (\ (c,((a,b),(a',b'))) -> ifA (c,(a,a'))) &&& ...
-== (ifA . (\ (c,((a,b),(a',b'))) -> (c,(a,a')))) &&& ...
-== (ifA . first (\ ((a,b),(a',b')) -> (a,a'))) &&& ...
-== (ifA . first (twiceP exl)) &&& (ifA . first (twiceP exr))
+== \ (c,((a,b),(a',b'))) -> (ifC (c,(a,a')), ifC (c,(b,b')))
+== (\ (c,((a,b),(a',b'))) -> ifC (c,(a,a'))) &&& ...
+== (ifC . (\ (c,((a,b),(a',b'))) -> (c,(a,a')))) &&& ...
+== (ifC . first (\ ((a,b),(a',b')) -> (a,a'))) &&& ...
+== (ifC . first (twiceP exl)) &&& (ifC . first (twiceP exr))
 
 #endif
 
 funIf :: forall k a b. (ClosedCat k, IfCat k b) => IfT k (a -> b)
-funIf = curry (ifA . (exl . exl &&& (half exl &&& half exr)))
+funIf = curry (ifC . (exl . exl &&& (half exl &&& half exr)))
  where
    half :: (u `k` (a -> b)) -> (((_Bool :* u) :* a) `k` b)
    half h = apply . first (h . exr)
 
--- funIf = curry (ifA . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+-- funIf = curry (ifC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
 
 #if 0
 
    funIf
-== \ (c,(f,f')) -> \ a -> ifA (c,(f a,f' a))
-== curry (\ ((c,(f,f')),a) -> ifA (c,(f a,f' a)))
-== curry (ifA . \ ((c,(f,f')),a) -> (c,(f a,f' a)))
-== curry (ifA . ((exl.exl) &&& \ ((c,(f,f')),a) -> (f a,f' a)))
-== curry (ifA . ((exl.exl) &&& ((\ ((c,(f,f')),a) -> f a) &&& (\ ((c,(f,f')),a) -> f' a))))
-== curry (ifA . ((exl.exl) &&& (apply (first (exl.exr)) &&& (apply (first (exl.exr))))))
+== \ (c,(f,f')) -> \ a -> ifC (c,(f a,f' a))
+== curry (\ ((c,(f,f')),a) -> ifC (c,(f a,f' a)))
+== curry (ifC . \ ((c,(f,f')),a) -> (c,(f a,f' a)))
+== curry (ifC . ((exl.exl) &&& \ ((c,(f,f')),a) -> (f a,f' a)))
+== curry (ifC . ((exl.exl) &&& ((\ ((c,(f,f')),a) -> f a) &&& (\ ((c,(f,f')),a) -> f' a))))
+== curry (ifC . ((exl.exl) &&& (apply (first (exl.exr)) &&& (apply (first (exl.exr))))))
 
 #endif
 
 repIf :: (RepCat k, ProductCat k, HasRep a, IfCat k (Rep a)) => IfT k a
-repIf = abstC . ifA . second (twiceP reprC)
+repIf = abstC . ifC . second (twiceP reprC)
 
 #if 0
    repIf
-== \ (c,(a,a')) -> abstC (ifA (c,(reprC a,reprC a')))
-== \ (c,(a,a')) -> abstC (ifA (c,(twiceP reprC (a,a'))))
-== \ (c,(a,a')) -> abstC (ifA (second (twiceP reprC) (c,((a,a')))))
-== abstC . ifA . second (twiceP reprC)
-#endif
-
+== \ (c,(a,a')) -> abstC (ifC (c,(reprC a,reprC a')))
+== \ (c,(a,a')) -> abstC (ifC (c,(twiceP reprC (a,a'))))
+== \ (c,(a,a')) -> abstC (ifC (second (twiceP reprC) (c,((a,a')))))
+== abstC . ifC . second (twiceP reprC)
 #endif
