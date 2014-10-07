@@ -718,64 +718,48 @@ instance NumCat (:>) Int where
 -- TODO: Some optimizations drop results. Make another pass to remove unused
 -- components (recursively).
 
--- muxC :: IsSourceP c => Bool :* (c :* c) :> c
--- muxC = namedC "mux"
-
 -- Simplifications for all types:
 -- 
---   mux (False,(a,_))     = a
---   mux (True ,(_,b))     = b
---   mux (_    ,(a,a))     = a
+--   if' (False,(_,a))     = a
+--   if' (True ,(b,_))     = b
+--   if' (_    ,(a,a))     = a
 --
 -- Simplifications for Bool values:
 -- 
---   mux (c,(False,True))  = c
---   mux (c,(True,False))  = not c
---   mux (a,(False,b))     =     a && b
---   mux (a,(b,False))     = not a && b
---   mux (a,(b ,True))     =     a || b
---   mux (a,(True,b ))     = not a || b
---   mux (c,(a,not a))     = c `xor` a
---   mux (c,(not a,a))     = c `xor` not a
---   mux (b,(a,c `xor` a)) = (b && c) `xor` a
+--   if' (c,(True,False))  = c
+--   if' (c,(False,True))  = not c
+--   if' (a,(b,False))     =     a && b
+--   if' (a,(False,b))     = not a && b
+--   if' (a,(True ,b))     =     a || b
+--   if' (a,(b,True ))     = not a || b
+--   if' (c,(not a,a))     = c `xor` a
+--   if' (c,(a,not a))     = c `xor` not a
+--   if' (b,(c `xor` a,a)) = (b && c) `xor` a
+--   if' (b,(a `xor` c,a)) = (b && c) `xor` a
 
-muxOpt :: SourceToBuses a => Opt a
-muxOpt = \ case
-  [FalseS,a,_] -> sourceB a
-  [ TrueS,_,b] -> sourceB b
+ifOpt :: SourceToBuses a => Opt a
+ifOpt = \ case
+  [FalseS,_,a] -> sourceB a
+  [ TrueS,b,_] -> sourceB b
   [_,a,Eql(a)] -> sourceB a
   _            -> nothingA
 
-muxOptB :: Opt Bool
-muxOptB = \ case
-  [c,FalseS,TrueS]      -> sourceB c
-  [c,TrueS,FalseS]      -> newComp1 notC c
-  [a,FalseS,b]          -> newComp2 andC a b
-  [a,b,FalseS]          -> newComp2 (andC . first notC) a b -- not a && b
-  [a,b,TrueS ]          -> newComp2 orC  a b
-  [a,TrueS ,b]          -> newComp2 (orC  . first notC) a b -- not a || b
-  [c,a,NotS Eql(a)]     -> newComp2 xorC c a
-  [c,b@(NotS a),Eql(a)] -> newComp2 xorC c b
-  [b,a,c `XorS` Eql(a)] -> newComp3 (xorC . first andC) b c a -- (b && c) `xor` a
-  [b,a,Eql(a) `XorS` c] -> newComp3 (xorC . first andC) b c a -- ''
-  _                     -> nothingA
+ifOptB :: Opt Bool
+ifOptB = \ case
+  [c,TrueS,FalseS]       -> sourceB c
+  [c,FalseS,TrueS]       -> newComp1 notC c
+  [a,b,FalseS]           -> newComp2 andC a b
+  [a,FalseS,b]           -> newComp2 (andC . first notC) a b -- not a && b
+  [a,TrueS, b]           -> newComp2 orC  a b
+  [a,b ,TrueS]           -> newComp2 (orC  . first notC) a b -- not a || b
+  [c,NotS a,Eql(a)]      -> newComp2 xorC c a
+  [c,a,b@(NotS(Eql(a)))] -> newComp2 xorC c b
+  [b,c `XorS` a,Eql(a)]  -> newComp3 (xorC . first andC) b c a -- (b && c) `xor` a
+  [b,a `XorS` c,Eql(a)]  -> newComp3 (xorC . first andC) b c a -- ''
+  _                      -> nothingA
 
-#if 0
-
-instance MuxCat (:>) where
-  muxB = primOpt "mux" (muxOpt `orOpt` muxOptB)
-  muxI = primOpt "mux" muxOpt
-
-#else
-
--- Since ifC takes True/then before False/else, while mux take False/else before
--- True/then, we must swap then/else.
-
-primOptIf :: GenBuses a => Opt a -> (Bool :* (a :* a) :> a)
-primOptIf opt = primOpt "mux" opt . second swapP
-
-instance IfCat (:>) Bool where ifC = primOptIf (muxOpt `orOpt` muxOptB)
-instance IfCat (:>) Int  where ifC = primOptIf muxOpt
+instance IfCat (:>) Bool where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
+instance IfCat (:>) Int  where ifC = primOpt "if" ifOpt
 
 instance IfCat (:>) Unit where ifC = unitIf
 
@@ -784,8 +768,6 @@ instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
 
 instance IfCat (:>) b => IfCat (:>) (a -> b) where
   ifC = funIf
-
-#endif
 
 instance GenBuses a => Show (a :> b) where
   show = show . runC
