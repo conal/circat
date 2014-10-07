@@ -38,10 +38,8 @@ import Prelude hiding (id,(.),curry,uncurry)
 import Data.Constraint (Dict(..))
 
 import Circat.Category
-import Circat.Classes (BoolCat(..),MuxCat(..),NumCat(..),BottomCat(..))
+import Circat.Classes (BoolCat(..),IfCat(..),NumCat(..),BottomCat(..))
 
--- :( . TODO: Disentangle!
--- HasUnitArrow links the category and primitive type
 import Circat.Circuit (GenBuses,(:>)
 #ifdef LitSources
                       , litUnit,litBool,litInt
@@ -149,8 +147,12 @@ data Prim :: * -> * where
   InlP          :: Prim (a -> a :+ b)
   InrP          :: Prim (b -> a :+ b)
   PairP         :: Prim (a -> b -> a :* b)
+#if 0
   CondBP        :: Prim (Bool :* (Bool :* Bool) -> Bool)  -- mux on Bool
   CondIP        :: Prim (Bool :* (Int  :* Int ) -> Int )  -- mux on Int
+#else
+  IfP           :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
+#endif
   AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
   OopsP         :: Prim a
@@ -168,8 +170,12 @@ instance Eq' (Prim a) (Prim b) where
   InlP      === InlP      = True
   InrP      === InrP      = True
   PairP     === PairP     = True
+#if 0
   CondBP    === CondBP    = True
   CondIP    === CondIP    = True
+#else
+  IfP       === IfP       = True
+#endif
   AbstP     === AbstP     = True
   ReprP     === ReprP     = True
   OopsP     === OopsP     = True
@@ -190,18 +196,19 @@ instance Show (Prim a) where
   showsPrec _ InrP       = showString "Right"
   showsPrec _ ExrP       = showString "exr"
   showsPrec _ PairP      = showString "(,)"
+#if 0
   showsPrec _ CondBP     = showString "muxB"
   showsPrec _ CondIP     = showString "muxI"
+#else
+  showsPrec _ IfP        = showString "ifC"
+#endif
   showsPrec _ AbstP      = showString "abst"
   showsPrec _ ReprP      = showString "repr"
   showsPrec _ OopsP      = showString "oops"
 
 instance Show' Prim where showsPrec' = showsPrec
 
-primArrow :: ( BiCCCC k Lit
-             , BoolCat k, MuxCat k, NumCat k Int, RepCat k
-             ) =>
-             Prim (a :=> b) -> (a `k` b)
+primArrow :: Prim (a :=> b) -> (a :> b)
 primArrow NotP      = notC
 primArrow AndP      = curry andC
 primArrow OrP       = curry orC
@@ -213,17 +220,20 @@ primArrow ExrP      = exr
 primArrow InlP      = inl
 primArrow InrP      = inr
 primArrow PairP     = curry id
+#if 0
 primArrow CondBP    = muxB
 primArrow CondIP    = muxI
+#else
+primArrow IfP       = ifC
+#endif
 primArrow AbstP     = abstC
 primArrow ReprP     = reprC
 primArrow OopsP     = error "primArrow: Oops"
 primArrow (LitP _)  = error ("primArrow: LitP with function type?!")
 
-instance ( BiCCCC k Lit
-         , BoolCat k, MuxCat k, NumCat k Int, BottomCat k
-         ) =>
-         HasUnitArrow k Prim where
+instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
+         (k ~ (:>))
+      => HasUnitArrow k Prim where
   unitArrow NotP      = unitFun notC
   unitArrow AndP      = unitFun (curry andC)
   unitArrow OrP       = unitFun (curry orC)
@@ -235,8 +245,12 @@ instance ( BiCCCC k Lit
   unitArrow InlP      = unitFun inl
   unitArrow InrP      = unitFun inr
   unitArrow PairP     = unitFun (curry id)
+#if 0
   unitArrow CondBP    = unitFun muxB
   unitArrow CondIP    = unitFun muxI
+#else
+  unitArrow IfP       = unitFun ifC
+#endif
   unitArrow AbstP     = unitFun abstC
   unitArrow ReprP     = unitFun reprC
   unitArrow OopsP     = bottom
@@ -261,8 +275,12 @@ instance Evalable (Prim a) where
   eval InlP          = Left
   eval InrP          = Right
   eval PairP         = (,)
+#if 0
   eval CondBP        = muxB
   eval CondIP        = muxI
+#else
+  eval IfP           = ifC
+#endif
   eval AbstP         = abstC
   eval ReprP         = reprC
   eval OopsP         = error "eval on Prim: Oops!"
