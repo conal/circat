@@ -721,8 +721,6 @@ instance NumCat (:>) Int where
 -- muxC :: IsSourceP c => Bool :* (c :* c) :> c
 -- muxC = namedC "mux"
 
-#if 1
-
 -- Simplifications for all types:
 -- 
 --   mux (False,(a,_))     = a
@@ -764,33 +762,28 @@ muxOptB = \ case
 
 #if 0
 
--- Alternative notation:
-
-muxOpt (_ ,(a,Eql(a))) = just $ wrap a
-
-#endif
-
--- orOpt
-
 instance MuxCat (:>) where
   muxB = primOpt "mux" (muxOpt `orOpt` muxOptB)
   muxI = primOpt "mux" muxOpt
 
 #else
 
--- instance GenBuses t => HasIf (:>) t where
---   ifA = namedC "mux"
+-- Since ifC takes True/then before False/else, while mux take False/else before
+-- True/then, we must swap then/else.
 
--- or
+primOptIf :: GenBuses a => Opt a -> (Bool :* (a :* a) :> a)
+primOptIf opt = primOpt "mux" opt . second swapP
 
-instance IfCat (:>) Bool where ifA = namedC "mux"
-instance IfCat (:>) Int  where ifA = namedC "mux32"
+instance IfCat (:>) Bool where ifC = primOptIf (muxOpt `orOpt` muxOptB)
+instance IfCat (:>) Int  where ifC = primOptIf muxOpt
+
+instance IfCat (:>) Unit where ifC = unitIf
 
 instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
-  ifA = prodIf
+  ifC = prodIf
 
 instance IfCat (:>) b => IfCat (:>) (a -> b) where
-  ifA = funIf
+  ifC = funIf
 
 #endif
 
@@ -1563,7 +1556,7 @@ genBusesRep' :: GenBuses (Rep a) =>
                 String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBusesRep' prim ins o = first abstB <$> (genBuses' prim ins o)
 
-#if 1
+#if 0
 
 -- class GenBuses a where
 --   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
@@ -1574,8 +1567,8 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 #else
 
 #define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'; \
-instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifA = repIf }
+instance GenBuses (Rep (abs)) => GenBuses (abs) where { genBuses' = genBusesRep' };\
+instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf }
 
 #endif
 
