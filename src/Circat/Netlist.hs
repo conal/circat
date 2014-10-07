@@ -99,7 +99,7 @@ moduleAssign p2w (CompS _ name [i0,i1] [o] _) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
-moduleAssign p2w (CompS _ "mux" [a,b,c] [o] _) =
+moduleAssign p2w (CompS _ "if" [a,b,c] [o] _) =
   [NetAssign (busName p2w o)
     (ExprCond (sourceExp p2w a) (sourceExp p2w b) (sourceExp p2w c))]
 
