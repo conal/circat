@@ -114,6 +114,9 @@ type Width = Int
 -- Data bus: Id, bit width, prim name, arguments, output index
 data Bus = Bus PinId Width
 
+-- | An information source: its bus and a description of its construction, which
+-- contains the primitive, argument sources, and which output of that
+-- application (usually 0th).
 data Source = Source Bus PrimName [Source] Int
 
 sourceBus :: Source -> Bus
@@ -205,8 +208,6 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
 
--- TODO: Remember why I number outputs
-
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBus wrap w prim ins o = do src <- newSource w prim ins o
@@ -236,7 +237,7 @@ flattenMb = fmap toList . flat
    flat UnitB       = Just mempty
    flat (BoolB b)   = Just (singleton b)
    flat (IntB b)    = Just (singleton b)
-   flat (PairB a b) = flat a <> flat b
+   flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
    flat _           = Nothing
 
@@ -1036,7 +1037,7 @@ recordDots comps = nodes ++ edges
 -- showBool False = "F"
 -- showBool True  = "T"
 
--- Map each pin to its width, source component and output port numbers
+-- Map each pin to its width, source component and output port number
 type SourceMap = Map PinId (Width,CompNum,PortNum)
 
 -- TODO: Try removing width.
