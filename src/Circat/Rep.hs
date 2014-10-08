@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),oops) where
+module Circat.Rep (Rep,HasRep(..),bottom) where
 
 import Data.Monoid
 import Control.Applicative (WrappedMonad(..))
@@ -107,16 +107,15 @@ instance IsNat n => HasRep (Nat (S n)) where
 type instance Rep (Maybe a) = a :* Bool
 instance HasRep (Maybe a) where
   repr (Just a) = (a,True)
-  repr Nothing  = (oops,False) -- error "repr on Maybe: undefined value"
+  repr Nothing  = (bottom,False) -- error "repr on Maybe: undefined value"
   abst (a,True ) = Just a
   abst (_,False) = Nothing 
 
 -- TODO: Move the boolean flag to the left part of the representation.
 
-oops :: a
-oops = error "oops: Oops!"
-{-# NOINLINE oops #-}
+bottom :: a
+bottom = error "bottom: Bottom!"
+{-# NOINLINE bottom #-}
 
--- TODO: LambdaCCC.Prim has an OopsP primitive, which
--- LambdaCCC.ReifySimple.primMap maps to oops. If the error ever occurs, add a
--- string argument, and twak the reification.
+-- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs, add
+-- a string argument, and tweak the reification.
