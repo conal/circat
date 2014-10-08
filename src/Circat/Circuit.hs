@@ -43,7 +43,7 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep'
+  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep', botBRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -108,16 +108,25 @@ type PinSupply = [PinId]
 
 -- TODO: Maybe stop using the name "pin", since it's a bus.
 
+undefinedPinId :: PinId
+undefinedPinId = PinId (-1)
+
 -- | Bus width
 type Width = Int
 
 -- Data bus: Id, bit width, prim name, arguments, output index
 data Bus = Bus PinId Width
 
+undefinedBus :: Width -> Bus
+undefinedBus = Bus undefinedPinId
+
 -- | An information source: its bus and a description of its construction, which
 -- contains the primitive, argument sources, and which output of that
 -- application (usually 0th).
 data Source = Source Bus PrimName [Source] Int
+
+undefinedSource :: Width -> Source
+undefinedSource w = Source (undefinedBus w) "undefined" [] 0
 
 sourceBus :: Source -> Bus
 sourceBus (Source b _ _ _) = b
@@ -167,7 +176,7 @@ data Buses :: * -> * where
 -- -- Alternatively,
 -- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
 --   -- Undefined, for Nothing and perhaps more general sums
-  BotB   :: Buses a
+--   BotB   :: Buses a                     -- *** Phasing out ***
 
 #if 0
 -- Equality. Easy hack: derive Eq, but say that circuits are never equal.
@@ -198,7 +207,7 @@ instance Show (Buses a) where
 --   show (MaybeB a b) = "(MaybeB "++show a++" "++show b++")"
   show (FunB _)     = "<function>"
   show (IsoB b)     = "IsoB ("++show b++")"
-  show BotB         = "BotB"
+--   show BotB         = "BotB"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -207,22 +216,33 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+  botB :: Buses a
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBus wrap w prim ins o = do src <- newSource w prim ins o
                               return (wrap src,o+1)
 
-instance GenBuses Unit where genBuses' _ _ o = return (UnitB,o)
+instance GenBuses Unit where
+  genBuses' _ _ o = return (UnitB,o)
+  botB = UnitB
 
-instance GenBuses Bool where genBuses' = genBus BoolB  1
-instance GenBuses Int  where genBuses' = genBus IntB  32
+instance GenBuses Bool where
+  genBuses' = genBus BoolB  1
+  botB = BoolB (undefinedSource 1)
+
+instance GenBuses Int  where
+  genBuses' = genBus IntB  32
+  botB = IntB (undefinedSource 32)
+
+-- TODO: maybe macro to eliminate the repetition between genBuses' and botB here.
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
+  botB = PairB botB botB
 
 -- instance GenBuses a => GenBuses (Maybe a) where
 --   genBuses' prim ins o =
@@ -249,8 +269,8 @@ flattenB name b = fromMaybe err (flattenMb b)
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
 
-botErr :: String -> x
-botErr nm = error (nm ++ ": BotB")
+-- botErr :: String -> x
+-- botErr nm = error (nm ++ ": BotB")
 
 -- unUnitB :: Buses Unit -> Unit
 -- unUnitB UnitB = ()
@@ -262,12 +282,12 @@ pairB (a,b) = PairB a b
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 unPairB (PairB a b) = (a,b)
 unPairB (IsoB _)    = isoErr "unPairB"
-unPairB BotB        = botErr "unPairB"
+-- unPairB BotB        = botErr "unPairB"
 
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
 unFunB (IsoB _)    = isoErr "unFunB"
-unFunB BotB        = botErr "unFunB"
+-- unFunB BotB        = botErr "unFunB"
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -605,7 +625,7 @@ constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 #if 0
 instance MaybeCat (:>) where
   just    = CK (\ a -> MaybeB a    <$> constM' True )
-  nothing = CK (\ _ -> MaybeB BotB <$> constM' False)
+  nothing = CK (\ _ -> MaybeB botB <$> constM' False)
   maybe = inCK2 maybeCK
 
 --   maybe (CK n) (CK j) = CK (maybeCK n j)
@@ -622,14 +642,20 @@ maybeCK n j (MaybeB a b) = undefined
 
 #endif
 
+#if 1
+instance GenBuses a => BottomCat (:>) a where
+  bottomC = mkCK (const (genBuses (Prim "bottom") []))
+#else
 #if 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
-  bottom = mkCK (const (genBuses (Prim "bottom") []))
+  bottomC = mkCK (const (genBuses (Prim "bottom") []))
 -- See the note at BottomCat
 #else
 instance BottomCat (:>) where
-  bottom = mkCK (const (return BotB))
+  type BottomKon (:>) a = GenBuses a
+  bottomC = mkCK (const (return botB))
+#endif
 #endif
 
 -- instance BoolCat (:>) where
@@ -1539,6 +1565,9 @@ genBusesRep' :: GenBuses (Rep a) =>
                 String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBusesRep' prim ins o = first abstB <$> (genBuses' prim ins o)
 
+botBRep :: GenBuses (Rep a) => Buses a
+botBRep = abstB botB
+
 #if 0
 
 -- class GenBuses a where
@@ -1550,7 +1579,8 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 #else
 
 #define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where { genBuses' = genBusesRep' };\
+instance GenBuses (Rep (abs)) => GenBuses (abs) where \
+  { genBuses' = genBusesRep' ; botB = botBRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf }
 
 #endif
