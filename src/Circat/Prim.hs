@@ -155,7 +155,8 @@ data Prim :: * -> * where
 #endif
   AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
-  OopsP         :: Prim a
+  BottomP       :: BottomCat (:>) a => Prim (Unit -> a)
+--   BottomP       :: GenBuses a => Prim a
 
 instance Eq' (Prim a) (Prim b) where
   LitP a    === LitP b    = a === b
@@ -178,7 +179,7 @@ instance Eq' (Prim a) (Prim b) where
 #endif
   AbstP     === AbstP     = True
   ReprP     === ReprP     = True
-  OopsP     === OopsP     = True
+  BottomP   === BottomP   = True
   _         === _         = False
 
 instance Eq (Prim a) where (==) = (===)
@@ -204,7 +205,7 @@ instance Show (Prim a) where
 #endif
   showsPrec _ AbstP      = showString "abst"
   showsPrec _ ReprP      = showString "repr"
-  showsPrec _ OopsP      = showString "oops"
+  showsPrec _ BottomP    = showString "bottomC"
 
 instance Show' Prim where showsPrec' = showsPrec
 
@@ -228,7 +229,8 @@ primArrow IfP       = ifC
 #endif
 primArrow AbstP     = abstC
 primArrow ReprP     = reprC
-primArrow OopsP     = error "primArrow: Oops"
+primArrow BottomP   = -- bottomC
+                      error "primArrow: BottomP"
 primArrow (LitP _)  = error ("primArrow: LitP with function type?!")
 
 instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
@@ -253,8 +255,9 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
 #endif
   unitArrow AbstP     = unitFun abstC
   unitArrow ReprP     = unitFun reprC
-  unitArrow OopsP     = bottom
-                        -- error "unitArrow on Prim: OopsP"
+  unitArrow BottomP   = -- bottomC
+                        unitFun bottomC
+                        -- error "unitArrow on Prim: BottomP"
   unitArrow (LitP l)  = unitArrow l
 
 --     Variable `k' occurs more often than in the instance head
@@ -283,7 +286,7 @@ instance Evalable (Prim a) where
 #endif
   eval AbstP         = abstC
   eval ReprP         = reprC
-  eval OopsP         = error "eval on Prim: Oops!"
+  eval BottomP       = error "eval on Prim: Bottom!"
 
 -- TODO: replace fst with exl, etc.
 
