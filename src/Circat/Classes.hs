@@ -72,19 +72,26 @@ instance MaybeCat (->) where
 --   maybe _ j (Just a) = j a
 #endif
 
+#if 1
+class BottomCat k a where
+  bottomC :: Unit `k` a
+
+instance BottomCat (->) a where bottomC = error "bottom"
+
+#else
 #if 0
 class BottomCat k where
   type BottomKon k a :: Constraint
   type BottomKon k a = Yes a
-  bottom :: BottomKon k a => Unit `k`a
+  bottomC :: BottomKon k a => Unit `k` a
 -- The constraint is problematic for the HasUnitArrow instance on Prim in
 -- LambdaCCC.Prim. Drop the constraint, and add BotB in Circat.Circuit.
 #else
 class BottomCat k where
-  bottom :: Unit `k`a
-#endif
-
+  bottomC :: Unit `k`a
 instance BottomCat (->) where bottom = error "bottom"
+#endif
+#endif
 
 {--------------------------------------------------------------------
     Misc
