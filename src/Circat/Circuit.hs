@@ -742,6 +742,8 @@ instance NumCat (:>) Int where
 --   if' (False,(_,a))     = a
 --   if' (True ,(b,_))     = b
 --   if' (_    ,(a,a))     = a
+--   if' (a,(b,bottom))    = b
+--   if' (a,(bottom,c))    = c
 --
 -- Simplifications for Bool values:
 -- 
@@ -756,12 +758,16 @@ instance NumCat (:>) Int where
 --   if' (b,(c `xor` a,a)) = (b && c) `xor` a
 --   if' (b,(a `xor` c,a)) = (b && c) `xor` a
 
+pattern BottomS <- ConstS "bottom"
+
 ifOpt :: SourceToBuses a => Opt a
 ifOpt = \ case
-  [FalseS,_,a] -> sourceB a
-  [ TrueS,b,_] -> sourceB b
-  [_,a,Eql(a)] -> sourceB a
-  _            -> nothingA
+  [FalseS,_,a]  -> sourceB a
+  [ TrueS,b,_]  -> sourceB b
+  [_,a,Eql(a)]  -> sourceB a
+  [_,b,BottomS] -> sourceB b
+  [_,BottomS,c] -> sourceB c
+  _             -> nothingA
 
 ifOptB :: Opt Bool
 ifOptB = \ case
