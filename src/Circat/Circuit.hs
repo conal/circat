@@ -43,7 +43,7 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep', mkBotRep
+  , PinId, Width, Bus(..), Source(..), GenBuses, GenBusesT, genBusesRep', mkBotRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -230,14 +230,14 @@ instance GenBuses Unit where
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
 --   mkBot = return (BoolB (undefinedSource 1))
-  mkBot = constComp' "bottom"
+  mkBot = constComp' "bottom :: Bool"
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
 --   mkBot = return (IntB (undefinedSource 32))
-  mkBot = constComp' "bottom"
+  mkBot = constComp' "bottom :: Int"
 
 -- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
@@ -331,8 +331,24 @@ type CircuitM = State (PinSupply,CompInfo)
 
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
+-- Names of output types
+type OTypes = Seq String
+
+class HasOTypes b where
+  otypes :: b -> OTypes  -- dummy argument
+
+type GenBusesT b = (GenBuses b, HasOTypes b)
+
+instance HasOTypes Int  where otypes = const (singleton "Int" )
+instance HasOTypes Bool where otypes = const (singleton "Bool")
+instance HasOTypes Unit where otypes = mempty
+instance (HasOTypes a, HasOTypes b) => HasOTypes (a :* b) where
+  otypes (a,b) = otypes a <> otypes b
+
+-- TODO: Use Proxy b in place of b
+
 -- Instantiate a 'Prim'
-genComp :: GenBuses b => Prim a b -> BCirc a b
+genComp :: GenBusesT b => Prim a b -> BCirc a b
 #ifdef HashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
@@ -348,26 +364,30 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
    ins  = flattenB "genComp" a
    name = primName prim
    key  = (name,ins)
+
+-- TODO: Key on result type as well. Particularly important for polymorphic
+-- constants such as bottom (and one day, zero).
+
 #else
 genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
                     Mtl.modify (second (Comp prim a b :))
                     return b
 #endif
 
-constComp' :: GenBuses b => String -> CircuitM (Buses b)
+constComp' :: GenBusesT b => String -> CircuitM (Buses b)
 constComp' str = genComp (Prim str) UnitB
 
-constComp :: GenBuses b => String -> BCirc a b
+constComp :: GenBusesT b => String -> BCirc a b
 constComp str = const (constComp' str)
 
 -- TODO: eliminate constComp in favor of a more restrictive version in which a
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+constM' :: (Show b, GenBusesT b) => b -> CircuitM (Buses b)
 constM' b = constComp' (show b)
 
-constM :: (Show b, GenBuses b) => b -> BCirc a b
+constM :: (Show b, GenBusesT b) => b -> BCirc a b
 constM b = constComp (show b)
 
 {--------------------------------------------------------------------
@@ -407,7 +427,7 @@ inCK2 = inCK <~ unmkCK
 -- primC :: GenBuses b => Prim a b -> a :> b
 -- primC = mkCK . genComp
 
-namedC :: GenBuses b => String -> a :> b
+namedC :: GenBusesT b => String -> a :> b
 -- namedC = primC . Prim
 namedC name = primOpt name noOpt
 
@@ -433,7 +453,7 @@ newComp3 :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
             ((a :* b) :* c :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
 newComp3 cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses c))
 
-newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
+newVal :: (Show b, GenBusesT b) => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
 noOpt :: Opt b
@@ -446,7 +466,7 @@ orOpt f g a = do mb <- f a
                    Nothing -> g a
                    Just _  -> return mb
 
-primOpt, primOptSort :: GenBuses b => String -> Opt b -> a :> b
+primOpt, primOptSort :: GenBusesT b => String -> Opt b -> a :> b
 #ifdef OptimizeCircuit
 primOpt name opt =
   mkCK $ \ a -> let plain = genComp (Prim name) a in
@@ -482,7 +502,7 @@ constSM mkB = mkCK (const mkB)
 constS :: Buses b -> (a :> b)
 constS b = constSM (return b)
 
-constC :: (Show b, GenBuses b) => b -> a :> b
+constC :: (Show b, GenBusesT b) => b -> a :> b
 constC = mkCK . constM
 
 -- Phasing out constC
@@ -775,7 +795,7 @@ instance (IfCat (:>) a, IfCat (:>) b) => IfCat (:>) (a :* b) where
 instance IfCat (:>) b => IfCat (:>) (a -> b) where
   ifC = funIf
 
-instance GenBuses a => Show (a :> b) where
+instance GenBusesT a => Show (a :> b) where
   show = show . runC
 
 --     Application is no smaller than the instance head
@@ -783,7 +803,7 @@ instance GenBuses a => Show (a :> b) where
 --     (Use -XUndecidableInstances to permit this)
 
 -- Turn a circuit into a list of components, including fake In & Out.
-runC :: GenBuses a => (a :> b) -> [(Comp,Reuses)]
+runC :: GenBusesT a => (a :> b) -> [(Comp,Reuses)]
 runC = runU . unitize
 
 -- runU :: (Unit :> Unit) -> [Comp]
@@ -808,7 +828,7 @@ runU cir = getComps compInfo
 
 
 -- Wrap a circuit with fake input and output
-unitize :: GenBuses a => (a :> b) -> (Unit :> Unit)
+unitize :: GenBusesT a => (a :> b) -> (Unit :> Unit)
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -828,7 +848,7 @@ systemSuccess cmd =
 
 type Attr = (String,String)
 
-outG :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
+outG :: GenBusesT a => String -> [Attr] -> (a :> b) -> IO ()
 outG = outGWith ("pdf","")
 
 -- Some options:
@@ -847,7 +867,7 @@ renameC = id
         . (++"-nohash")
 #endif
 
-outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
+outGWith :: GenBusesT a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
 outGWith (outType,res) (renameC -> name) attrs circ = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot") (graphDot name attrs graph
@@ -922,7 +942,7 @@ type DGraph = [CompS]
 
 type Dot = String
 
-circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
+circuitGraph :: GenBusesT a => (a :> b) -> (DGraph,Depth)
 circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 type Depth = Int
