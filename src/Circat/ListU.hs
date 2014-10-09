@@ -1,14 +1,19 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TypeOperators, TypeFamilies, Rank2Types, ExistentialQuantification #-}
-{-# LANGUAGE LambdaCase #-}
-{-# OPTIONS_GHC -Wall #-}
-
 -- #define ListRep
+#define AsGADT
+
+{-# LANGUAGE TypeOperators, TypeFamilies, Rank2Types #-}
+{-# LANGUAGE LambdaCase #-}
+#ifdef AsGADT
+{-# LANGUAGE GADTs #-}
+#else
+{-# LANGUAGE ExistentialQuantification #-}
+#endif
+{-# OPTIONS_GHC -Wall #-}
 
 #ifdef ListRep
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- TEMP
 #endif
-
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
@@ -29,31 +34,29 @@ module Circat.ListU where
 
 import Data.List (unfoldr)
 
-import Circat.Misc ((:*))
 #ifdef ListRep
 import Circat.Rep
 #endif
 
-data ListU a = forall s. ListU (s -> Maybe (a,s)) s
+#ifdef AsGADT
+data ListU :: * -> * where
+  UnfoldR :: (s -> Maybe (a,s)) -> s -> ListU a
+#else
+data ListU a = forall s. UnfoldR (s -> Maybe (a,s)) s
+#endif
 
 toListU :: [a] -> ListU a
-toListU = ListU (\ case  []     -> Nothing
-                         (a:as) -> Just (a, as))
+toListU = UnfoldR (\ case []   -> Nothing
+                          a:as -> Just (a, as))
 
 unListU :: ListU a -> [a]
-unListU (ListU h s) = unfoldr h s
-
--- unListU  (ListU f s0) = go s0
---  where
---    go s = case f s of Nothing -> []
---                       Just (a,s') -> a : go s'
+unListU (UnfoldR h s) = unfoldr h s
 
 #ifdef ListRep
-
+-- TODO: move this orphan to Circat.Rep, and remove -fno-warn-orphans above.
 type instance Rep [a] = ListU a
 instance HasRep [a] where
   repr = toListU
   abst = unListU
-
 #endif
 
