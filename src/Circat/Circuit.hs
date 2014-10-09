@@ -32,7 +32,7 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
--- #define OptimizeCircuit
+#define OptimizeCircuit
 
 #define HashCons
 
@@ -237,7 +237,7 @@ instance GenBuses Unit where
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
 --   mkBot = return (BoolB (undefinedSource 1))
-  mkBot = constComp' "bottom :: Bool"
+  mkBot = constComp' "bottom"
   ty = const BoolT
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
@@ -245,7 +245,7 @@ instance GenBuses Bool where
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
 --   mkBot = return (IntB (undefinedSource 32))
-  mkBot = constComp' "bottom :: Int"
+  mkBot = constComp' "bottom"
   ty = const IntT
 -- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
@@ -329,8 +329,8 @@ deriving instance Show Comp
 
 type Reuses = Int
 #ifdef HashCons
--- Tracks prim applications and reuses per component.
-type CompInfo = Map (PrimName,[Source]) (Comp,Reuses)
+-- Tracks prim applications (including output type) and reuses per component.
+type CompInfo = Map (PrimName,[Source],Ty) (Comp,Reuses)
 #else
 type CompInfo = [Comp]
 #endif
@@ -341,7 +341,7 @@ type CircuitM = State (PinSupply,CompInfo)
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
-genComp :: GenBuses b => Prim a b -> BCirc a b
+genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
 #ifdef HashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
@@ -356,7 +356,7 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
  where
    ins  = flattenB "genComp" a
    name = primName prim
-   key  = (name,ins)
+   key  = (name,ins,ty (undefined :: b))
 
 -- TODO: Key on result type as well. Particularly important for polymorphic
 -- constants such as bottom (and one day, zero).
