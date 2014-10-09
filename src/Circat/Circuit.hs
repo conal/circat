@@ -32,7 +32,7 @@
 -- Circuit representation
 ----------------------------------------------------------------------
 
-#define OptimizeCircuit
+-- #define OptimizeCircuit
 
 #define HashCons
 
@@ -43,7 +43,7 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep', botBRep
+  , PinId, Width, Bus(..), Source(..), GenBuses(..), genBusesRep', mkBotRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -108,8 +108,8 @@ type PinSupply = [PinId]
 
 -- TODO: Maybe stop using the name "pin", since it's a bus.
 
-undefinedPinId :: PinId
-undefinedPinId = PinId (-1)
+-- undefinedPinId :: PinId
+-- undefinedPinId = PinId (-1)
 
 -- | Bus width
 type Width = Int
@@ -117,16 +117,16 @@ type Width = Int
 -- Data bus: Id, bit width, prim name, arguments, output index
 data Bus = Bus PinId Width
 
-undefinedBus :: Width -> Bus
-undefinedBus = Bus undefinedPinId
+-- undefinedBus :: Width -> Bus
+-- undefinedBus = Bus undefinedPinId
 
 -- | An information source: its bus and a description of its construction, which
 -- contains the primitive, argument sources, and which output of that
 -- application (usually 0th).
 data Source = Source Bus PrimName [Source] Int
 
-undefinedSource :: Width -> Source
-undefinedSource w = Source (undefinedBus w) "undefined" [] 0
+-- undefinedSource :: Width -> Source
+-- undefinedSource w = Source (undefinedBus w) "undefined" [] 0
 
 sourceBus :: Source -> Bus
 sourceBus (Source b _ _ _) = b
@@ -216,7 +216,7 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
-  botB :: Buses a
+  mkBot :: CircuitM (Buses a)
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
@@ -225,30 +225,28 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
 
 instance GenBuses Unit where
   genBuses' _ _ o = return (UnitB,o)
-  botB = UnitB
+  mkBot = return UnitB
 
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
-  botB = BoolB (undefinedSource 1)
+--   mkBot = return (BoolB (undefinedSource 1))
+  mkBot = constComp' "bottom"
+
+-- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
-  botB = IntB (undefinedSource 32)
+--   mkBot = return (IntB (undefinedSource 32))
+  mkBot = constComp' "bottom"
 
--- TODO: maybe macro to eliminate the repetition between genBuses' and botB here.
+-- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
-  botB = PairB botB botB
-
--- instance GenBuses a => GenBuses (Maybe a) where
---   genBuses' prim ins o =
---     do (a,oa) <- genBuses' prim ins o
---        (b,ob) <- genBuses' prim ins oa
---        return (MaybeB a b, ob)
+  mkBot = PairB <$> mkBot <*> mkBot
 
 flattenMb :: Buses a -> Maybe [Source]
 flattenMb = fmap toList . flat
@@ -622,29 +620,10 @@ constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 
 #endif
 
-#if 0
-instance MaybeCat (:>) where
-  just    = CK (\ a -> MaybeB a    <$> constM' True )
-  nothing = CK (\ _ -> MaybeB botB <$> constM' False)
-  maybe = inCK2 maybeCK
-
---   maybe (CK n) (CK j) = CK (maybeCK n j)
---
---     Pattern match(es) are non-exhaustive
---     In an equation for ‘maybe’: Patterns not matched: _ _
--- 
--- GHC bug?
-
-maybeCK :: BCirc Unit c -> BCirc a c -> BCirc (Maybe a) c
-maybeCK n j (MaybeB a b) = undefined
-
--- Oops! I don't know how to implement conditional over a
-
-#endif
-
 #if 1
 instance GenBuses a => BottomCat (:>) a where
-  bottomC = mkCK (const (genBuses (Prim "bottom") []))
+--   bottomC = mkCK (const (genBuses (Prim "bottom") []))
+  bottomC = mkCK (const mkBot)
 #else
 #if 0
 instance BottomCat (:>) where
@@ -654,7 +633,7 @@ instance BottomCat (:>) where
 #else
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
-  bottomC = mkCK (const (return botB))
+  bottomC = mkCK (const mkBot)
 #endif
 #endif
 
@@ -1563,10 +1542,10 @@ instance DistribCat (:>) where
 
 genBusesRep' :: GenBuses (Rep a) =>
                 String -> [Source] -> Int -> CircuitM (Buses a,Int)
-genBusesRep' prim ins o = first abstB <$> (genBuses' prim ins o)
+genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
 
-botBRep :: GenBuses (Rep a) => Buses a
-botBRep = abstB botB
+mkBotRep :: GenBuses (Rep a) => CircuitM (Buses a)
+mkBotRep = abstB <$> mkBot
 
 #if 0
 
@@ -1580,7 +1559,7 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; botB = botBRep };\
+  { genBuses' = genBusesRep' ; mkBot = mkBotRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf }
 
 #endif
