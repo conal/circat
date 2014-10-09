@@ -219,8 +219,8 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
-  mkBot :: CircuitM (Buses a)
-  ty :: a -> Ty                         -- dummy argument
+  mkBot     :: CircuitM (Buses a)
+  ty        :: a -> Ty                         -- dummy argument
 
 -- TODO: Use Proxy instead of dummy argument
 
@@ -234,10 +234,13 @@ instance GenBuses Unit where
   mkBot = return UnitB
   ty = const UnitT
 
+bottomComp :: GenBuses b => CircuitM (Buses b)
+bottomComp = constComp' "undefined"
+
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
 --   mkBot = return (BoolB (undefinedSource 1))
-  mkBot = constComp' "bottom"
+  mkBot = bottomComp
   ty = const BoolT
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
@@ -245,7 +248,7 @@ instance GenBuses Bool where
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
 --   mkBot = return (IntB (undefinedSource 32))
-  mkBot = constComp' "bottom"
+  mkBot = bottomComp
   ty = const IntT
 -- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
@@ -635,13 +638,13 @@ constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 
 #if 1
 instance GenBuses a => BottomCat (:>) a where
---   bottomC = mkCK (const (genBuses (Prim "bottom") []))
+--   bottomC = mkCK (const (genBuses (Prim "undefined") []))
   bottomC = mkCK (const mkBot)
 #else
 #if 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
-  bottomC = mkCK (const (genBuses (Prim "bottom") []))
+  bottomC = mkCK (const (genBuses (Prim "undefined") []))
 -- See the note at BottomCat
 #else
 instance BottomCat (:>) where
@@ -758,7 +761,7 @@ instance NumCat (:>) Int where
 --   if' (b,(c `xor` a,a)) = (b && c) `xor` a
 --   if' (b,(a `xor` c,a)) = (b && c) `xor` a
 
-pattern BottomS <- ConstS "bottom"
+pattern BottomS <- ConstS "undefined"
 
 ifOpt :: SourceToBuses a => Opt a
 ifOpt = \ case
