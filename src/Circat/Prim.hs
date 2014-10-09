@@ -40,7 +40,7 @@ import Data.Constraint (Dict(..))
 import Circat.Category
 import Circat.Classes (BoolCat(..),IfCat(..),NumCat(..),BottomCat(..))
 
-import Circat.Circuit (GenBusesT,(:>)
+import Circat.Circuit (GenBuses,(:>)
 #ifdef LitSources
                       , litUnit,litBool,litInt
 #else
@@ -102,14 +102,14 @@ litHasShow (IntL  _) = Dict
 instance Show (Lit a) where
   showsPrec p l@LSh = showsPrec p (eval l)
 
-litGenBuses :: Lit a -> Dict (GenBusesT a)
+litGenBuses :: Lit a -> Dict (GenBuses a)
 litGenBuses (UnitL _) = Dict
 litGenBuses (BoolL _) = Dict
 litGenBuses (IntL  _) = Dict
 
 #define LSo (litGenBuses -> Dict)
 
-litSS :: Lit a -> Dict (Show a, GenBusesT a)
+litSS :: Lit a -> Dict (Show a, GenBuses a)
 litSS l | (Dict,Dict) <- (litHasShow l,litGenBuses l) = Dict
 
 #define LS (litSS -> Dict)
@@ -156,7 +156,6 @@ data Prim :: * -> * where
   AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
   BottomP       :: BottomCat (:>) a => Prim (Unit -> a)
---   BottomP       :: GenBusesT a => Prim a
 
 instance Eq' (Prim a) (Prim b) where
   LitP a    === LitP b    = a === b
