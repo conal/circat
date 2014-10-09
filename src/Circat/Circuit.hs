@@ -43,7 +43,8 @@
 
 module Circat.Circuit
   ( CircuitM, (:>)
-  , PinId, Width, Bus(..), Source(..), GenBuses, GenBusesT, genBusesRep', mkBotRep
+  , PinId, Width, Bus(..), Source(..)
+  , GenBuses(..), GenBusesT, genBusesRep', mkBotRep, tyRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -211,12 +212,17 @@ instance Show (Buses a) where
 
 -- TODO: Improve to Show instance with showsPrec
 
+data Ty = UnitT | BoolT | IntT | PairT Ty Ty deriving (Eq,Ord)
+
 genBuses :: GenBuses b => Prim a b -> [Source] -> CircuitM (Buses b)
 genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
   mkBot :: CircuitM (Buses a)
+  ty :: a -> Ty                         -- dummy argument
+
+-- TODO: Use Proxy instead of dummy argument
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
@@ -226,11 +232,13 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
 instance GenBuses Unit where
   genBuses' _ _ o = return (UnitB,o)
   mkBot = return UnitB
+  ty = const UnitT
 
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
 --   mkBot = return (BoolB (undefinedSource 1))
   mkBot = constComp' "bottom :: Bool"
+  ty = const BoolT
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
@@ -238,7 +246,7 @@ instance GenBuses Int  where
   genBuses' = genBus IntB  32
 --   mkBot = return (IntB (undefinedSource 32))
   mkBot = constComp' "bottom :: Int"
-
+  ty = const IntT
 -- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
@@ -247,6 +255,7 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
   mkBot = PairB <$> mkBot <*> mkBot
+  ty ~(a,b) = PairT (ty a) (ty b)
 
 flattenMb :: Buses a -> Maybe [Source]
 flattenMb = fmap toList . flat
@@ -331,6 +340,7 @@ type CircuitM = State (PinSupply,CompInfo)
 
 type BCirc a b = Buses a -> CircuitM (Buses b)
 
+-- Phasing out
 -- Names of output types
 type OTypes = Seq String
 
@@ -1567,6 +1577,9 @@ genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
 mkBotRep :: GenBuses (Rep a) => CircuitM (Buses a)
 mkBotRep = abstB <$> mkBot
 
+tyRep :: forall a. GenBuses (Rep a) => a -> Ty
+tyRep = const (ty (undefined :: Rep a))
+
 #if 0
 
 -- class GenBuses a where
@@ -1579,7 +1592,7 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; mkBot = mkBotRep };\
+  { genBuses' = genBusesRep' ; mkBot = mkBotRep ; ty = tyRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf }
 
 #endif
