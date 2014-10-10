@@ -44,7 +44,7 @@
 module Circat.Circuit
   ( CircuitM, (:>)
   , PinId, Width, Bus(..), Source(..)
-  , GenBuses(..), genBusesRep', mkBotRep, tyRep
+  , GenBuses(..), genBusesRep', tyRep, bottomRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -219,7 +219,6 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
-  mkBot     :: CircuitM (Buses a)
   ty        :: a -> Ty                         -- dummy argument
 
 genBus :: (Source -> Buses a) -> Width
@@ -229,33 +228,23 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
 
 instance GenBuses Unit where
   genBuses' _ _ o = return (UnitB,o)
-  mkBot = return UnitB
   ty = const UnitT
-
-bottomComp :: GenBuses b => CircuitM (Buses b)
-bottomComp = constComp' "undefined"
 
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
---   mkBot = return (BoolB (undefinedSource 1))
-  mkBot = bottomComp
   ty = const BoolT
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
---   mkBot = return (IntB (undefinedSource 32))
-  mkBot = bottomComp
   ty = const IntT
--- TODO: maybe macro to eliminate the repetition between genBuses' and mkBot here.
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
-  mkBot = PairB <$> mkBot <*> mkBot
   ty ~(a,b) = PairT (ty a) (ty b)
 
 flattenMb :: Buses a -> Maybe [Source]
@@ -1587,9 +1576,6 @@ genBusesRep' :: GenBuses (Rep a) =>
                 String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
 
-mkBotRep :: GenBuses (Rep a) => CircuitM (Buses a)
-mkBotRep = abstB <$> mkBot
-
 bottomRep :: (HasRep a, BottomCat (:>) (Rep a)) => Unit :> a
 bottomRep = abstC . bottomC
 
@@ -1608,7 +1594,7 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; mkBot = mkBotRep ; ty = tyRep };\
+  { genBuses' = genBusesRep' ; ty = tyRep };\
 instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where { bottomC = bottomRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
 
