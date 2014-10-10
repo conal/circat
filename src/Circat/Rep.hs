@@ -104,12 +104,12 @@ instance IsNat n => HasRep (Nat (S n)) where
 -- TODO: See about eliminating that constructor constraint.
 
 -- Experimental treatment of Maybe
-type instance Rep (Maybe a) = a :* Bool
+type instance Rep (Maybe a) = Bool :* a
 instance HasRep (Maybe a) where
-  repr (Just a) = (a,True)
-  repr Nothing  = (bottom,False) -- error "repr on Maybe: undefined value"
-  abst (a,True ) = Just a
-  abst (_,False) = Nothing 
+  repr (Just a) = (True,a)
+  repr Nothing  = (False,bottom) -- error "repr on Maybe: undefined value"
+  abst (True,a ) = Just a
+  abst (False,_) = Nothing 
 
 -- TODO: Move the boolean flag to the left part of the representation.
 
