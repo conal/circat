@@ -222,8 +222,6 @@ class GenBuses a where
   mkBot     :: CircuitM (Buses a)
   ty        :: a -> Ty                         -- dummy argument
 
--- TODO: Use Proxy instead of dummy argument
-
 genBus :: (Source -> Buses a) -> Width
        -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
 genBus wrap w prim ins o = do src <- newSource w prim ins o
@@ -637,21 +635,44 @@ constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 #endif
 
 #if 1
+
+-- bottomScalar :: GenBuses b => CircuitM (Buses b)
+bottomScalar :: GenBuses b => Unit :> b
+bottomScalar = mkCK (constComp "undefined")
+
+instance BottomCat (:>) Bool where bottomC = bottomScalar
+instance BottomCat (:>) Int  where bottomC = bottomScalar
+
+instance BottomCat (:>) Unit where
+--   bottomC = mkCK (const (return UnitB))
+  bottomC = C (arr (const UnitB))
+
+instance (BottomCat (:>) a, BottomCat (:>) b) => BottomCat (:>) (a :* b) where
+  bottomC = bottomC &&& bottomC
+
+instance BottomCat (:>) b => BottomCat (:>) (a -> b) where
+  bottomC = curry (bottomC . exl)
+
+#ifdef TypeDerivation
+bottomC :: Unit :> b
+bottomC . exl :: Unit :* a :> b
+curry (bottomC . exl) :: Unit :> (a -> b)
+#endif
+
+#elif 0
 instance GenBuses a => BottomCat (:>) a where
---   bottomC = mkCK (const (genBuses (Prim "undefined") []))
   bottomC = mkCK (const mkBot)
-#else
-#if 0
+#elif 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
   bottomC = mkCK (const (genBuses (Prim "undefined") []))
 -- See the note at BottomCat
-#else
+#elif 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
   bottomC = mkCK (const mkBot)
 #endif
-#endif
+
 
 -- instance BoolCat (:>) where
 --   not = namedC "not"
