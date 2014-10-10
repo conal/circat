@@ -3,7 +3,7 @@
 #define AsGADT
 
 {-# LANGUAGE TypeOperators, TypeFamilies, Rank2Types #-}
-{-# LANGUAGE LambdaCase, TupleSections #-}
+{-# LANGUAGE LambdaCase, TupleSections, ScopedTypeVariables #-}
 #ifdef AsGADT
 {-# LANGUAGE GADTs #-}
 #else
@@ -32,10 +32,10 @@ module Circat.ListU where
 
 -- TODO: explicit exports
 
-import Data.Monoid (Monoid(..),Sum(..),Product(..))
+import Data.Monoid (Monoid(..))
 import Data.Functor ((<$>))
 import Data.Foldable (Foldable(..))
-import Control.Arrow (first)
+import Control.Arrow (first,second)
 import Control.Applicative (Applicative(..))
 import Data.List (unfoldr)
 
@@ -122,13 +122,12 @@ dfa2 f = dfa' (\ s -> case f s of Nothing -> Left  s
 
 -- dfa2 f = dfa' (\ s -> maybe (Left s) Right (f s))
 
--- or `dfa (flip maybe id)`, but I wouldn't go there.
-
 -- We could also define variants for explicitly identifying final states.
 -- For instance,
 
 dfa'' :: (s -> s) -> (s -> Bool) -> s -> s
 dfa'' f final = dfa' (\ s -> if final s then Left s else Right (f s))
+
 
 #ifdef ListRep
 -- TODO: move this orphan to Circat.Rep, and remove -fno-warn-orphans above.
@@ -155,11 +154,11 @@ instance Monoid (ListU a) where
 --      h (Left  s) = maybe (h (Right t0)) (Just . second Left) (f s)
 --      h (Right t) = (fmap.second) Right (g t)
 
-mconcatU :: Monoid m => ListU m -> m
-mconcatU = foldlU mappend mempty
+foldU :: Monoid m => ListU m -> m
+foldU = foldlU mappend mempty
 
 instance Foldable ListU where
-  foldMap f = mconcatU . fmap f
+  foldMap f = foldU . fmap f
 
 instance Functor ListU where
   fmap f (UnfoldR h s0) = UnfoldR ((fmap.fmap.first) f h) s0
@@ -224,3 +223,19 @@ fromTo low high = unfoldRU (\ n -> if n > high then Nothing else Just (n,succ n)
 -- | Count from 0 to high inclusive
 upTo :: (Enum a, Ord a, Num a) => a -> ListU a
 upTo = fromTo 0
+
+cons :: forall a. a -> ListU a -> ListU a
+cons a (UnfoldR h (s0 :: s)) = UnfoldR h' Nothing
+ where
+   h' :: Maybe s -> Maybe (a, Maybe s)
+   h' Nothing  = Just (a,Just s0)
+   h' (Just s) = (fmap.second) Just (h s)
+
+unList :: ListU a -> Maybe (a, ListU a)
+
+-- unList (UnfoldR h s) =
+--   case h s of
+--     Nothing -> Nothing
+--     Just (a,s') -> Just (a, UnfoldR h s')
+
+unList (UnfoldR h s) = (fmap.second) (UnfoldR h) (h s)
