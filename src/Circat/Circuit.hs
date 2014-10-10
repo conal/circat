@@ -1590,6 +1590,9 @@ genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
 mkBotRep :: GenBuses (Rep a) => CircuitM (Buses a)
 mkBotRep = abstB <$> mkBot
 
+bottomRep :: (HasRep a, BottomCat (:>) (Rep a)) => Unit :> a
+bottomRep = abstC . bottomC
+
 tyRep :: forall a. GenBuses (Rep a) => a -> Ty
 tyRep = const (ty (undefined :: Rep a))
 
@@ -1606,7 +1609,8 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   { genBuses' = genBusesRep' ; mkBot = mkBotRep ; ty = tyRep };\
-instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf }
+instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where { bottomC = bottomRep };\
+instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
 
 #endif
 
