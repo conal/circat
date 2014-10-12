@@ -1,3 +1,10 @@
+{-# LANGUAGE CPP #-}
+
+#define OptimizeCircuit
+#define Idempotence
+
+#define HashCons
+
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
@@ -8,7 +15,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE CPP #-}
 
 -- For Church sum experiment
 {-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes #-}
@@ -31,10 +37,6 @@
 -- 
 -- Circuit representation
 ----------------------------------------------------------------------
-
-#define OptimizeCircuit
-
-#define HashCons
 
 #define NoSums
 -- #define StaticSums
@@ -318,7 +320,7 @@ data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 deriving instance Show Comp
 
 type Reuses = Int
-#ifdef HashCons
+#if defined HashCons
 -- Tracks prim applications (including output type) and reuses per component.
 type CompInfo = Map (PrimName,[Source],Ty) (Comp,Reuses)
 #else
@@ -332,7 +334,7 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
 genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
-#ifdef HashCons
+#if defined HashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
                       Just (Comp _ _ b', _) ->
@@ -450,7 +452,7 @@ orOpt f g a = do mb <- f a
                    Just _  -> return mb
 
 primOpt, primOptSort :: GenBuses b => String -> Opt b -> a :> b
-#ifdef OptimizeCircuit
+#if defined OptimizeCircuit
 primOpt name opt =
   mkCK $ \ a -> let plain = genComp (Prim name) a in
                   case flattenMb a of
@@ -553,7 +555,7 @@ instance ClosedCat (:>) where
   curry   = inC $ \ h -> arr (FunB . C) . curryK (h . arr pairB)
   uncurry = inC $ \ f -> uncurryK (arr (unC . unFunB) . f) . arr unPairB 
 
-#ifdef TypeDerivation
+#if defined TypeDerivation
 
 -- ClosedCat type derivations:
 
@@ -642,7 +644,7 @@ instance (BottomCat (:>) a, BottomCat (:>) b) => BottomCat (:>) (a :* b) where
 instance BottomCat (:>) b => BottomCat (:>) (a -> b) where
   bottomC = curry (bottomC . exl)
 
-#ifdef TypeDerivation
+#if defined TypeDerivation
 bottomC :: Unit :> b
 bottomC . exl :: Unit :* a :> b
 curry (bottomC . exl) :: Unit :> (a -> b)
@@ -697,7 +699,9 @@ instance BoolCat (:>) where
            [x,TrueS ]   -> sourceB x
            [x@FalseS,_] -> sourceB x
            [_,y@FalseS] -> sourceB y
+#if defined Idempotence
            [x,Eql(x)]   -> sourceB x
+#endif
            [x,NotS (Eql(x))] -> newVal False
            [NotS x,Eql(x)]   -> newVal False
            _            -> nothingA
@@ -706,7 +710,9 @@ instance BoolCat (:>) where
            [x,FalseS]   -> sourceB x
            [x@TrueS ,_] -> sourceB x
            [_,y@TrueS ] -> sourceB y
+#if defined Idempotence
            [x,Eql(x)]   -> sourceB x
+#endif
            [x,NotS (Eql(x))] -> newVal True
            [NotS x,Eql(x)]   -> newVal True
            -- not a || not b == not (a && b)
@@ -826,7 +832,7 @@ runU cir = getComps compInfo
  where
    compInfo :: CompInfo
    (_,compInfo) = execState (unmkCK cir UnitB) (PinId <$> [0 ..],mempty)
-#ifdef HashCons
+#if defined HashCons
    getComps = M.elems 
 #else
    getComps = map (,0)
@@ -872,10 +878,12 @@ outG = outGWith ("pdf","")
 
 renameC :: Unop String
 renameC = id
-#ifndef OptimizeCircuit
+#if !defined OptimizeCircuit
         . (++"-unopt")
+#elif !defined Idempotence
+        . (++"-no-idem")
 #endif
-#ifndef HashCons
+#if !defined HashCons
         . (++"-nohash")
 #endif
 
@@ -891,7 +899,7 @@ outGWith (outType,res) (renameC -> name) attrs circ =
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-#ifdef HashCons
+#if defined HashCons
    reused :: Map PrimName Reuses
    reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
 #endif
@@ -906,7 +914,7 @@ outGWith (outType,res) (renameC -> name) attrs circ =
           | otherwise  =
               printf "Components: %s.%s Depth: %d.\n"
                 (summary graph)
-#ifdef HashCons
+#if defined HashCons
                 (case showCounts (M.toList reused) of
                    ""  -> ""
                    str -> printf " Reuses: %s." str)
