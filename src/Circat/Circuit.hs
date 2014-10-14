@@ -777,7 +777,9 @@ instance NumCat (:>) Int where
 --   if' (b,(c `xor` a,a)) = (b && c) `xor` a
 --   if' (b,(a `xor` c,a)) = (b && c) `xor` a
 
+#if defined IfBotOpt
 pattern BottomS <- ConstS "undefined"
+#endif
 
 ifOpt :: SourceToBuses a => Opt a
 ifOpt = \ case
