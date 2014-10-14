@@ -2,7 +2,7 @@
 
 #define OptimizeCircuit
 #define Idempotence
-
+#define IfBotOpt
 #define HashCons
 
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
@@ -784,8 +784,10 @@ ifOpt = \ case
   [FalseS,_,a]  -> sourceB a
   [ TrueS,b,_]  -> sourceB b
   [_,a,Eql(a)]  -> sourceB a
+#if defined IfBotOpt
   [_,b,BottomS] -> sourceB b
   [_,BottomS,c] -> sourceB c
+#endif
   _             -> nothingA
 
 ifOptB :: Opt Bool
@@ -880,11 +882,16 @@ renameC :: Unop String
 renameC = id
 #if !defined OptimizeCircuit
         . (++"-unopt")
-#elif !defined Idempotence
+#else
+#if !defined Idempotence
         . (++"-no-idem")
 #endif
 #if !defined HashCons
-        . (++"-nohash")
+        . (++"-no-hash")
+#endif
+#if !defined IfBotOpt
+        . (++"-no-ifbot")
+#endif
 #endif
 
 outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
