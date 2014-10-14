@@ -1,9 +1,10 @@
 {-# LANGUAGE CPP #-}
 
-#define OptimizeCircuit
-#define Idempotence
-#define IfBotOpt
-#define HashCons
+-- #define NoOptimizeCircuit
+
+-- #define NoIdempotence
+-- #define NoIfBotOpt
+-- #define NoHashCons
 
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
@@ -320,7 +321,7 @@ data Comp = forall a b. Comp (Prim a b) (Buses a) (Buses b)
 deriving instance Show Comp
 
 type Reuses = Int
-#if defined HashCons
+#if !defined NoHashCons
 -- Tracks prim applications (including output type) and reuses per component.
 type CompInfo = Map (PrimName,[Source],Ty) (Comp,Reuses)
 #else
@@ -334,7 +335,7 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 
 -- Instantiate a 'Prim'
 genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
-#if defined HashCons
+#if !defined NoHashCons
 genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
                     case mb of
                       Just (Comp _ _ b', _) ->
@@ -452,7 +453,7 @@ orOpt f g a = do mb <- f a
                    Just _  -> return mb
 
 primOpt, primOptSort :: GenBuses b => String -> Opt b -> a :> b
-#if defined OptimizeCircuit
+#if !defined NoOptimizeCircuit
 primOpt name opt =
   mkCK $ \ a -> let plain = genComp (Prim name) a in
                   case flattenMb a of
@@ -699,7 +700,7 @@ instance BoolCat (:>) where
            [x,TrueS ]   -> sourceB x
            [x@FalseS,_] -> sourceB x
            [_,y@FalseS] -> sourceB y
-#if defined Idempotence
+#if !defined NoIdempotence
            [x,Eql(x)]   -> sourceB x
 #endif
            [x,NotS (Eql(x))] -> newVal False
@@ -710,7 +711,7 @@ instance BoolCat (:>) where
            [x,FalseS]   -> sourceB x
            [x@TrueS ,_] -> sourceB x
            [_,y@TrueS ] -> sourceB y
-#if defined Idempotence
+#if !defined NoIdempotence
            [x,Eql(x)]   -> sourceB x
 #endif
            [x,NotS (Eql(x))] -> newVal True
@@ -777,7 +778,7 @@ instance NumCat (:>) Int where
 --   if' (b,(c `xor` a,a)) = (b && c) `xor` a
 --   if' (b,(a `xor` c,a)) = (b && c) `xor` a
 
-#if defined IfBotOpt
+#if !defined NoIfBotOpt
 pattern BottomS <- ConstS "undefined"
 #endif
 
@@ -786,7 +787,7 @@ ifOpt = \ case
   [FalseS,_,a]  -> sourceB a
   [ TrueS,b,_]  -> sourceB b
   [_,a,Eql(a)]  -> sourceB a
-#if defined IfBotOpt
+#if !defined NoIfBotOpt
   [_,b,BottomS] -> sourceB b
   [_,BottomS,c] -> sourceB c
 #endif
@@ -836,7 +837,7 @@ runU cir = getComps compInfo
  where
    compInfo :: CompInfo
    (_,compInfo) = execState (unmkCK cir UnitB) (PinId <$> [0 ..],mempty)
-#if defined HashCons
+#if !defined NoHashCons
    getComps = M.elems 
 #else
    getComps = map (,0)
@@ -882,16 +883,16 @@ outG = outGWith ("pdf","")
 
 renameC :: Unop String
 renameC = id
-#if !defined OptimizeCircuit
+#if defined NoOptimizeCircuit
         . (++"-unopt")
 #else
-#if !defined Idempotence
+#if defined NoIdempotence
         . (++"-no-idem")
 #endif
-#if !defined HashCons
+#if defined NoHashCons
         . (++"-no-hash")
 #endif
-#if !defined IfBotOpt
+#if defined NoIfBotOpt
         . (++"-no-ifbot")
 #endif
 #endif
@@ -908,7 +909,7 @@ outGWith (outType,res) (renameC -> name) attrs circ =
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-#if defined HashCons
+#if !defined NoHashCons
    reused :: Map PrimName Reuses
    reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
 #endif
@@ -923,7 +924,7 @@ outGWith (outType,res) (renameC -> name) attrs circ =
           | otherwise  =
               printf "Components: %s.%s Depth: %d.\n"
                 (summary graph)
-#if defined HashCons
+#if !defined NoHashCons
                 (case showCounts (M.toList reused) of
                    ""  -> ""
                    str -> printf " Reuses: %s." str)
