@@ -29,7 +29,7 @@ import Data.Functor.Identity (Identity(..))
 
 -- import Data.Constraint
 
-import Circat.Misc ((:*))
+import Circat.Misc ((:*),(:+))
 import TypeUnary.TyNat (Z,S)
 import TypeUnary.Nat (Nat(..),IsNat(..))
 import TypeUnary.Vec (Vec(..))
@@ -111,11 +111,23 @@ instance HasRep (Maybe a) where
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
 
--- TODO: Move the boolean flag to the left part of the representation.
-
 bottom :: a
 bottom = error "bottom: Bottom!"
 {-# NOINLINE bottom #-}
 
 -- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs, add
--- a string argument, and tweak the reification.
+-- a string argument and tweak the reification.
+
+-- Generalize Maybe to sums:
+
+type instance Rep (a :+ b) = Bool :* (a :* b)
+instance HasRep (a :+ b) where
+  repr (Left  a) = (False,(a,bottom)) -- error "repr on Maybe: undefined value"
+  repr (Right b) = (True,(bottom,b))
+  abst (False,(a,_)) = Left  a
+  abst (True ,(_,b)) = Right b
+
+-- -- TODO: Redefine `Maybe` representation as sum:
+-- 
+-- type instance Rep (Maybe a) = Unit :+ a
+-- ...
