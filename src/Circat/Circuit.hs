@@ -2,8 +2,8 @@
 
 -- #define NoOptimizeCircuit
 
--- #define NoIdempotence
 -- #define NoIfBotOpt
+-- #define NoIdempotence
 -- #define NoHashCons
 
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
@@ -1621,6 +1621,7 @@ instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
 AbsTy((a,b,c))
 AbsTy((a,b,c,d))
 AbsTy(Maybe a)
+AbsTy(Either a b)
 AbsTy(Pair a)
 AbsTy(Vec Z a)
 AbsTy(Vec (S n) a)
