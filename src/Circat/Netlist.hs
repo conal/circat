@@ -121,11 +121,7 @@ moduleAssign p2w (CompS _ name [] [o@(Bus _ width)] _) =
     val = case name of 
             "True"      -> ExprBit T
             "False"     -> ExprBit F
-            "undefined" -> -- Replace with default value
-                           case width of
-                             1  -> ExprBit F
-                             32 -> ExprNum 0
-                             n  -> err $ "undefined of width " ++ show n
+            "undefined" -> ExprNum 0  -- default
             _           ->
               case reads name of
                 [(n :: Int,"")] -> ExprNum (fromIntegral n)
