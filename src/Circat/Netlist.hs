@@ -33,7 +33,7 @@ import Circat.Circuit
   , Width, PinId, Bus(..) )
 
 import Language.Netlist.AST
-  ( Module(..), Decl(..), Expr(..), ExprLit (..), Range(..)
+  ( Module(..), Decl(..), Expr(..), ExprLit (..), Bit(..), Range(..)
   , BinaryOp(..), UnaryOp(..), Ident, Range )
 
 import Language.Netlist.GenVHDL(genVHDL)
@@ -115,21 +115,22 @@ moduleAssign p2w c@(CompS _ name [i] [o] _) =
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
                   ++ show name ++ " not supported." ++ show c
 
-#if 0
--- Now handled in sourceExp
--- constant sources
-moduleAssign p2w (_,(name,[],[o])) = 
+moduleAssign p2w (CompS _ name [] [o@(Bus _ width)] _) = 
   [NetAssign (busName p2w o) (ExprLit Nothing val)]
   where 
     val = case name of 
-            "True"  -> ExprBit T
-            "False" -> ExprBit F
-            _       ->
+            "True"      -> ExprBit T
+            "False"     -> ExprBit F
+            "undefined" -> -- Replace with default value
+                           case width of
+                             1  -> ExprBit F
+                             32 -> ExprNum 0
+                             n  -> err $ "undefined of width " ++ show n
+            _           ->
               case reads name of
                 [(n :: Int,"")] -> ExprNum (fromIntegral n)
-                _ -> error $ "Circat.Netlist.moduleAssign: Literal "
-                              ++ name ++ " not recognized."
-#endif
+                _ -> err $ "Literal " ++ name ++ " not recognized."
+    err = error . ("Circat.Netlist.moduleAssign: " ++)
 
 -- output assignments
 moduleAssign p2w (CompS _ "Out" ps [] _) =
