@@ -115,7 +115,7 @@ moduleAssign p2w c@(CompS _ name [i] [o] _) =
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
                   ++ show name ++ " not supported." ++ show c
 
-moduleAssign p2w (CompS _ name [] [o@(Bus _ width)] _) = 
+moduleAssign p2w (CompS _ name [] [o] _) = 
   [NetAssign (busName p2w o) (ExprLit Nothing val)]
   where 
     val = case name of 
