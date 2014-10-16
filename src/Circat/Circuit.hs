@@ -55,6 +55,10 @@ module Circat.Circuit
   , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
   , simpleComp, tagged
   , systemSuccess
+
+  -- Experiment
+  , BusesT(..)
+
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -181,6 +185,67 @@ data Buses :: * -> * where
 -- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
 --   -- Undefined, for Nothing and perhaps more general sums
 --   BotB   :: Buses a                     -- *** Phasing out ***
+
+-- Experiment
+#if 1
+
+data BusesT = forall a. BusesT (Buses a)
+
+instance Eq BusesT where BusesT a == BusesT b = a === b
+
+instance Eq' (Buses a) (Buses b) where
+  UnitB     === UnitB       = True
+  BoolB s   === BoolB s'    = s == s'
+  IntB  s   === IntB  s'    = s == s'
+  PairB a b === PairB a' b' = a === a' && b === b'
+  FunB _    === FunB _      = False -- Note
+  IsoB p    === IsoB q      = p === q
+  _         === _           = False
+
+instance Ord BusesT where BusesT a `compare` BusesT b = a <?> b
+
+(<?>) :: Buses a -> Buses b -> Ordering
+
+UnitB      <?> UnitB       = EQ
+UnitB      <?> _           = LT
+
+BoolB _    <?> UnitB       = GT
+BoolB s    <?> BoolB s'    = s `compare` s'
+BoolB _    <?> _           = LT
+
+IntB _     <?> UnitB       = GT
+IntB _     <?> BoolB _     = GT
+IntB s     <?> IntB  s'    = s `compare` s'
+IntB _     <?> _           = LT
+
+PairB _  _ <?> UnitB       = GT
+PairB _  _ <?> BoolB _     = GT
+PairB _  _ <?> IntB _      = GT
+PairB a b  <?> PairB a' b' = a <?> a' <> b <?> b'
+PairB _  _ <?> _           = LT
+
+FunB _     <?> UnitB       = GT
+FunB _     <?> BoolB _     = GT
+FunB _     <?> IntB _      = GT
+FunB _     <?> PairB _ _   = GT
+FunB _     <?> FunB _      = LT  -- Bail here
+FunB _     <?> _           = LT
+
+IsoB _     <?> UnitB       = GT
+IsoB _     <?> BoolB _     = GT
+IsoB _     <?> IntB _      = GT
+IsoB _     <?> FunB _      = GT
+IsoB _     <?> PairB _ _   = GT
+IsoB c     <?> IsoB c'     = c <?> c'
+
+-- Alternatively, add a `Typeable` constraint. Compare typereps first. If the
+-- same, safely cast one to the other, and then compare with many fewer cases.
+-- For each constructor, if the result types are the same, then the argument
+-- types must be as well.
+
+data Source' = Source Bus PrimName BusesT Int
+
+#endif
 
 #if 0
 -- Equality. Easy hack: derive Eq, but say that circuits are never equal.
