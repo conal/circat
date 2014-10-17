@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 
--- #define NoOptimizeCircuit
+#define Flatten
+
+#define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -55,10 +57,9 @@ module Circat.Circuit
   , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
   , simpleComp, tagged
   , systemSuccess
-
-  -- Experiment
+#if !defined Flatten
   , BusesT(..)
-
+#endif
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -131,7 +132,15 @@ data Bus = Bus PinId Width
 -- | An information source: its bus and a description of its construction, which
 -- contains the primitive, argument sources, and which output of that
 -- application (usually 0th).
-data Source = Source Bus PrimName [Source] Int
+
+type Sources = 
+#if defined Flatten
+               [Source]
+#else
+               BusesT
+#endif
+
+data Source = Source Bus PrimName Sources Int
 
 -- undefinedSource :: Width -> Source
 -- undefinedSource w = Source (undefinedBus w) "undefined" [] 0
@@ -163,7 +172,7 @@ newPinId = do { (p:ps',comps) <- Mtl.get ; Mtl.put (ps',comps) ; return p }
 newBus :: Width -> CircuitM Bus
 newBus w = flip Bus w <$> newPinId
 
-newSource ::  Width -> String -> [Source] -> Int -> CircuitM Source
+newSource ::  Width -> String -> Sources -> Int -> CircuitM Source
 newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
 
 {--------------------------------------------------------------------
@@ -187,7 +196,7 @@ data Buses :: * -> * where
 --   BotB   :: Buses a                     -- *** Phasing out ***
 
 -- Experiment
-#if 1
+#if !defined Flatten
 
 data BusesT = forall a. BusesT (Buses a)
 
@@ -198,52 +207,50 @@ instance Eq' (Buses a) (Buses b) where
   BoolB s   === BoolB s'    = s == s'
   IntB  s   === IntB  s'    = s == s'
   PairB a b === PairB a' b' = a === a' && b === b'
-  FunB _    === FunB _      = False -- Note
+  FunB _    === FunB _      = False     -- Bail
   IsoB p    === IsoB q      = p === q
   _         === _           = False
 
-instance Ord BusesT where BusesT a `compare` BusesT b = a <?> b
+instance Ord BusesT where BusesT a `compare` BusesT b = a >< b
 
-(<?>) :: Buses a -> Buses b -> Ordering
+(><) :: Buses a -> Buses b -> Ordering
 
-UnitB      <?> UnitB       = EQ
-UnitB      <?> _           = LT
+UnitB      >< UnitB       = EQ
+UnitB      >< _           = LT
 
-BoolB _    <?> UnitB       = GT
-BoolB s    <?> BoolB s'    = s `compare` s'
-BoolB _    <?> _           = LT
+BoolB _    >< UnitB       = GT
+BoolB s    >< BoolB s'    = s `compare` s'
+BoolB _    >< _           = LT
 
-IntB _     <?> UnitB       = GT
-IntB _     <?> BoolB _     = GT
-IntB s     <?> IntB  s'    = s `compare` s'
-IntB _     <?> _           = LT
+IntB _     >< UnitB       = GT
+IntB _     >< BoolB _     = GT
+IntB s     >< IntB  s'    = s `compare` s'
+IntB _     >< _           = LT
 
-PairB _  _ <?> UnitB       = GT
-PairB _  _ <?> BoolB _     = GT
-PairB _  _ <?> IntB _      = GT
-PairB a b  <?> PairB a' b' = a <?> a' <> b <?> b'
-PairB _  _ <?> _           = LT
+PairB _  _ >< UnitB       = GT
+PairB _  _ >< BoolB _     = GT
+PairB _  _ >< IntB _      = GT
+PairB a b  >< PairB a' b' = a >< a' <> b >< b'
+PairB _  _ >< _           = LT
 
-FunB _     <?> UnitB       = GT
-FunB _     <?> BoolB _     = GT
-FunB _     <?> IntB _      = GT
-FunB _     <?> PairB _ _   = GT
-FunB _     <?> FunB _      = LT  -- Bail here
-FunB _     <?> _           = LT
+FunB _     >< UnitB       = GT
+FunB _     >< BoolB _     = GT
+FunB _     >< IntB _      = GT
+FunB _     >< PairB _ _   = GT
+FunB _     >< FunB _      = LT         -- Bail
+FunB _     >< _           = LT
 
-IsoB _     <?> UnitB       = GT
-IsoB _     <?> BoolB _     = GT
-IsoB _     <?> IntB _      = GT
-IsoB _     <?> FunB _      = GT
-IsoB _     <?> PairB _ _   = GT
-IsoB c     <?> IsoB c'     = c <?> c'
+IsoB _     >< UnitB       = GT
+IsoB _     >< BoolB _     = GT
+IsoB _     >< IntB _      = GT
+IsoB _     >< FunB _      = GT
+IsoB _     >< PairB _ _   = GT
+IsoB c     >< IsoB c'     = c >< c'
 
 -- Alternatively, add a `Typeable` constraint. Compare typereps first. If the
 -- same, safely cast one to the other, and then compare with many fewer cases.
 -- For each constructor, if the result types are the same, then the argument
 -- types must be as well.
-
-data Source' = Source Bus PrimName BusesT Int
 
 #endif
 
@@ -282,15 +289,15 @@ instance Show (Buses a) where
 
 data Ty = UnitT | BoolT | IntT | PairT Ty Ty deriving (Eq,Ord)
 
-genBuses :: GenBuses b => Prim a b -> [Source] -> CircuitM (Buses b)
+genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
 genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
-  genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+  genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
   ty        :: a -> Ty                         -- dummy argument
 
 genBus :: (Source -> Buses a) -> Width
-       -> String -> [Source] -> Int -> CircuitM (Buses a,Int)
+       -> String -> Sources -> Int -> CircuitM (Buses a,Int)
 genBus wrap w prim ins o = do src <- newSource w prim ins o
                               return (wrap src,o+1)
 
@@ -315,7 +322,13 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
        return (PairB a b, ob)
   ty ~(a,b) = PairT (ty a) (ty b)
 
-flattenMb :: Buses a -> Maybe [Source]
+flattenB :: String -> Buses a -> Sources
+#ifdef Flatten
+flattenB name b = fromMaybe err (flattenMb b)
+ where
+   err = error $ "flattenB/"++name++": unhandled " ++ show b
+
+flattenMb :: Buses a -> Maybe Sources
 flattenMb = fmap toList . flat
  where
    flat :: Buses a -> Maybe (Seq Source)
@@ -325,11 +338,9 @@ flattenMb = fmap toList . flat
    flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
    flat _           = Nothing
-
-flattenB :: String -> Buses a -> [Source]
-flattenB name b = fromMaybe err (flattenMb b)
- where
-   err = error $ "flattenB/"++name++": unhandled " ++ show b
+#else
+flattenB _ = BusesT
+#endif
 
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
@@ -388,7 +399,7 @@ deriving instance Show Comp
 type Reuses = Int
 #if !defined NoHashCons
 -- Tracks prim applications (including output type) and reuses per component.
-type CompInfo = Map (PrimName,[Source],Ty) (Comp,Reuses)
+type CompInfo = Map (PrimName,Sources,Ty) (Comp,Reuses)
 #else
 type CompInfo = [Comp]
 #endif
@@ -435,9 +446,6 @@ constComp str = const (constComp' str)
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
-constM' b = constComp' (show b)
-
 constM :: (Show b, GenBuses b) => b -> BCirc a b
 constM b = constComp (show b)
 
@@ -475,14 +483,15 @@ inCK2 :: (BCirc a a' -> BCirc b b' -> BCirc c c')
       -> ((a :> a') -> (b :> b') -> (c :> c'))
 inCK2 = inCK <~ unmkCK
 
--- primC :: GenBuses b => Prim a b -> a :> b
--- primC = mkCK . genComp
-
 namedC :: GenBuses b => String -> a :> b
--- namedC = primC . Prim
+#if defined OptimizeCircuit
 namedC name = primOpt name noOpt
+#else
+namedC = mkCK . genComp . Prim
+#endif
 
-type Opt b = [Source] -> CircuitM (Maybe (Buses b))
+#ifdef OptimizeCircuit
+type Opt b = Sources -> CircuitM (Maybe (Buses b))
 
 justA :: Applicative f => a -> f (Maybe a)
 justA = pure . Just
@@ -506,6 +515,9 @@ newComp3 cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses
 
 newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
+
+constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+constM' b = constComp' (show b)
 
 noOpt :: Opt b
 noOpt = const nothingA
@@ -543,6 +555,9 @@ primOptSort name opt = primOpt name opt . tryCommute
 #else
 primOpt name _ = mkCK (genComp (Prim name))
 primOptSort = primOpt
+#endif
+
+// defined Flatten
 #endif
 
 -- | Constant circuit from source generator (experimental)
@@ -730,12 +745,7 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
-
--- instance BoolCat (:>) where
---   not = namedC "not"
---   and = namedC "and"
---   or  = namedC "or"
---   xor = namedC "xor"
+#if defined OptimizeCircuit
 
 pattern ConstS name <- Source _ name [] 0
 pattern Val x     <- ConstS (reads -> [(x,"")])
@@ -796,11 +806,20 @@ instance BoolCat (:>) where
            [NotS x,Eql(x)]   -> newVal True
            _            -> nothingA
 
+#else
+instance BoolCat (:>) where
+  notC = namedC "not"
+  andC = namedC "and"
+  orC  = namedC "or"
+  xorC = namedC "xor"
+#endif
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
+
+#if defined OptimizeCircuit
 
 pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
@@ -819,8 +838,15 @@ instance NumCat (:>) Int where
          [_,y@ZeroS]    -> sourceB y
          _              -> nothingA
 
--- TODO: Some optimizations drop results. Make another pass to remove unused
--- components (recursively).
+#else
+
+instance NumCat (:>) Int where
+ add = namedC "add"
+ mul = namedC "mul"
+
+#endif
+
+#if defined OptimizeCircuit
 
 -- Simplifications for all types:
 -- 
@@ -872,8 +898,30 @@ ifOptB = \ case
   [b,a `XorS` c,Eql(a)]  -> newComp3 (xorC . first andC) b c a -- ''
   _                      -> nothingA
 
+#if !defined NoIfBotOpt
+pattern BottomS <- ConstS "undefined"
+#endif
+
+ifOpt :: SourceToBuses a => Opt a
+ifOpt = \ case
+  [FalseS,_,a]  -> sourceB a
+  [ TrueS,b,_]  -> sourceB b
+  [_,a,Eql(a)]  -> sourceB a
+#if !defined NoIfBotOpt
+  [_,b,BottomS] -> sourceB b
+  [_,BottomS,c] -> sourceB c
+#endif
+  _             -> nothingA
+
 instance IfCat (:>) Bool where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
 instance IfCat (:>) Int  where ifC = primOpt "if" ifOpt
+
+#else
+
+instance IfCat (:>) Bool where ifC = namedC "if"
+instance IfCat (:>) Int  where ifC = namedC "if"
+
+#endif
 
 instance IfCat (:>) Unit where ifC = unitIf
 
@@ -908,7 +956,7 @@ runU cir = getComps compInfo
    getComps = map (,0)
 #endif
 
--- type CompInfo = Map (PrimName,[Source]) (Comp,Int)
+-- type CompInfo = Map (PrimName,Sources) (Comp,Int)
 -- type CircuitM = State (PinSupply, CompInfo)
 
 
@@ -1100,6 +1148,10 @@ simpleComp (n, (Comp prim a b,reuses)) = CompS n name (flat a) (flat b) reuses
    name = show prim
    flat :: forall t. Buses t -> [Bus]
    flat = map sourceBus . flattenB name
+
+
+-- Working here in converting away from flattening
+
 
 data Dir = In | Out deriving Show
 type PortNum = Int
@@ -1656,7 +1708,7 @@ instance DistribCat (:>) where
 -- not removed during compilation).
 
 genBusesRep' :: GenBuses (Rep a) =>
-                String -> [Source] -> Int -> CircuitM (Buses a,Int)
+                String -> Sources -> Int -> CircuitM (Buses a,Int)
 genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
 
 bottomRep :: (HasRep a, BottomCat (:>) (Rep a)) => Unit :> a
@@ -1668,7 +1720,7 @@ tyRep = const (ty (undefined :: Rep a))
 #if 0
 
 -- class GenBuses a where
---   genBuses' :: String -> [Source] -> Int -> CircuitM (Buses a,Int)
+--   genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
