@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification, TupleSections, TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
@@ -21,6 +22,7 @@ module Circat.Mealy where
 -- TODO: explicit exports
 
 import Prelude hiding (id,(.))
+import Data.Tuple (swap)
 
 import Circat.Misc ((:*),(:+))
 import Circat.Category
@@ -98,6 +100,7 @@ transS2 (Right (Right s)) = Right (Right s)
 transS2' :: ((p :+ q) :+ (r :+ s)) -> ((p :+ r) :+ (q :+ s))
 transS2' = (inl.inl ||| inr.inl) ||| (inl.inr ||| inr.inr)
 
+#if 0
 instance ClosedCat Mealy where
   apply = arr apply
   curry (Mealy (f :: (s,(a,b)) -> (s,c)) s0) = Mealy g s0
@@ -111,3 +114,67 @@ curry f :: s -> (a,b) -> (s,c)
 curry . curry f :: s -> a -> b -> (s,c)
 uncurry (curry . curry f) :: (s,a) -> b -> (s,c)
 need :: (s,a) -> (s,b -> c)
+#endif
+
+delay :: a -> Mealy a a
+delay = Mealy swap
+-- delay a = Mealy (\ (s,a) -> (a,s)) a
+
+loop' :: Mealy (a,c) (b,c) -> Mealy a b
+loop' (Mealy f s0) = Mealy g t0
+ where
+   t0 = (s0,error "missing initial c")
+   g ((s,c),a) = ((s',c'),b)
+    where
+      (s',(b,c')) = f (s,(a,c))
+
+#if 0
+f :: (s,(a,c)) -> (s,(b,c))
+s0 :: s
+
+g :: ((s,c),a) -> ((s,c),b)
+t0 :: (s,c)
+#endif
+
+
+loop :: Mealy (a,c) (b,c) -> Mealy a b
+loop (Mealy f s0) = Mealy g s0
+ where
+   g (s,a) = (s',b)
+    where
+      (s',(b,c)) = f (s,(a,c))
+
+
+-- Try combining loop and delay:
+
+loopDelay :: Mealy (a,c) (b,c) -> c -> Mealy a b
+-- loopDelay m c0 = loop (m . second (delay c0))
+
+loopDelay (Mealy f s0) c0 = Mealy g (s0,c0)
+ where
+   g ((s,c),a) = ((s',c'),b)
+    where
+      (s',(b,c')) = f (s,(a,c))
+
+
+----
+
+type LF a b = [a] -> [b]
+
+delayL :: a -> LF a a
+delayL = (:)
+
+loopL :: LF (a,c) (b,c) -> LF a b
+loopL f as = bs
+ where
+   (bs,cs) = unzip (f (zip as cs))
+
+-- f :: [(a,c)] -> [(b,c)]
+
+-- want :: [a] -> [b]
+
+
+
+
+
+-- data Mealy a b = forall s. Mealy ((s,a) -> (s,b)) s
