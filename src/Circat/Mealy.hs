@@ -7,6 +7,8 @@
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
+#define CircuitConstraint
+
 ----------------------------------------------------------------------
 -- |
 -- Module      :  Circat.Mealy
@@ -30,9 +32,19 @@ import Control.Arrow
 
 import Circat.Misc (dup)
 
+#ifdef CircuitConstraint
+import Circat.Circuit (GenBuses(..))
+#endif
+
 {--------------------------------------------------------------------
     Experiment with constraining s
 --------------------------------------------------------------------}
+
+#ifdef CircuitConstraint
+
+type C = GenBuses
+
+#else
 
 class C s
 
@@ -40,6 +52,8 @@ instance C ()
 instance (C a, C b) => C (a,b)
 instance C Bool
 instance C Int
+
+#endif
 
 --------------------------------------------------------------------
 
