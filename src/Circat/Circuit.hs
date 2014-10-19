@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-#define Flatten
-
-#define NoOptimizeCircuit
+-- #define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -57,9 +55,6 @@ module Circat.Circuit
   , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
   , simpleComp, tagged
   , systemSuccess
-#if !defined Flatten
-  , BusesT(..)
-#endif
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -133,12 +128,7 @@ data Bus = Bus PinId Width
 -- contains the primitive, argument sources, and which output of that
 -- application (usually 0th).
 
-type Sources = 
-#if defined Flatten
-               [Source]
-#else
-               BusesT
-#endif
+type Sources = [Source]
 
 data Source = Source Bus PrimName Sources Int
 
@@ -190,76 +180,7 @@ data Buses :: * -> * where
   -- | Isomorphic form. Note: b must not have one of the standard forms.
   -- If it does, we'll get a run-time error when consuming.
   IsoB   :: Buses (Rep a) -> Buses a
--- -- Alternatively,
--- IsoB  :: Rep a ~ a' => Buses a' -> Buses a
---   -- Undefined, for Nothing and perhaps more general sums
---   BotB   :: Buses a                     -- *** Phasing out ***
 
--- Experiment
-#if !defined Flatten
-
-data BusesT = forall a. BusesT (Buses a)
-
-instance Eq BusesT where BusesT a == BusesT b = a === b
-
-instance Eq' (Buses a) (Buses b) where
-  UnitB     === UnitB       = True
-  BoolB s   === BoolB s'    = s == s'
-  IntB  s   === IntB  s'    = s == s'
-  PairB a b === PairB a' b' = a === a' && b === b'
-  FunB _    === FunB _      = False     -- Bail
-  IsoB p    === IsoB q      = p === q
-  _         === _           = False
-
-instance Ord BusesT where BusesT a `compare` BusesT b = a >< b
-
-(><) :: Buses a -> Buses b -> Ordering
-
-UnitB      >< UnitB       = EQ
-UnitB      >< _           = LT
-
-BoolB _    >< UnitB       = GT
-BoolB s    >< BoolB s'    = s `compare` s'
-BoolB _    >< _           = LT
-
-IntB _     >< UnitB       = GT
-IntB _     >< BoolB _     = GT
-IntB s     >< IntB  s'    = s `compare` s'
-IntB _     >< _           = LT
-
-PairB _  _ >< UnitB       = GT
-PairB _  _ >< BoolB _     = GT
-PairB _  _ >< IntB _      = GT
-PairB a b  >< PairB a' b' = a >< a' <> b >< b'
-PairB _  _ >< _           = LT
-
-FunB _     >< UnitB       = GT
-FunB _     >< BoolB _     = GT
-FunB _     >< IntB _      = GT
-FunB _     >< PairB _ _   = GT
-FunB _     >< FunB _      = LT         -- Bail
-FunB _     >< _           = LT
-
-IsoB _     >< UnitB       = GT
-IsoB _     >< BoolB _     = GT
-IsoB _     >< IntB _      = GT
-IsoB _     >< FunB _      = GT
-IsoB _     >< PairB _ _   = GT
-IsoB c     >< IsoB c'     = c >< c'
-
--- Alternatively, add a `Typeable` constraint. Compare typereps first. If the
--- same, safely cast one to the other, and then compare with many fewer cases.
--- For each constructor, if the result types are the same, then the argument
--- types must be as well.
-
-#endif
-
-#if 0
--- Equality. Easy hack: derive Eq, but say that circuits are never equal.
--- TODO: reconsider.
-deriving instance Eq (Buses a)
-instance Eq (a :> b) where _ == _ = False
-#else
 instance Eq (Buses a) where
   UnitB     == UnitB        = True
   BoolB s   == BoolB s'     = s == s'
@@ -268,7 +189,6 @@ instance Eq (Buses a) where
   IsoB r    == IsoB r'      = r == r'
   FunB _    == FunB _       = False             -- TODO: reconsider
   _         == _            = False
-#endif
 
 -- deriving instance Typeable Buses
 -- deriving instance Show (Buses a)
@@ -280,10 +200,8 @@ instance Show (Buses a) where
   show (BoolB b)    = show b
   show (IntB b)     = show b
   show (PairB a b)  = "("++show a++","++show b++")"
---   show (MaybeB a b) = "(MaybeB "++show a++" "++show b++")"
   show (FunB _)     = "<function>"
   show (IsoB b)     = "IsoB ("++show b++")"
---   show BotB         = "BotB"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -323,7 +241,6 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   ty ~(a,b) = PairT (ty a) (ty b)
 
 flattenB :: String -> Buses a -> Sources
-#ifdef Flatten
 flattenB name b = fromMaybe err (flattenMb b)
  where
    err = error $ "flattenB/"++name++": unhandled " ++ show b
@@ -338,19 +255,9 @@ flattenMb = fmap toList . flat
    flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
    flat _           = Nothing
-#else
-flattenB _ = BusesT
-#endif
 
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
-
--- botErr :: String -> x
--- botErr nm = error (nm ++ ": BotB")
-
--- unUnitB :: Buses Unit -> Unit
--- unUnitB UnitB = ()
--- unUnitB (IsoB _) = isoErr "unUnitB"
 
 pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
@@ -358,12 +265,10 @@ pairB (a,b) = PairB a b
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 unPairB (PairB a b) = (a,b)
 unPairB (IsoB _)    = isoErr "unPairB"
--- unPairB BotB        = botErr "unPairB"
 
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
 unFunB (IsoB _)    = isoErr "unFunB"
--- unFunB BotB        = botErr "unFunB"
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -484,13 +389,8 @@ inCK2 :: (BCirc a a' -> BCirc b b' -> BCirc c c')
 inCK2 = inCK <~ unmkCK
 
 namedC :: GenBuses b => String -> a :> b
-#if defined OptimizeCircuit
 namedC name = primOpt name noOpt
-#else
-namedC = mkCK . genComp . Prim
-#endif
 
-#ifdef OptimizeCircuit
 type Opt b = Sources -> CircuitM (Maybe (Buses b))
 
 justA :: Applicative f => a -> f (Maybe a)
@@ -523,7 +423,6 @@ noOpt :: Opt b
 noOpt = const nothingA
 
 orOpt :: Binop (Opt b)
-
 orOpt f g a = do mb <- f a
                  case mb of
                    Nothing -> g a
@@ -555,9 +454,6 @@ primOptSort name opt = primOpt name opt . tryCommute
 #else
 primOpt name _ = mkCK (genComp (Prim name))
 primOptSort = primOpt
-#endif
-
-// defined Flatten
 #endif
 
 -- | Constant circuit from source generator (experimental)
@@ -745,8 +641,6 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
-#if defined OptimizeCircuit
-
 pattern ConstS name <- Source _ name [] 0
 pattern Val x     <- ConstS (reads -> [(x,"")])
 
@@ -806,20 +700,18 @@ instance BoolCat (:>) where
            [NotS x,Eql(x)]   -> newVal True
            _            -> nothingA
 
-#else
-instance BoolCat (:>) where
-  notC = namedC "not"
-  andC = namedC "and"
-  orC  = namedC "or"
-  xorC = namedC "xor"
-#endif
+
+-- instance BoolCat (:>) where
+--   notC = namedC "not"
+--   andC = namedC "and"
+--   orC  = namedC "or"
+--   xorC = namedC "xor"
+
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
-
-#if defined OptimizeCircuit
 
 pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
@@ -838,15 +730,9 @@ instance NumCat (:>) Int where
          [_,y@ZeroS]    -> sourceB y
          _              -> nothingA
 
-#else
-
-instance NumCat (:>) Int where
- add = namedC "add"
- mul = namedC "mul"
-
-#endif
-
-#if defined OptimizeCircuit
+-- instance NumCat (:>) Int where
+--  add = namedC "add"
+--  mul = namedC "mul"
 
 -- Simplifications for all types:
 -- 
@@ -868,21 +754,6 @@ instance NumCat (:>) Int where
 --   if' (c,(a,not a))     = c `xor` not a
 --   if' (b,(c `xor` a,a)) = (b && c) `xor` a
 --   if' (b,(a `xor` c,a)) = (b && c) `xor` a
-
-#if !defined NoIfBotOpt
-pattern BottomS <- ConstS "undefined"
-#endif
-
-ifOpt :: SourceToBuses a => Opt a
-ifOpt = \ case
-  [FalseS,_,a]  -> sourceB a
-  [ TrueS,b,_]  -> sourceB b
-  [_,a,Eql(a)]  -> sourceB a
-#if !defined NoIfBotOpt
-  [_,b,BottomS] -> sourceB b
-  [_,BottomS,c] -> sourceB c
-#endif
-  _             -> nothingA
 
 ifOptB :: Opt Bool
 ifOptB = \ case
@@ -916,12 +787,8 @@ ifOpt = \ case
 instance IfCat (:>) Bool where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
 instance IfCat (:>) Int  where ifC = primOpt "if" ifOpt
 
-#else
-
-instance IfCat (:>) Bool where ifC = namedC "if"
-instance IfCat (:>) Int  where ifC = namedC "if"
-
-#endif
+-- instance IfCat (:>) Bool where ifC = namedC "if"
+-- instance IfCat (:>) Int  where ifC = namedC "if"
 
 instance IfCat (:>) Unit where ifC = unitIf
 
