@@ -25,7 +25,6 @@ import Data.Tuple (swap)
 
 import Control.Arrow
 import Control.Arrow.Operations
-import Control.Arrow.Transformer.Automaton
 
 import Circat.Misc ((:*))
 
@@ -78,15 +77,6 @@ runMealy (Mealy f s0) = go s0
    go _ []     = []
    go s (a:as) = b : go s' as where (s',b) = f (s,a)
 
--- For comparison
-type Aut = Automaton (->)
-
-runAut :: Aut a b -> [a] -> [b]
-runAut _ [] = []
-runAut (Automaton f) (a:as) = b : runAut aut' as
- where
-   (b,aut') = f a
-
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
@@ -136,19 +126,3 @@ _m3 = runMealy serialSum3 [1..10]
 -- [1,3,6,10,15,21,28,36,45,55]
 _m4 :: [Int]
 _m4 = runMealy serialSum4 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_a1 :: [Int]
-_a1 = runAut serialSum1 [1..10]
-
--- [0,1,3,6,10,15,21,28,36,45]
-_a2 :: [Int]
-_a2 = runAut serialSum2 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_a3 :: [Int]
-_a3 = runAut serialSum3 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_a4 :: [Int]
-_a4 = runAut serialSum4 [1..10]
