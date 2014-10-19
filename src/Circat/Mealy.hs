@@ -21,6 +21,7 @@ module Circat.Mealy (Mealy(..)) where
 
 import Prelude hiding (id,(.))
 import Control.Category
+import Control.Applicative ((<$>), Applicative(..))
 import Data.Tuple (swap)
 
 import Control.Arrow
@@ -29,6 +30,8 @@ import Control.Arrow.Operations
 import Circat.Misc ((:*))
 
 data Mealy a b = forall s. Mealy ((s,a) -> (s,b)) s
+
+-- TODO: Perhaps generalize Mealy to an arrow transformer.
 
 instance Category Mealy where
   id = Mealy id ()
@@ -78,6 +81,15 @@ runMealy (Mealy f s0) = go s0
    go s (a:as) = b : go s' as where (s',b) = f (s,a)
 
 {--------------------------------------------------------------------
+    Standard instances for arrows
+--------------------------------------------------------------------}
+
+instance Functor (Mealy a) where fmap = flip (>>^)
+instance Applicative (Mealy a) where
+  pure b = arr (const b)
+  fs <*> xs = uncurry ($) <$> (fs &&& xs)
+
+{--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
 
@@ -108,21 +120,47 @@ serialSum4 = proc a -> do rec old <- delay 0 -< new
                           returnA -< new
 
 -- [1,3,6,10,15,21,28,36,45,55]
-_m0 :: [Int]
-_m0 = runMealy serialSum0 [1..10]
+_ms0 :: [Int]
+_ms0 = runMealy serialSum0 [1..10]
 
 -- [1,3,6,10,15,21,28,36,45,55]
-_m1 :: [Int]
-_m1 = runMealy serialSum1 [1..10]
+_ms1 :: [Int]
+_ms1 = runMealy serialSum1 [1..10]
 
 -- [0,1,3,6,10,15,21,28,36,45]
-_m2 :: [Int]
-_m2 = runMealy serialSum2 [1..10]
+_ms2 :: [Int]
+_ms2 = runMealy serialSum2 [1..10]
 
 -- [1,3,6,10,15,21,28,36,45,55]
-_m3 :: [Int]
-_m3 = runMealy serialSum3 [1..10]
+_ms3 :: [Int]
+_ms3 = runMealy serialSum3 [1..10]
 
 -- [1,3,6,10,15,21,28,36,45,55]
-_m4 :: [Int]
-_m4 = runMealy serialSum4 [1..10]
+_ms4 :: [Int]
+_ms4 = runMealy serialSum4 [1..10]
+
+-- Counter
+
+counter0 :: Num a => Mealy () a
+counter0 = Mealy (\ (old,()) -> dup (old+1)) 0
+
+counter1 :: (ArrowCircuit k, Num a) => k () a
+counter1 = loop (arr (\ ((),tot) -> dup (tot+1)) . second (delay 0))
+
+counter2 :: (ArrowCircuit k, Num a) => k () a
+counter2 = proc () -> do rec old <- delay 0 -< new
+                             new <- returnA -< old + 1
+                         returnA -< new
+
+-- [1,2,3,4,5,6,7,8,9,10]
+_mc0 :: [Int]
+_mc0 = runMealy counter0 (replicate 10 ())
+
+-- [1,2,3,4,5,6,7,8,9,10]
+_mc1 :: [Int]
+_mc1 = runMealy counter1 (replicate 10 ())
+
+-- [1,2,3,4,5,6,7,8,9,10]
+_mc2 :: [Int]
+_mc2 = runMealy counter2 (replicate 10 ())
+
