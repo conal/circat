@@ -31,6 +31,9 @@ import Unsafe.Coerce (unsafeCoerce)     -- see below
 import Control.Newtype
 import Data.Proof.EQ ((:=:)(..))
 
+dup :: a -> (a,a)
+dup a = (a,a)
+
 infixr 3 `xor`
 
 xor :: Binop Bool
