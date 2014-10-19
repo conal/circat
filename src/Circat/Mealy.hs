@@ -18,7 +18,7 @@
 -- Mealy machines
 ----------------------------------------------------------------------
 
-module Circat.Mealy (Mealy(..)) where
+module Circat.Mealy (Mealy(..),ArrowCircuit(..),ArrowCircuitT) where
 
 import Prelude hiding (id,(.))
 import Control.Category
@@ -27,9 +27,8 @@ import Data.Tuple (swap)
 import GHC.Prim (Constraint)
 
 import Control.Arrow
-import Control.Arrow.Operations ()
 
-import Circat.Misc ((:*))
+import Circat.Misc (dup)
 
 {--------------------------------------------------------------------
     Experiment with constraining s
@@ -120,9 +119,6 @@ instance Applicative (Mealy a) where
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
-
-dup :: Arrow k => a `k` (a :* a)
-dup = id &&& id
 
 serialSum0 :: (C a, Num a) => Mealy a a
 serialSum0 = Mealy (\ (old,a) -> dup (old+a)) 0
