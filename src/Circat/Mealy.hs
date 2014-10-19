@@ -31,7 +31,7 @@ import Circat.Misc ((:*))
 
 data Mealy a b = forall s. Mealy ((s,a) -> (s,b)) s
 
--- TODO: Perhaps generalize Mealy to an arrow transformer.
+-- I could probably generalize Mealy to an arrow transformer.
 
 instance Category Mealy where
   id = Mealy id ()
@@ -46,12 +46,17 @@ instance Arrow Mealy where
   arr f = Mealy (second f) ()
   Mealy f s0 *** Mealy g t0 = Mealy h (s0,t0)
    where
-     h = transP2 . (f *** g) . transP2
+     h ((s,t),(a,b)) = ((s',t'),(c,d))
+      where
+        (s',c) = f (s,a)
+        (t',d) = g (t,b)
   first  f = f *** id
   second g = id *** g
 
-transP2 :: ((p :* q) :* (r :* s)) -> ((p :* r) :* (q :* s))
-transP2 ((p,q),(r,s)) = ((p,r),(q,s))
+--   Mealy f s0 *** Mealy g t0 = Mealy (transP2 . (f *** g) . transP2) (s0,t0)
+--
+-- transP2 :: ((p :* q) :* (r :* s)) -> ((p :* r) :* (q :* s))
+-- transP2 ((p,q),(r,s)) = ((p,r),(q,s))
 
 instance ArrowChoice Mealy where
   Mealy f s0 +++ Mealy g t0 = Mealy h (s0,t0)
@@ -163,4 +168,3 @@ _mc1 = runMealy counter1 (replicate 10 ())
 -- [1,2,3,4,5,6,7,8,9,10]
 _mc2 :: [Int]
 _mc2 = runMealy counter2 (replicate 10 ())
-
