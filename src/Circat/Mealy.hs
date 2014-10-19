@@ -3,9 +3,6 @@
 {-# LANGUAGE ScopedTypeVariables, Arrows #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- Whether to instantiate standard Arrow classes instead of our own
-#define Arrows
-
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
@@ -28,13 +25,9 @@ import Prelude hiding (id,(.))
 import Control.Category
 import Data.Tuple (swap)
 
-#ifdef Arrows
 import Control.Arrow
 import Control.Arrow.Operations
 import Control.Arrow.Transformer.Automaton
-#else
-import Circat.Category
-#endif
 
 import Circat.Misc ((:*),(:+))
 
@@ -51,8 +44,6 @@ instance Category Mealy where
       where
         (s',b) = f (s,a)
         (t',c) = g (t,b)
-
-#ifdef Arrows
 
 exl :: Arrow k => (a :* b) `k` a
 exl = arr fst
@@ -96,28 +87,6 @@ instance ArrowCircuit Mealy where
 
 -- delay a = Mealy (\ (s,a) -> (a,s)) a
 
-#else
-
-arr :: (a -> b) -> Mealy a b
-arr f = Mealy (second f) ()
-
-instance ProductCat Mealy where
-  exl = arr exl
-  exr = arr exr
-  Mealy f s0 *** Mealy g t0 = Mealy h (s0,t0)
-   where
-     h = transP2 . (f *** g) . transP2
-
-instance CoproductCat Mealy where
-  inl = arr inl
-  inr = arr inr
-  Mealy f s0 +++ Mealy g t0 = Mealy h (s0,t0)
-   where
-     h ((s,t),Left  a) = ((s',t), Left  c) where (s',c) = f (s,a)
-     h ((s,t),Right b) = ((s,t'), Right d) where (t',d) = g (t,b)
-
-#endif
-
 transP2 :: ((p :* q) :* (r :* s)) -> ((p :* r) :* (q :* s))
 transP2 ((p,q),(r,s)) = ((p,r),(q,s))
 
@@ -155,8 +124,6 @@ runAut (Automaton f) (a:as) = b : runAut aut' as
 {--------------------------------------------------------------------
     Examples
 --------------------------------------------------------------------}
-
-#ifdef Arrows
 
 serialSum1 :: (ArrowCircuit k, Num a) => k a a
 serialSum1 = loop (arr (\ (a,tot) -> dup (tot+a)) . second (delay 0))
@@ -209,5 +176,3 @@ a3 = runAut serialSum3 [1..10]
 -- [1,3,6,10,15,21,28,36,45,55]
 a4 :: [Int]
 a4 = runAut serialSum4 [1..10]
-
-#endif
