@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExistentialQuantification, TupleSections, TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables, Arrows #-}
+{-# LANGUAGE ConstraintKinds, TypeFamilies #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -23,13 +24,27 @@ import Prelude hiding (id,(.))
 import Control.Category
 import Control.Applicative ((<$>), Applicative(..))
 import Data.Tuple (swap)
+import GHC.Prim (Constraint)
 
 import Control.Arrow
-import Control.Arrow.Operations
+import Control.Arrow.Operations ()
 
 import Circat.Misc ((:*))
 
-data Mealy a b = forall s. Mealy ((s,a) -> (s,b)) s
+{--------------------------------------------------------------------
+    Experiment with constraining s
+--------------------------------------------------------------------}
+
+class C s
+
+instance C ()
+instance (C a, C b) => C (a,b)
+instance C Bool
+instance C Int
+
+--------------------------------------------------------------------
+
+data Mealy a b = forall s. C s => Mealy ((s,a) -> (s,b)) s
 
 -- I could probably generalize Mealy to an arrow transformer.
 
@@ -74,10 +89,18 @@ lassocP (a,(b,c)) = ((a,b),c)
 rassocP :: ((a,b),c) -> (a,(b,c))
 rassocP ((a,b),c) = (a,(b,c))
 
+class ArrowLoop k => ArrowCircuit k where
+  type CircuitKon k a :: Constraint
+  type CircuitKon k a = ()
+  delay :: CircuitKon k a => a -> k a a
+
 instance ArrowCircuit Mealy where
+  type CircuitKon Mealy a = C a
   delay = Mealy swap
 
 -- delay a = Mealy (\ (s,a) -> (a,s)) a
+
+type ArrowCircuitT k a = (ArrowCircuit k, CircuitKon k a)
 
 runMealy :: Mealy a b -> [a] -> [b]
 runMealy (Mealy f s0) = go s0
@@ -101,25 +124,25 @@ instance Applicative (Mealy a) where
 dup :: Arrow k => a `k` (a :* a)
 dup = id &&& id
 
-serialSum0 :: Num a => Mealy a a
+serialSum0 :: (C a, Num a) => Mealy a a
 serialSum0 = Mealy (\ (old,a) -> dup (old+a)) 0
 
-serialSum1 :: (ArrowCircuit k, Num a) => k a a
+serialSum1 :: (ArrowCircuitT k a, Num a) => k a a
 serialSum1 = loop (arr (\ (a,tot) -> dup (tot+a)) . second (delay 0))
 
 -- With arrow notation. Oops. Exclusive.
-serialSum2 :: (ArrowCircuit k, Num a) => k a a
+serialSum2 :: (ArrowCircuitT k a, Num a) => k a a
 serialSum2 = proc a -> do rec tot <- delay 0 -< tot + a
                           returnA -< tot
 
 -- With arrow notation. Inclusive.
-serialSum3 :: (ArrowCircuit k, Num a) => k a a
+serialSum3 :: (ArrowCircuitT k a, Num a) => k a a
 serialSum3 = proc a -> do rec old <- delay 0 -< new
                               new <- returnA -< old + a
                           returnA -< new
 
 -- Using let. Inclusive.
-serialSum4 :: (ArrowCircuit k, Num a) => k a a
+serialSum4 :: (ArrowCircuitT k a, Num a) => k a a
 serialSum4 = proc a -> do rec old <- delay 0 -< new
                               let new = old + a
                           returnA -< new
@@ -146,13 +169,13 @@ _ms4 = runMealy serialSum4 [1..10]
 
 -- Counter
 
-counter0 :: Num a => Mealy () a
+counter0 :: (C a, Num a) => Mealy () a
 counter0 = Mealy (\ (old,()) -> dup (old+1)) 0
 
-counter1 :: (ArrowCircuit k, Num a) => k () a
+counter1 :: (ArrowCircuitT k a, Num a) => k () a
 counter1 = loop (arr (\ ((),tot) -> dup (tot+1)) . second (delay 0))
 
-counter2 :: (ArrowCircuit k, Num a) => k () a
+counter2 :: (ArrowCircuitT k a, Num a) => k () a
 counter2 = proc () -> do rec old <- delay 0 -< new
                              new <- returnA -< old + 1
                          returnA -< new
