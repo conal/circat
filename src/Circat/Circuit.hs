@@ -57,7 +57,7 @@ module Circat.Circuit
   , simpleComp, tagged
   , systemSuccess
   , unitize
-  , MealyC(..), unitizeMealyC
+  , MealyC(..), unitizeMealyC, mkMealyC
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -1581,6 +1581,17 @@ instance DistribCat (:>) where
 -- Mealy machine
 
 data MealyC a b = forall s. GenBuses s => MealyC (s :* a :> s :* b) (Unit :> s)
+
+-- Convenient interface for construction from lambda-ccc
+mkMealyC :: GenBuses s => Unit :> ((s :* a -> s :* b) :* s) -> MealyC a b
+mkMealyC q = MealyC f s
+ where
+   f = unUnitFun (exl . q)
+   s = exr . q
+
+-- Will the replication of q result in replication of work in the circuit?
+
+-- TODO: consider rolling unitizeMealyC in with mkMealyC.
 
 unitizeMealyC :: GenBuses a => MealyC a b -> UU
 unitizeMealyC (MealyC f s) =
