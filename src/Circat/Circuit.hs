@@ -57,7 +57,7 @@ module Circat.Circuit
   , simpleComp, tagged
   , systemSuccess
   , unitize
-  , Machine, unitizeMachine, runMachine
+  , MealyC(..), unitizeMealyC
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -925,7 +925,7 @@ showCounts = intercalate ", "
            . map (\ (nm,num) -> printf "%d %s" num nm)
            . (\ ps -> if length ps <= 1 then ps
                        else ps ++ [("total",sum (snd <$> ps))])
-           . filter (\ (nm,n) -> n > 0 && nm `notElem` ["In","Out"])
+           . filter (\ (nm,n) -> n > 0 && not (isOuterPrim nm))
 
 summary :: DGraph -> String
 summary = showCounts
@@ -972,13 +972,13 @@ type TrimM = State (Map CompS Depth)
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
--- Explicitly include "In" as well, in case it's ignored.
+-- Explicitly include other outer prims as well, in case any are ignored.
 trimDGraph :: DGraph -> (DGraph, Depth)
 trimDGraph g =
   (M.keys *** pred . maximum) . swap $
     runState (mapM searchComp startComps) M.empty
  where
-   startComps = filter ((`elem` ["In","Out"]) . compName) g
+   startComps = filter (isOuterPrim . compName) g
    searchComp :: CompS -> TrimM Depth
    searchComp c =
     do mb <- Mtl.gets (M.lookup c)
@@ -1580,11 +1580,10 @@ instance DistribCat (:>) where
 
 -- Mealy machine
 
-type Machine s a b = ((s :* a) :> (s :* b), Unit :> s)
+data MealyC a b = forall s. GenBuses s => MealyC (s :* a :> s :* b) (Unit :> s)
 
-unitizeMachine :: (GenBuses a, GenBuses s) =>
-                  Machine s a b -> UU
-unitizeMachine (f, s) =
+unitizeMealyC :: GenBuses a => MealyC a b -> UU
+unitizeMealyC (MealyC f s) =
   (undup . first undup) . (f' *** s') . (first dup . dup)
  where
    s' = namedC "InitialState" . s
@@ -1594,8 +1593,14 @@ unitizeMachine (f, s) =
    undup :: Unit :* Unit :> Unit
    undup = it
 
-runMachine :: (GenBuses a, GenBuses s) => Machine s a b -> [(Comp,Reuses)]
-runMachine = runU . unitizeMachine
+-- runMealyC :: GenBuses a => MealyC a b -> [(Comp,Reuses)]
+-- runMealyC = runU . unitizeMealyC
+
+outerPrims :: [PrimName]
+outerPrims = ["In","Out", "OldState","NewState","InitialState"]
+
+isOuterPrim :: PrimName -> Bool
+isOuterPrim = flip S.member (S.fromList outerPrims)
 
 {--------------------------------------------------------------------
     Type-specific support
