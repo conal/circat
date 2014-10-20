@@ -20,17 +20,21 @@
 module Circat.Netlist
   ( toNetlist, mk_module
   , genVHDL, V.ppModule
-  , toV, outV) where
+  , outV  -- phasing out
+  , saveAsVerilog
+  ) where
 
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Text.Printf (printf)
 
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), GenBuses, CompS(..), compName, compOuts, circuitGraph, tagged
-  , Width, PinId, Bus(..) )
+  ( (:>), GenBuses, CompS(..), compName, compOuts, tagged
+  , Width, PinId, Bus(..)
+  , Name,unitize,DGraph,mkGraph,Report)
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Bit(..), Range(..)
@@ -45,6 +49,41 @@ type PinDesc = (Width,String)
 
 type PinToWireDesc = (PinId,PinDesc) 
 
+#if 1
+-- TODO: Phase out
+outV :: GenBuses a => Name -> (a :> b) -> IO ()
+outV name circ = saveVerilog name' (toVerilog ndr)
+ where
+   ndr@(name',_,_) = mkGraph name (unitize circ)
+
+-- | Converts a Circuit to a Module
+toNetlist :: Name -> DGraph -> Module
+toNetlist name comps = Module name ins outs [] (nets++assigns)
+  where (p2wM,ins)  = modulePorts (portComp "In"  comps)
+        (_,outs)    = modulePorts (portComp "Out" comps)
+        (p2wI,nets) = moduleNets comps
+        p2w         = M.fromList (p2wM ++ p2wI)
+        assigns     = moduleAssigns p2w comps
+
+toVerilog :: (Name,DGraph,Report) -> String
+toVerilog (name,graph,report) =
+  printf "%s\n\n// %s\n"
+   (show (V.ppModule (mk_module (toNetlist name graph))))
+   report
+
+saveAsVerilog :: (Name,DGraph,Report) -> IO ()
+saveAsVerilog gg@(name,_,_) = saveVerilog name (toVerilog gg)
+
+saveVerilog :: Name -> String -> IO ()
+saveVerilog name verilog =
+  do createDirectoryIfMissing False outDir
+     writeFile filePath verilog
+     putStrLn ("Wrote " ++ filePath)
+  where
+    outDir   = "out"
+    filePath = outDir ++ "/" ++ name ++ ".v.txt"
+
+#else
 outV :: GenBuses a => String -> (a :> b) -> IO ()
 outV cirName cir = 
   do createDirectoryIfMissing False outDir
@@ -66,6 +105,8 @@ toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
         (p2wI,nets) = moduleNets comps
         p2w         = M.fromList (p2wM ++ p2wI)
         assigns     = moduleAssigns p2w comps
+
+#endif
 
 type PinMap = Map PinId PinDesc
 

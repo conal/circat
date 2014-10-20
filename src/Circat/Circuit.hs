@@ -53,8 +53,11 @@ module Circat.Circuit
   -- , (|||*), fromBool, toBool
   , CompS(..), compNum, compName, compIns, compOuts
   , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
+  , UU, outDotG, mkGraph,Name,Report
   , simpleComp, tagged
   , systemSuccess
+  , unitize
+  , Machine, unitizeMachine, runMachine
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -93,7 +96,7 @@ import qualified Control.Monad.State as Mtl
 
 import TypeUnary.Vec hiding (get)
 
-import Circat.Misc
+import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
 import Circat.Category
 import Circat.Classes
 import Circat.Rep
@@ -809,10 +812,9 @@ instance GenBuses a => Show (a :> b) where
 runC :: GenBuses a => (a :> b) -> [(Comp,Reuses)]
 runC = runU . unitize
 
--- runU :: (Unit :> Unit) -> [Comp]
--- runU = fst . runU'
+type UU = Unit :> Unit
 
-runU :: (Unit :> Unit) -> [(Comp,Reuses)]
+runU :: UU -> [(Comp,Reuses)]
 runU cir = getComps compInfo
  where
    compInfo :: CompInfo
@@ -823,15 +825,8 @@ runU cir = getComps compInfo
    getComps = map (,0)
 #endif
 
--- type CompInfo = Map (PrimName,Sources) (Comp,Int)
--- type CircuitM = State (PinSupply, CompInfo)
-
-
--- TODO: Eliminate the writer, since the state tells more.
-
-
 -- Wrap a circuit with fake input and output
-unitize :: GenBuses a => (a :> b) -> (Unit :> Unit)
+unitize :: GenBuses a => (a :> b) -> UU
 unitize = namedC "Out" <~ namedC "In"
 
 {--------------------------------------------------------------------
@@ -877,41 +872,53 @@ renameC = id
 #endif
 #endif
 
-outGWith :: GenBuses a => (String,String) -> String -> [Attr] -> (a :> b) -> IO ()
-outGWith (outType,res) (renameC -> name) attrs circ = 
+type Name = String
+type Report = String
+
+-- TODO: Phase out
+outGWith :: GenBuses a => (String,String) -> Name -> [Attr] -> (a :> b) -> IO ()
+outGWith ss s ats circ = outGWithU ss s ats (unitize circ)
+
+outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
+outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
+
+mkGraph :: Name -> UU -> (Name,DGraph,Report)
+mkGraph (renameC -> name') uu = (name',graph,report)
+ where
+   (graph,depth) = uuGraph uu
+   report | depth == 0 = "No components.\n"  -- except In & Out
+          | otherwise  =
+              printf "Components: %s.%s Depth: %d.\n"
+                (summary graph)
+#if !defined NoHashCons
+                (let reused :: Map PrimName Reuses
+                     reused = M.fromListWith (+)
+                               [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
+                 in
+                   case showCounts (M.toList reused) of
+                     ""  -> ""
+                     str -> printf " Reuses: %s." str)
+#else          
+                ""
+#endif         
+                depth
+outDotG :: (String,String) -> [Attr] -> (Name,DGraph,Report) -> IO ()
+outDotG (outType,res) attrs (name,graph,report) = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (graphDot name attrs graph
-                               ++ "\n// "++ report)
-     putStr report
+     writeFile (outFile "dot") (graphDot name attrs graph ++ "\n// "++ report)
+     -- putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
      systemSuccess $
        printf "%s %s" open (outFile outType)
  where
-#if !defined NoHashCons
-   reused :: Map PrimName Reuses
-   reused = M.fromListWith (+) [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
-#endif
-   (graph,depth) = circuitGraph circ
    outDir = "out"
    outFile suff = outDir++"/"++name++"."++suff
    open = case SI.os of
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
-   report | depth == 0 = "No components.\n"  -- except In & Out
-          | otherwise  =
-              printf "Components: %s.%s Depth: %d.\n"
-                (summary graph)
-#if !defined NoHashCons
-                (case showCounts (M.toList reused) of
-                   ""  -> ""
-                   str -> printf " Reuses: %s." str)
-#else          
-                ""
-#endif         
-                depth
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
@@ -952,8 +959,12 @@ type DGraph = [CompS]
 
 type Dot = String
 
+uuGraph :: UU -> (DGraph,Depth)
+uuGraph = trimDGraph . map simpleComp . tagged . runU
+
 circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
-circuitGraph = trimDGraph . map simpleComp . tagged . runC
+circuitGraph = uuGraph . unitize
+-- circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
 type Depth = Int
 
@@ -1566,6 +1577,25 @@ instance DistribCat (:>) where
   distr = distrC
 
 #endif
+
+-- Mealy machine
+
+type Machine s a b = ((s :* a) :> (s :* b), Unit :> s)
+
+unitizeMachine :: (GenBuses a, GenBuses s) =>
+                  Machine s a b -> UU
+unitizeMachine (f, s) =
+  (undup . first undup) . (f' *** s') . (first dup . dup)
+ where
+   s' = namedC "InitialState" . s
+   f' = (namedC "NewState" *** namedC "Out")
+      . f
+      . (namedC "OldState" *** namedC "In")
+   undup :: Unit :* Unit :> Unit
+   undup = it
+
+runMachine :: (GenBuses a, GenBuses s) => Machine s a b -> [(Comp,Reuses)]
+runMachine = runU . unitizeMachine
 
 {--------------------------------------------------------------------
     Type-specific support
