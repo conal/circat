@@ -32,9 +32,10 @@ import Text.Printf (printf)
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( (:>), GenBuses, CompS(..), compName, compOuts, tagged
-  , Width, PinId, Bus(..)
-  , Name,unitize,DGraph,mkGraph,Report)
+  ( CompS(..), compName, compOuts, tagged
+  , Width, PinId, Bus(..), Name,DGraph,Report
+  , (:>), GenBuses,unitize,mkGraph
+  )
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Bit(..), Range(..)
@@ -49,8 +50,7 @@ type PinDesc = (Width,String)
 
 type PinToWireDesc = (PinId,PinDesc) 
 
-#if 1
--- TODO: Phase out
+-- Phasing out
 outV :: GenBuses a => Name -> (a :> b) -> IO ()
 outV name circ = saveVerilog name' (toVerilog ndr)
  where
@@ -82,31 +82,6 @@ saveVerilog name verilog =
   where
     outDir   = "out"
     filePath = outDir ++ "/" ++ name ++ ".v.txt"
-
-#else
-outV :: GenBuses a => String -> (a :> b) -> IO ()
-outV cirName cir = 
-  do createDirectoryIfMissing False outDir
-     writeFile filePath (toV cirName cir)
-     putStrLn ("Wrote " ++ filePath)
-  where
-    outDir   = "out"
-    filePath = outDir ++ "/" ++ cirName ++ ".v.txt"
-
-toV :: GenBuses a => String -> (a :> b) -> String
-toV cirName cir = show . V.ppModule . mk_module $ toNetlist cirName cir
-
--- | Converts a Circuit to a Module
-toNetlist :: GenBuses a => String -> (a :> b) -> Module
-toNetlist circuitName cir = Module circuitName ins outs [] (nets++assigns)
-  where (comps,_)   = circuitGraph cir
-        (p2wM,ins)  = modulePorts (portComp "In"  comps)
-        (_,outs)    = modulePorts (portComp "Out" comps)
-        (p2wI,nets) = moduleNets comps
-        p2w         = M.fromList (p2wM ++ p2wI)
-        assigns     = moduleAssigns p2w comps
-
-#endif
 
 type PinMap = Map PinId PinDesc
 
