@@ -30,10 +30,10 @@ import GHC.Prim (Constraint)
 
 import Control.Arrow
 
-import Circat.Misc (dup)
+import Circat.Misc (dup) -- ,Unit,(:*)
 
 #ifdef CircuitConstraint
-import Circat.Circuit (GenBuses(..))
+import Circat.Circuit (GenBuses(..)) -- , Machine, unitizeMachine
 #endif
 
 {--------------------------------------------------------------------
@@ -122,13 +122,21 @@ runMealy (Mealy f s0) = go s0
    go s (a:as) = b : go s' as where (s',b) = f (s,a)
 
 {--------------------------------------------------------------------
-    Standard instances for arrows
+    Some other standard instances for arrows
 --------------------------------------------------------------------}
 
-instance Functor (Mealy a) where fmap = flip (>>^)
+instance Functor (Mealy a) where
+  fmap = flip (>>^)
+
 instance Applicative (Mealy a) where
   pure b = arr (const b)
   fs <*> xs = uncurry ($) <$> (fs &&& xs)
+
+{--------------------------------------------------------------------
+    Circuit graph generation
+--------------------------------------------------------------------}
+
+-- Working here
 
 {--------------------------------------------------------------------
     Examples
