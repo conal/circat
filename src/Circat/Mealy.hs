@@ -69,6 +69,8 @@ instance Category Mealy where
       where
         (s',b) = f (s,a)
         (t',c) = g (t,b)
+  {-# INLINE id #-}
+  {-# INLINE (.) #-}
 
 instance Arrow Mealy where
   arr f = Mealy (second f) ()
@@ -80,6 +82,10 @@ instance Arrow Mealy where
         (t',d) = g (t,b)
   first  f = f *** id
   second g = id *** g
+  {-# INLINE arr #-}
+  {-# INLINE (***) #-}
+  {-# INLINE first #-}
+  {-# INLINE second #-}
 
 --   Mealy f s0 *** Mealy g t0 = Mealy (transP2 . (f *** g) . transP2) (s0,t0)
 --
@@ -93,6 +99,9 @@ instance ArrowChoice Mealy where
      h ((s,t),Right b) = ((s,t'), Right d) where (t',d) = g (t,b)
   left  f = f +++ id
   right g = id +++ g
+  {-# INLINE (+++) #-}
+  {-# INLINE left #-}
+  {-# INLINE right #-}
 
 instance ArrowLoop Mealy where
   loop (Mealy f s0) = Mealy (loop (lassocP . f . rassocP)) s0
@@ -110,11 +119,13 @@ class ArrowLoop k => ArrowCircuit k where
 instance ArrowCircuit Mealy where
   type CircuitKon Mealy a = C a
   delay = Mealy swap
+  {-# INLINE delay #-}
 
 -- delay a = Mealy (\ (s,a) -> (a,s)) a
 
 type ArrowCircuitT k a = (ArrowCircuit k, CircuitKon k a)
 
+-- A sort of semantic function.
 runMealy :: Mealy a b -> [a] -> [b]
 runMealy (Mealy f s0) = go s0
  where
@@ -127,10 +138,13 @@ runMealy (Mealy f s0) = go s0
 
 instance Functor (Mealy a) where
   fmap = flip (>>^)
+  {-# INLINE fmap #-}
 
 instance Applicative (Mealy a) where
   pure b = arr (const b)
   fs <*> xs = uncurry ($) <$> (fs &&& xs)
+  {-# INLINE pure #-}
+  {-# INLINE (<*>) #-}
 
 {--------------------------------------------------------------------
     Circuit graph generation
