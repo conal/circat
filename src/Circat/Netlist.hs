@@ -24,6 +24,8 @@ module Circat.Netlist
   , saveAsVerilog
   ) where
 
+import Data.Monoid (mempty,(<>),mconcat)
+import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -48,7 +50,9 @@ import qualified Language.Verilog as V
 -- PinId description: width & name
 type PinDesc = (Width,String)
 
-type PinToWireDesc = (PinId,PinDesc) 
+-- type PinToWireDesc = (PinId,PinDesc) 
+
+type PinMap = Map PinId PinDesc
 
 -- Phasing out
 outV :: GenBuses a => Name -> (a :> b) -> IO ()
@@ -58,16 +62,30 @@ outV name circ = saveVerilog name' (toVerilog ndr)
 
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
+
+#if 0
+toNetlist name comps = Module name (ins++olds) (outs++news) [] (nets++assigns)
+ where
+   (p2wIn,ins)    = ports "In"
+   (p2wOld,olds)  = ports "OldState"
+   (_,outs)       = ports "Out"
+   (_,news)       = ports "NewState"
+   (p2wNets,nets) = moduleNets comps
+   p2w            = p2wIn <> p2wOld <> p2wNets
+   assigns        = moduleAssigns p2w comps
+   ports str      = modulePorts (portComp str comps)
+#else
 toNetlist name comps = Module name ins outs [] (nets++assigns)
   where (p2wM,ins)  = modulePorts (portComp "In"  comps)
         (_,outs)    = modulePorts (portComp "Out" comps)
         (p2wI,nets) = moduleNets comps
-        p2w         = M.fromList (p2wM ++ p2wI)
+        p2w         = p2wM <> p2wI
         assigns     = moduleAssigns p2w comps
+#endif
 
 toVerilog :: (Name,DGraph,Report) -> String
 toVerilog (name,graph,report) =
-  printf "%s\n\n// %s\n"
+  printf "%s\n// %s"
    (show (V.ppModule (mk_module (toNetlist name graph))))
    report
 
@@ -83,18 +101,21 @@ saveVerilog name verilog =
     outDir   = "out"
     filePath = outDir ++ "/" ++ name ++ ".v.txt"
 
-type PinMap = Map PinId PinDesc
-
--- | Produces the assign statements for every Comp except "In"
--- Assign statements bind the result of a function (and,or,add etc.)
--- to a variable name which is a wire in verilog parlance
--- eg. w_xor_I1 = In_0 ^ In_1 // (`^` is xor)
+-- | Produces the assign statements for every Comp except inputs ("In" and
+-- "OldState"). Assign statements bind the result of a function (and,or,add
+-- etc.) to a variable name which is a wire in verilog parlance eg. w_xor_I1 =
+-- In_0 ^ In_1 // (`^` is xor)
 moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
+isInput, isOutput, isTerminal :: String -> Bool
+isInput  = (`elem` ["In" , "OldState"])
+isOutput = (`elem` ["Out", "NewState", "InitialState"])
+isTerminal s = isInput s || isOutput s
+
 moduleAssign :: PinMap -> CompS -> [Decl]
--- "In" comps are never assigned
-moduleAssign _ (CompS _ "In" _ _ _) = [] 
+-- Input comps are never assigned
+moduleAssign _ (CompS _ (isInput -> True) _ _ _) = [] 
 -- binary operations
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
@@ -126,7 +147,7 @@ moduleAssign p2w c@(CompS _ name [i] [o] _) =
     iE = sourceExp p2w i
     unaryOp = case name of
                 "not"   -> Neg
-                "False" -> Neg
+                "False" -> Neg          -- TODO: remove?
                 _       -> err
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
                   ++ show name ++ " not supported." ++ show c
@@ -145,10 +166,10 @@ moduleAssign p2w (CompS _ name [] [o] _) =
     err = error . ("Circat.Netlist.moduleAssign: " ++)
 
 -- output assignments
-moduleAssign p2w (CompS _ "Out" ps [] _) =
+moduleAssign p2w (CompS _ name ps [] _) | isOutput name =
   map (\ (n,p) -> NetAssign (outPortName n) (sourceExp p2w p)) (tagged ps)
   where
-     outPortName = portName "Out" ps
+     outPortName = portName name ps
 
 -- We now remove components with unused outputs, including ()
 -- moduleAssign _ (CompS _ "()" [] [] _) = []
@@ -181,14 +202,15 @@ busName p2w (Bus i _) = snd (lw p2w i)
 
 -- | Generates a wire declaration for all Comp outputs along with 
 -- a map from PinId to wire name
-moduleNets :: [CompS] -> ([PinToWireDesc],[Decl])
-moduleNets = unzip . concatMap moduleNet
+moduleNets :: [CompS] -> (PinMap,[Decl])
+moduleNets = mconcat . map moduleNet
 
-moduleNet :: CompS -> [(PinToWireDesc,Decl)]
-moduleNet c | compName c `elem` ["In","Out"] = []
-moduleNet c = 
-  [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
-  | (i,Bus o wid) <- tagged outs ]
+moduleNet :: CompS -> (PinMap,[Decl])
+moduleNet c | isTerminal (compName c) = mempty
+moduleNet c =
+  first M.fromList . unzip $
+    [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
+    | (i,Bus o wid) <- tagged outs ]
   where
     outs = compOuts c
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
@@ -203,17 +225,18 @@ instName (CompS num name _ _ _) = name ++"_I"++show num
 
 -- | Generates a bit-blasted list of primary inputs of
 -- the module.
-modulePorts :: CompS -> ([PinToWireDesc],[(Ident, Maybe Range)])
+modulePorts :: CompS -> (PinMap,[(Ident, Maybe Range)])
 modulePorts comp' = 
   case comp' of 
-    (CompS _  "In"  []  outs _) -> unzip (ports "In" outs)
-    (CompS _  "Out" ins [] _)   -> ([],map snd $ ports "Out" ins) 
+    (CompS _  name [] outs _) -> ports name outs
+    (CompS _  name ins  [] _) -> (mempty, snd (ports name ins))
     _                   -> 
       error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
                ++ " not recognized." 
   where
-    ports :: String -> [Bus] -> [(PinToWireDesc,(Ident, Maybe Range))]
+    ports :: String -> [Bus] -> (PinMap,[(Ident, Maybe Range)])
     ports dir ps =
+      (first M.fromList . unzip)
       [ let name = portName dir ps i in
           ((p,(wid,name)),(name,Just (busRange wid))) -- TODO: redesign
       | (i,Bus p wid) <- tagged ps
@@ -224,21 +247,20 @@ portName dir ps i =
   dir++if length ps == 1 then "" else "_" ++ show i
 
 -- | Given a list of simple Comps (CompS), retrieve 
--- the comp named dir. `dir` can have the values of 
--- "In" or "Out"
+-- the comp with given name, which must be a terminal.
 portComp :: String -> [CompS] -> CompS
-portComp dir comps
-  | dir /= "In" && dir /= "Out" = error eIllegalDir 
-  | length fC == 1              = head fC
-  | otherwise                   = error eIncorrectComps
+portComp name comps
+  | not (isTerminal name) = error eIllegalName 
+  | length fC == 1        = head fC
+  | otherwise             = error eIncorrectComps
   where 
-    fC = filter ((== dir) . compName) comps
+    fC = filter ((== name) . compName) comps
     floc = "Circat.Netlist.portComp"
-    eIllegalDir = 
-      floc ++ ": Illegal value for dir " ++ dir
+    eIllegalName = 
+      floc ++ ": Illegal value for name " ++ name
            ++ ". Valid values are In or Out"            
     eIncorrectComps = 
-      floc ++ ": Incorrect number of comps named " ++ show dir
+      floc ++ ": Incorrect number of comps named " ++ show name
            ++ " found in the list of comps. "
            ++ if length fC > 1 then " Multiple comps found " ++ show fC 
               else " No comps found."
