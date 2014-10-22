@@ -59,7 +59,7 @@ instance C Int
 
 data Mealy a b = forall s. C s => Mealy ((a,s) -> (b,s)) s
 
--- I could probably generalize Mealy to an arrow transformer.
+-- We could probably generalize Mealy to an arrow transformer.
 
 instance Category Mealy where
   id = Mealy id ()
@@ -86,11 +86,6 @@ instance Arrow Mealy where
   {-# INLINE (***) #-}
   {-# INLINE first #-}
   {-# INLINE second #-}
-
---   Mealy f s0 *** Mealy g t0 = Mealy (transP2 . (f *** g) . transP2) (s0,t0)
---
--- transP2 :: ((p :* q) :* (r :* s)) -> ((p :* r) :* (q :* s))
--- transP2 ((p,q),(r,s)) = ((p,r),(q,s))
 
 instance ArrowChoice Mealy where
   Mealy f s0 +++ Mealy g t0 = Mealy h (s0,t0)
@@ -154,70 +149,72 @@ instance Applicative (Mealy a) where
     Examples
 --------------------------------------------------------------------}
 
-serialSum0 :: (C a, Num a) => Mealy a a
-serialSum0 = Mealy (\ (old,a) -> dup (old+a)) 0
-
-serialSum1 :: (ArrowCircuitT k a, Num a) => k a a
-serialSum1 = loop (arr (\ (a,tot) -> dup (tot+a)) . second (delay 0))
-
--- With arrow notation. Oops. Exclusive.
-serialSum2 :: (ArrowCircuitT k a, Num a) => k a a
-serialSum2 = proc a -> do rec tot <- delay 0 -< tot + a
-                          returnA -< tot
-
--- With arrow notation. Inclusive.
-serialSum3 :: (ArrowCircuitT k a, Num a) => k a a
-serialSum3 = proc a -> do rec old <- delay 0 -< new
-                              new <- returnA -< old + a
-                          returnA -< new
-
--- Using let. Inclusive.
-serialSum4 :: (ArrowCircuitT k a, Num a) => k a a
-serialSum4 = proc a -> do rec old <- delay 0 -< new
-                              let new = old + a
-                          returnA -< new
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms0 :: [Int]
-_ms0 = runMealy serialSum0 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms1 :: [Int]
-_ms1 = runMealy serialSum1 [1..10]
-
--- [0,1,3,6,10,15,21,28,36,45]
-_ms2 :: [Int]
-_ms2 = runMealy serialSum2 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms3 :: [Int]
-_ms3 = runMealy serialSum3 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms4 :: [Int]
-_ms4 = runMealy serialSum4 [1..10]
-
 -- Counter
 
 counter0 :: (C a, Num a) => Mealy () a
-counter0 = Mealy (\ ((),old) -> dup (old+1)) 0
+counter0 = Mealy (\ ((),n) -> (n,n+1)) 0
 
 counter1 :: (ArrowCircuitT k a, Num a) => k () a
-counter1 = loop (arr (\ ((),tot) -> dup (tot+1)) . second (delay 0))
+counter1 = loop (arr (\ ((),n) -> (n,n+1)) . second (delay 0))
+
+-- Also works when the composed functions are swapped
 
 counter2 :: (ArrowCircuitT k a, Num a) => k () a
 counter2 = proc () -> do rec old <- delay 0 -< new
                              new <- returnA -< old + 1
-                         returnA -< new
+                         returnA -< old
 
--- [1,2,3,4,5,6,7,8,9,10]
+-- [0,1,2,3,4,5,6,7,8,9]
 _mc0 :: [Int]
 _mc0 = runMealy counter0 (replicate 10 ())
 
--- [1,2,3,4,5,6,7,8,9,10]
+-- [0,1,2,3,4,5,6,7,8,9]
 _mc1 :: [Int]
 _mc1 = runMealy counter1 (replicate 10 ())
 
--- [1,2,3,4,5,6,7,8,9,10]
+-- [0,1,2,3,4,5,6,7,8,9]
 _mc2 :: [Int]
 _mc2 = runMealy counter2 (replicate 10 ())
+
+adder0 :: (C a, Num a) => Mealy a a
+adder0 = Mealy (\ (old,a) -> dup (old+a)) 0
+
+adder1 :: (ArrowCircuitT k a, Num a) => k a a
+adder1 = loop (arr (\ (a,tot) -> dup (tot+a)) . second (delay 0))
+
+-- With arrow notation. Oops. Exclusive.
+adder2 :: (ArrowCircuitT k a, Num a) => k a a
+adder2 = proc a -> do rec tot <- delay 0 -< tot + a
+                      returnA -< tot
+
+-- With arrow notation. Inclusive.
+adder3 :: (ArrowCircuitT k a, Num a) => k a a
+adder3 = proc a -> do rec old <- delay 0 -< new
+                          new <- returnA -< old + a
+                      returnA -< new
+
+-- Using let. Inclusive.
+adder4 :: (ArrowCircuitT k a, Num a) => k a a
+adder4 = proc a -> do rec old <- delay 0 -< new
+                          let new = old + a
+                      returnA -< new
+
+-- [1,3,6,10,15,21,28,36,45,55]
+_ms0 :: [Int]
+_ms0 = runMealy adder0 [1..10]
+
+-- [1,3,6,10,15,21,28,36,45,55]
+_ms1 :: [Int]
+_ms1 = runMealy adder1 [1..10]
+
+-- [0,1,3,6,10,15,21,28,36,45]
+_ms2 :: [Int]
+_ms2 = runMealy adder2 [1..10]
+
+-- [1,3,6,10,15,21,28,36,45,55]
+_ms3 :: [Int]
+_ms3 = runMealy adder3 [1..10]
+
+-- [1,3,6,10,15,21,28,36,45,55]
+_ms4 :: [Int]
+_ms4 = runMealy adder4 [1..10]
