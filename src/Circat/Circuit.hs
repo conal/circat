@@ -1580,16 +1580,17 @@ instance DistribCat (:>) where
 
 -- Mealy machine
 
-data MealyC a b = forall s. GenBuses s => MealyC (s :* a :> s :* b) (Unit :> s)
+data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) (Unit :> s)
 
 -- Convenient interface for construction from lambda-ccc
-mkMealyC :: GenBuses s => Unit :> ((s :* a -> s :* b) :* s) -> MealyC a b
+mkMealyC :: GenBuses s => Unit :> ((a :* s -> b :* s) :* s) -> MealyC a b
 mkMealyC q = MealyC f s
  where
    f = unUnitFun (exl . q)
    s = exr . q
 
 -- Will the replication of q result in replication of work in the circuit?
+-- Try it, and find out.
 
 -- TODO: consider rolling unitizeMealyC in with mkMealyC.
 
@@ -1598,9 +1599,9 @@ unitizeMealyC (MealyC f s) =
   (undup . first undup) . (f' *** s') . (first dup . dup)
  where
    s' = namedC "InitialState" . s
-   f' = (namedC "NewState" *** namedC "Out")
+   f' = (namedC "Out" *** namedC "NewState")
       . f
-      . (namedC "OldState" *** namedC "In")
+      . (namedC "In"  *** namedC "OldState")
    undup :: Unit :* Unit :> Unit
    undup = it
 

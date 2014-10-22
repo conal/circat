@@ -57,7 +57,7 @@ instance C Int
 
 --------------------------------------------------------------------
 
-data Mealy a b = forall s. C s => Mealy ((s,a) -> (s,b)) s
+data Mealy a b = forall s. C s => Mealy ((a,s) -> (b,s)) s
 
 -- I could probably generalize Mealy to an arrow transformer.
 
@@ -65,21 +65,21 @@ instance Category Mealy where
   id = Mealy id ()
   Mealy g t0 . Mealy f s0 = Mealy h (s0,t0)
    where
-     h ((s,t),a) = ((s',t'),c)
+     h (a,(s,t)) = (c,(s',t'))
       where
-        (s',b) = f (s,a)
-        (t',c) = g (t,b)
+        (b,s') = f (a,s)
+        (c,t') = g (b,t)
   {-# INLINE id #-}
   {-# INLINE (.) #-}
 
 instance Arrow Mealy where
-  arr f = Mealy (second f) ()
+  arr f = Mealy (first f) ()
   Mealy f s0 *** Mealy g t0 = Mealy h (s0,t0)
    where
-     h ((s,t),(a,b)) = ((s',t'),(c,d))
+     h ((a,b),(s,t)) = ((c,d),(s',t'))
       where
-        (s',c) = f (s,a)
-        (t',d) = g (t,b)
+        (c,s') = f (a,s)
+        (d,t') = g (b,t)
   first  f = f *** id
   second g = id *** g
   {-# INLINE arr #-}
@@ -95,8 +95,8 @@ instance Arrow Mealy where
 instance ArrowChoice Mealy where
   Mealy f s0 +++ Mealy g t0 = Mealy h (s0,t0)
    where
-     h ((s,t),Left  a) = ((s',t), Left  c) where (s',c) = f (s,a)
-     h ((s,t),Right b) = ((s,t'), Right d) where (t',d) = g (t,b)
+     h (Left  a,(s,t)) = (Left  c,(s',t)) where (c,s') = f (a,s)
+     h (Right b,(s,t)) = (Right d,(s,t')) where (d,t') = g (b,t)
   left  f = f +++ id
   right g = id +++ g
   {-# INLINE (+++) #-}
@@ -104,12 +104,10 @@ instance ArrowChoice Mealy where
   {-# INLINE right #-}
 
 instance ArrowLoop Mealy where
-  loop (Mealy f s0) = Mealy (loop (lassocP . f . rassocP)) s0
-
-lassocP :: (a,(b,c)) -> ((a,b),c)
-lassocP (a,(b,c)) = ((a,b),c)
-rassocP :: ((a,b),c) -> (a,(b,c))
-rassocP ((a,b),c) = (a,(b,c))
+  loop (Mealy f s0) = Mealy (loop (rot . f . rot)) s0
+   where
+     rot :: ((p,q),r) -> ((p,r),q)
+     rot ((p,q),r) = ((p,r),q)
 
 class ArrowLoop k => ArrowCircuit k where
   type CircuitKon k a :: Constraint
@@ -130,7 +128,7 @@ runMealy :: Mealy a b -> [a] -> [b]
 runMealy (Mealy f s0) = go s0
  where
    go _ []     = []
-   go s (a:as) = b : go s' as where (s',b) = f (s,a)
+   go s (a:as) = b : go s' as where (b,s') = f (a,s)
 
 {--------------------------------------------------------------------
     Some other standard instances for arrows
@@ -202,7 +200,7 @@ _ms4 = runMealy serialSum4 [1..10]
 -- Counter
 
 counter0 :: (C a, Num a) => Mealy () a
-counter0 = Mealy (\ (old,()) -> dup (old+1)) 0
+counter0 = Mealy (\ ((),old) -> dup (old+1)) 0
 
 counter1 :: (ArrowCircuitT k a, Num a) => k () a
 counter1 = loop (arr (\ ((),tot) -> dup (tot+1)) . second (delay 0))
