@@ -14,6 +14,8 @@
 -- Circuit to Netlist conversion
 ----------------------------------------------------------------------
 
+#define StateMachine
+
 -- TODO: Use Text.Printf to replace the awkward string formations in this
 -- module.
 
@@ -25,6 +27,7 @@ module Circat.Netlist
   ) where
 
 import Data.Monoid (mempty,(<>),mconcat)
+import Data.Functor ((<$>))
 import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
@@ -34,14 +37,14 @@ import Text.Printf (printf)
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( CompS(..), compName, compOuts, tagged
-  , Width, PinId, Bus(..), Name,DGraph,Report
+  ( CompS(..), compIns, compOuts, compName, compOuts, tagged
+  , Width, PinId, Bus(..),Name,DGraph,Report
   , (:>), GenBuses,unitize,mkGraph
   )
 
 import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Bit(..), Range(..)
-  , BinaryOp(..), UnaryOp(..), Ident, Range )
+  , BinaryOp(..), UnaryOp(..), Ident, Range, Event(..), Edge(..), Stmt(..) )
 
 import Language.Netlist.GenVHDL(genVHDL)
 import Language.Netlist.GenVerilog(mk_module)
@@ -63,17 +66,46 @@ outV name circ = saveVerilog name' (toVerilog ndr)
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
 
-#if 0
-toNetlist name comps = Module name (ins++olds) (outs++news) [] (nets++assigns)
+#ifdef StateMachine
+toNetlist name comps =
+  Module name (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
  where
-   (p2wIn,ins)    = ports "In"
-   (p2wOld,olds)  = ports "OldState"
-   (_,outs)       = ports "Out"
-   (_,news)       = ports "NewState"
+   clock          = ("clock",Nothing)
+   reset          = ("reset",Nothing)
+   (p2wIn,ins)    = modPorts "In"
+   (_,outs)       = modPorts "Out"
    (p2wNets,nets) = moduleNets comps
-   p2w            = p2wIn <> p2wOld <> p2wNets
+   p2w            = p2wIn <> p2wNets
    assigns        = moduleAssigns p2w comps
-   ports str      = modulePorts (portComp str comps)
+   modPorts str   = modulePorts (portComp str comps)
+
+-- TODO: rename "portComp", since it's no longer just about module ports.
+
+clocked :: PinMap -> DGraph -> Decl
+clocked p2w comps =
+  ProcessDecl
+    (Event (ExprVar "clock") PosEdge) Nothing
+    (If (ExprBinary Equals (ExprVar "reset") (ExprLit Nothing (ExprBit T)))
+        (updates "InitialState")
+        (Just (updates "NewState")))
+ where
+  updates :: Name -> Stmt
+  updates source =
+    sseq (zipWith Assign (vars compOuts "OldState") (vars compIns source))
+   where
+     vars :: (CompS -> [Bus]) -> Name -> [Expr]
+     vars get nm = sourceExp p2w <$> get (portComp nm comps)
+
+--   always @ (posedge clock) begin
+--     if (reset == 1'b1) begin s0 <= inits0; ... end
+--     else begin s0 <= t0; ... end
+--   end
+
+-- Statment Seq tidied for singletons sequences.
+sseq :: [Stmt] -> Stmt
+sseq [s] = s
+sseq ss = Seq ss
+
 #else
 toNetlist name comps = Module name ins outs [] (nets++assigns)
   where (p2wM,ins)  = modulePorts (portComp "In"  comps)
@@ -82,6 +114,11 @@ toNetlist name comps = Module name ins outs [] (nets++assigns)
         p2w         = p2wM <> p2wI
         assigns     = moduleAssigns p2w comps
 #endif
+
+-- TODO: Rework toNetlist with a Writer monad, aggregating a PinMap.
+-- Ditto for modulePorts and moduleNets.
+-- Maybe gather the ins & outs similarly in the monoid.
+-- Maybe then a Reader with the same info for moduleAssigns.
 
 toVerilog :: (Name,DGraph,Report) -> String
 toVerilog (name,graph,report) =
@@ -108,14 +145,20 @@ saveVerilog name verilog =
 moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
-isInput, isOutput, isTerminal :: String -> Bool
-isInput  = (`elem` ["In" , "OldState"])
-isOutput = (`elem` ["Out", "NewState", "InitialState"])
+isInput, isOutput, isNewState, isTerminal :: String -> Bool
+-- isInput  = (`elem` ["In" , "OldState"])
+-- isOutput = (`elem` ["Out", "NewState", "InitialState"])
+isInput    = (== "In" )
+isOutput   = (== "Out")
+isNewState = (== "NewState")
 isTerminal s = isInput s || isOutput s
 
 moduleAssign :: PinMap -> CompS -> [Decl]
 -- Input comps are never assigned
-moduleAssign _ (CompS _ (isInput -> True) _ _ _) = [] 
+moduleAssign _ (CompS _ "In" _ _ _) = [] 
+moduleAssign _ (CompS _ "OldState" _ _ _) = [] 
+moduleAssign _ (CompS _ "InitialState" _ _ _) = [] 
+moduleAssign _ (CompS _ "NewState" _ _ _) = [] 
 -- binary operations
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
@@ -166,12 +209,12 @@ moduleAssign p2w (CompS _ name [] [o] _) =
     err = error . ("Circat.Netlist.moduleAssign: " ++)
 
 -- output assignments
-moduleAssign p2w (CompS _ name ps [] _) | isOutput name =
+moduleAssign p2w (CompS _ name ps [] _) | isOutput name || isNewState name =
   map (\ (n,p) -> NetAssign (outPortName n) (sourceExp p2w p)) (tagged ps)
-  where
-     outPortName = portName name ps
+ where
+   outPortName = portName name ps
 
--- We now remove components with unused outputs, including ()
+-- Upstream, we now remove components with unused outputs, including ()
 -- moduleAssign _ (CompS _ "()" [] [] _) = []
 
 -- HACK: Catch-all
@@ -209,11 +252,15 @@ moduleNet :: CompS -> (PinMap,[Decl])
 moduleNet c | isTerminal (compName c) = mempty
 moduleNet c =
   first M.fromList . unzip $
-    [ ((o,(wid, wireName i)), NetDecl (wireName i) (Just (busRange wid)) Nothing)
+    [ ((o,(wid, wireName i)), valDecl (compName c) (wireName i) (Just (busRange wid)))
     | (i,Bus o wid) <- tagged outs ]
   where
     outs = compOuts c
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
+
+valDecl :: Name -> Ident -> Maybe Range -> Decl
+valDecl "OldState" s r = MemDecl s r Nothing Nothing
+valDecl _          s r = NetDecl s r Nothing
 
 busRange :: Width -> Range
 busRange wid = Range (lit 0) (lit (wid - 1))
@@ -223,44 +270,40 @@ busRange wid = Range (lit 0) (lit (wid - 1))
 instName :: CompS -> String
 instName (CompS num name _ _ _) = name ++"_I"++show num
 
--- | Generates a bit-blasted list of primary inputs of
--- the module.
-modulePorts :: CompS -> (PinMap,[(Ident, Maybe Range)])
-modulePorts comp' = 
-  case comp' of 
-    (CompS _  name [] outs _) -> ports name outs
-    (CompS _  name ins  [] _) -> (mempty, snd (ports name ins))
-    _                   -> 
-      error $ "Circat.Netlist.modulePorts: Comp " ++ show comp' 
-               ++ " not recognized." 
-  where
-    ports :: String -> [Bus] -> (PinMap,[(Ident, Maybe Range)])
-    ports dir ps =
-      (first M.fromList . unzip)
-      [ let name = portName dir ps i in
-          ((p,(wid,name)),(name,Just (busRange wid))) -- TODO: redesign
-      | (i,Bus p wid) <- tagged ps
-      ]
+type CompStuff = (PinMap,[(Ident, Maybe Range)]) -- TODO: Better name
 
-portName :: Show b => String -> [a] -> b  -> String
-portName dir ps i = 
-  dir++if length ps == 1 then "" else "_" ++ show i
+-- | Bit-blasted list of inputs and outputs
+modulePorts :: CompS -> CompStuff
+modulePorts (CompS _  name ins outs _) = ports name ins <> ports name outs
+
+ports :: Name -> [Bus] -> CompStuff
+ports compNm ps =
+  (first M.fromList . unzip)
+    [ let name = portName compNm ps i in
+        ((p,(wid,name)),(name,Just (busRange wid))) -- TODO: redesign
+    | (i,Bus p wid) <- tagged ps ]
+
+portName :: Show b => String -> [a] -> b  -> Ident
+portName compNm ps i = 
+  compNm ++ if length ps == 1 then "" else "_" ++ show i
 
 -- | Given a list of simple Comps (CompS), retrieve 
--- the comp with given name, which must be a terminal.
+-- the one comp with given name.
 portComp :: String -> [CompS] -> CompS
 portComp name comps
-  | not (isTerminal name) = error eIllegalName 
+--   | not (isTerminal name) = error eIllegalName 
   | length fC == 1        = head fC
   | otherwise             = error eIncorrectComps
   where 
     fC = filter ((== name) . compName) comps
     floc = "Circat.Netlist.portComp"
-    eIllegalName = 
-      floc ++ ": Illegal value for name " ++ name
-           ++ ". Valid values are In or Out"            
+--     eIllegalName = 
+--       floc ++ ": Illegal value for name " ++ name
+--            ++ ". Valid values are In or Out"            
     eIncorrectComps = 
       floc ++ ": Incorrect number of comps named " ++ show name
            ++ " found in the list of comps. "
            ++ if length fC > 1 then " Multiple comps found " ++ show fC 
               else " No comps found."
+
+-- TODO: Build a Name-to-CompS map and use repeatedly in portComp calls
