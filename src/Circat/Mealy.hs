@@ -154,12 +154,12 @@ instance Applicative (Mealy a) where
 counter0 :: (C a, Num a) => Mealy () a
 counter0 = Mealy (\ ((),n) -> (n,n+1)) 0
 
-counter1 :: (ArrowCircuitT k a, Num a) => k () a
+counter1 :: (ArrowCircuitT k a, Num a) => () `k` a
 counter1 = loop (arr (\ ((),n) -> (n,n+1)) . second (delay 0))
 
--- Also works when the composed functions are swapped
+-- Also works when the composed functions are swapped.
 
-counter2 :: (ArrowCircuitT k a, Num a) => k () a
+counter2 :: (ArrowCircuitT k a, Num a) => () `k` a
 counter2 = proc () -> do rec old <- delay 0 -< new
                              new <- returnA -< old + 1
                          returnA -< old
@@ -179,22 +179,22 @@ _mc2 = runMealy counter2 (replicate 10 ())
 adder0 :: (C a, Num a) => Mealy a a
 adder0 = Mealy (\ (old,a) -> dup (old+a)) 0
 
-adder1 :: (ArrowCircuitT k a, Num a) => k a a
+adder1 :: (ArrowCircuitT k a, Num a) => a `k` a
 adder1 = loop (arr (\ (a,tot) -> dup (tot+a)) . second (delay 0))
 
 -- With arrow notation. Oops. Exclusive.
-adder2 :: (ArrowCircuitT k a, Num a) => k a a
+adder2 :: (ArrowCircuitT k a, Num a) => a `k` a
 adder2 = proc a -> do rec tot <- delay 0 -< tot + a
                       returnA -< tot
 
 -- With arrow notation. Inclusive.
-adder3 :: (ArrowCircuitT k a, Num a) => k a a
+adder3 :: (ArrowCircuitT k a, Num a) => a `k` a
 adder3 = proc a -> do rec old <- delay 0 -< new
                           new <- returnA -< old + a
                       returnA -< new
 
 -- Using let. Inclusive.
-adder4 :: (ArrowCircuitT k a, Num a) => k a a
+adder4 :: (ArrowCircuitT k a, Num a) => a `k` a
 adder4 = proc a -> do rec old <- delay 0 -< new
                           let new = old + a
                       returnA -< new
