@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts, CPP #-}
-{-# LANGUAGE ViewPatterns, ParallelListComp, ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns, PatternGuards, ParallelListComp, ScopedTypeVariables #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -69,9 +69,9 @@ toNetlist :: Name -> DGraph -> Module
 #ifdef StateMachine
 toNetlist name comps
   | Left _ <- portCompMb "NewState" comps
-  = Module name ins outs [] (nets++assigns)
+  = Module name' ins outs [] (nets++assigns)
   | otherwise
-  = Module name (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
+  = Module name' (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
  where
    clock          = ("clock",Nothing)
    reset          = ("reset",Nothing)
@@ -81,6 +81,10 @@ toNetlist name comps
    p2w            = p2wIn <> p2wNets
    assigns        = moduleAssigns p2w comps
    modPorts str   = modulePorts (portComp str comps)
+   name' = map tweak name
+    where
+      tweak '-' = '_'
+      tweak c   = c
 
 -- TODO: rename "portComp", since it's no longer just about module ports.
 
