@@ -67,8 +67,11 @@ outV name circ = saveVerilog name' (toVerilog ndr)
 toNetlist :: Name -> DGraph -> Module
 
 #ifdef StateMachine
-toNetlist name comps =
-  Module name (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
+toNetlist name comps
+  | Left _ <- portCompMb "NewState" comps
+  = Module name ins outs [] (nets++assigns)
+  | otherwise
+  = Module name (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
  where
    clock          = ("clock",Nothing)
    reset          = ("reset",Nothing)
@@ -287,19 +290,22 @@ portName :: Show b => String -> [a] -> b  -> Ident
 portName compNm ps i = 
   compNm ++ if length ps == 1 then "" else "_" ++ show i
 
+
 -- | Given a list of simple Comps (CompS), retrieve 
 -- the one comp with given name.
 portComp :: String -> [CompS] -> CompS
-portComp name comps
---   | not (isTerminal name) = error eIllegalName 
-  | length fC == 1        = head fC
-  | otherwise             = error eIncorrectComps
+portComp name comps =
+ either error id (portCompMb name comps)
+
+-- | Like 'portComp' but fails gracefully
+portCompMb :: String -> [CompS] -> Either String CompS
+portCompMb name comps =
+  case fC of
+    [c] -> Right c
+    _   -> Left eIncorrectComps
   where 
     fC = filter ((== name) . compName) comps
     floc = "Circat.Netlist.portComp"
---     eIllegalName = 
---       floc ++ ": Illegal value for name " ++ name
---            ++ ". Valid values are In or Out"            
     eIncorrectComps = 
       floc ++ ": Incorrect number of comps named " ++ show name
            ++ " found in the list of comps. "
