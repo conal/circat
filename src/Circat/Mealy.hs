@@ -2,6 +2,7 @@
 {-# LANGUAGE ExistentialQuantification, TupleSections, TypeOperators #-}
 {-# LANGUAGE ScopedTypeVariables, Arrows #-}
 {-# LANGUAGE ConstraintKinds, TypeFamilies #-}
+{-# LANGUAGE Rank2Types #-} -- for tests
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -164,17 +165,14 @@ counter2 = proc () -> do rec old <- delay 0 -< new
                              new <- returnA -< old + 1
                          returnA -< old
 
--- [0,1,2,3,4,5,6,7,8,9]
-_mc0 :: [Int]
-_mc0 = runMealy counter0 (replicate 10 ())
+testCounter :: Mealy () Int -> [Int]
+testCounter counter = runMealy counter (replicate 10 ())
 
--- [0,1,2,3,4,5,6,7,8,9]
-_mc1 :: [Int]
-_mc1 = runMealy counter1 (replicate 10 ())
+_testCounters :: [[Int]]
+_testCounters = testCounter <$> [counter0,counter1,counter2]
 
--- [0,1,2,3,4,5,6,7,8,9]
-_mc2 :: [Int]
-_mc2 = runMealy counter2 (replicate 10 ())
+-- *Circat.Mealy> _testCounters
+-- [[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9],[0,1,2,3,4,5,6,7,8,9]]
 
 adder0 :: (C a, Num a) => Mealy a a
 adder0 = Mealy (\ (old,a) -> dup (old+a)) 0
@@ -199,22 +197,9 @@ adder4 = proc a -> do rec old <- delay 0 -< new
                           let new = old + a
                       returnA -< new
 
--- [1,3,6,10,15,21,28,36,45,55]
-_ms0 :: [Int]
-_ms0 = runMealy adder0 [1..10]
+testAdder :: Mealy Int Int -> [Int]
+testAdder adder = runMealy adder [1..10]
 
--- [1,3,6,10,15,21,28,36,45,55]
-_ms1 :: [Int]
-_ms1 = runMealy adder1 [1..10]
+_testAdders :: [[Int]]
+_testAdders = testAdder <$> [adder0,adder1,adder2,adder3,adder4]
 
--- [0,1,3,6,10,15,21,28,36,45]
-_ms2 :: [Int]
-_ms2 = runMealy adder2 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms3 :: [Int]
-_ms3 = runMealy adder3 [1..10]
-
--- [1,3,6,10,15,21,28,36,45,55]
-_ms4 :: [Int]
-_ms4 = runMealy adder4 [1..10]
