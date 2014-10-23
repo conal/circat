@@ -882,7 +882,7 @@ outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
 outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
 
 mkGraph :: Name -> UU -> (Name,DGraph,Report)
-mkGraph (renameC -> name') uu = (name',graph,report)
+mkGraph (renameC -> name') uu = (name', connectState graph,report)
  where
    (graph,depth) = uuGraph uu
    report | depth == 0 = "No components.\n"  -- except In & Out
@@ -905,7 +905,7 @@ outDotG :: (String,String) -> [Attr] -> (Name,DGraph,Report) -> IO ()
 outDotG (outType,res) attrs (name,graph,report) = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot")
-       (graphDot name attrs (knotTie graph) ++ "\n// "++ report)
+       (graphDot name attrs graph ++ "\n// "++ report)
      -- putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
@@ -920,8 +920,9 @@ outDotG (outType,res) attrs (name,graph,report) =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
-knotTie :: Unop DGraph
-knotTie g0 = delays ++ g3
+-- Replace the state pseudo-components with connected-up delay elements.
+connectState :: Unop DGraph
+connectState g0 = delays ++ g3
  where
    (new,g1) = gDrop "NewState"     g0
    (old,g2) = gDrop "State"        g1
@@ -936,9 +937,9 @@ knotTie g0 = delays ++ g3
    gDrop name g =
      case partition ((== name) . compName) g of
        ([c],g') -> (c,g')
-       (cs,_)   -> error ("knotTie: " ++ name ++ ": " ++ show cs)
+       (cs,_)   -> error ("connectState: " ++ name ++ ": " ++ show cs)
 
--- TODO: Rewrite knotTie entirely, with more elegance and efficiency.
+-- TODO: Rewrite connectState entirely, with more elegance and efficiency.
 -- Avoid multiple linear list traversals!
 
 showCounts :: [(PrimName,Int)] -> String

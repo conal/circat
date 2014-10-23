@@ -27,7 +27,6 @@ module Circat.Netlist
   ) where
 
 import Data.Monoid (mempty,(<>),mconcat)
-import Data.Functor ((<$>))
 import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
@@ -37,7 +36,7 @@ import Text.Printf (printf)
 import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
-  ( CompS(..), compIns, compOuts, compName, compOuts, tagged
+  ( CompS(..), compOuts, compName, compOuts, tagged
   , Width, PinId, Bus(..),Name,DGraph,Report
   , (:>), GenBuses,unitize,mkGraph
   )
@@ -68,19 +67,18 @@ toNetlist :: Name -> DGraph -> Module
 
 #ifdef StateMachine
 toNetlist name comps
-  | Left _ <- portCompMb "NewState" comps
-  = Module name' ins outs [] (nets++assigns)
-  | otherwise
-  = Module name' (clock:reset:ins) outs [] (nets++assigns++[clocked p2w comps])
+--   | Left _ <- portCompMb "NewState" comps
+--   = Module name' ins outs [] (nets++assigns)
+--   | otherwise
+  = Module name' (clockIns++ins) outs [] (nets++assigns++clockDecls)
  where
-   clock          = ("clock",Nothing)
-   reset          = ("reset",Nothing)
    (p2wIn,ins)    = modPorts "In"
    (_,outs)       = modPorts "Out"
    (p2wNets,nets) = moduleNets comps
    p2w            = p2wIn <> p2wNets
    assigns        = moduleAssigns p2w comps
    modPorts str   = modulePorts (portComp str comps)
+   (clockIns,clockDecls) = clocked p2w comps
    name' = map tweak name
     where
       tweak '-' = '_'
@@ -88,22 +86,27 @@ toNetlist name comps
 
 -- TODO: rename "portComp", since it's no longer just about module ports.
 
-clocked :: PinMap -> DGraph -> Decl
-clocked p2w comps =
-  ProcessDecl
-    (Event (ExprVar "clock") PosEdge) Nothing
-    (If (ExprBinary Equals (ExprVar "reset") (ExprLit Nothing (ExprBit T)))
-        (updates "InitialState")
-        (Just (updates "NewState")))
+clocked :: PinMap -> DGraph -> ([(Ident,Maybe Range)],[Decl])
+clocked p2w comps
+  | null states = mempty
+  | otherwise =
+      ( [("clock",Nothing),("reset",Nothing)]
+      , [ProcessDecl
+           (Event (ExprVar "clock") PosEdge) Nothing
+           (If (ExprBinary Equals
+                 (ExprVar "reset") (ExprLit Nothing (ExprBit T)))
+               (updates starts)
+               (Just (updates news)))] )
  where
-  updates :: Name -> Stmt
-  updates source =
-    sseq (zipWith Assign (vars compOuts "State") (vars compIns source))
-   where
-     vars :: (CompS -> [Bus]) -> Name -> [Expr]
-     vars get nm = sourceExp p2w <$> get (portComp nm comps)
+  starts,news,states :: [Expr]
+  (starts,news,states) =
+    unzip3 [(v start,v new,v state) | CompS _ "delay" [start,new] [state] _ <- comps]
+  v :: Bus -> Expr
+  v = sourceExp p2w  -- Move to view pattern
+  updates :: [Expr] -> Stmt
+  updates sources = sseq (zipWith Assign states sources)
 
---   always @ (posedge clock) begin
+--   always @ (posedge clock)
 --     if (reset == 1'b1) begin s0 <= inits0; ... end
 --     else begin s0 <= t0; ... end
 --   end
@@ -162,9 +165,10 @@ isTerminal s = isInput s || isOutput s
 moduleAssign :: PinMap -> CompS -> [Decl]
 -- Input comps are never assigned
 moduleAssign _ (CompS _ "In" _ _ _) = [] 
-moduleAssign _ (CompS _ "State" _ _ _) = [] 
-moduleAssign _ (CompS _ "InitialState" _ _ _) = [] 
-moduleAssign _ (CompS _ "NewState" _ _ _) = [] 
+-- moduleAssign _ (CompS _ "State" _ _ _) = [] 
+-- moduleAssign _ (CompS _ "InitialState" _ _ _) = [] 
+-- moduleAssign _ (CompS _ "NewState" _ _ _) = [] 
+moduleAssign _ (CompS _ "delay" _ _ _) = []   -- treated specially
 -- binary operations
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
@@ -265,7 +269,7 @@ moduleNet c =
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
 valDecl :: Name -> Ident -> Maybe Range -> Decl
-valDecl "State" s r = MemDecl s Nothing r Nothing
+valDecl "delay" s r = MemDecl s Nothing r Nothing
 valDecl _       s r = NetDecl s r Nothing
 
 busRange :: Width -> Range
