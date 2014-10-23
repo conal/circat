@@ -924,7 +924,7 @@ knotTie :: Unop DGraph
 knotTie g0 = delays ++ g3
  where
    (new,g1) = gDrop "NewState"     g0
-   (old,g2) = gDrop "OldState"     g1
+   (old,g2) = gDrop "State"        g1
    (ini,g3) = gDrop "InitialState" g2
    delays = zipWith4 delay
                [compStart ..] (compIns ini) (compIns new) (compOuts old)
@@ -937,7 +937,7 @@ knotTie g0 = delays ++ g3
      case partition ((== name) . compName) g of
        ([c],g') -> (c,g')
        (cs,_)   -> error ("knotTie: " ++ name ++ ": " ++ show cs)
-   
+
 -- TODO: Rewrite knotTie entirely, with more elegance and efficiency.
 -- Avoid multiple linear list traversals!
 
@@ -1622,7 +1622,7 @@ unitizeMealyC (MealyC f s) =
    s' = namedC "InitialState" . s
    f' = (namedC "Out" *** namedC "NewState")
       . f
-      . (namedC "In"  *** namedC "OldState")
+      . (namedC "In"  *** namedC "State")
    undup :: Unit :* Unit :> Unit
    undup = it
 
@@ -1630,7 +1630,7 @@ unitizeMealyC (MealyC f s) =
 -- runMealyC = runU . unitizeMealyC
 
 outerPrims :: [PrimName]
-outerPrims = ["In","Out", "OldState","NewState","InitialState"]
+outerPrims = ["In","Out", "State","NewState","InitialState"]
 
 isOuterPrim :: PrimName -> Bool
 isOuterPrim = flip S.member (S.fromList outerPrims)

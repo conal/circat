@@ -98,7 +98,7 @@ clocked p2w comps =
  where
   updates :: Name -> Stmt
   updates source =
-    sseq (zipWith Assign (vars compOuts "OldState") (vars compIns source))
+    sseq (zipWith Assign (vars compOuts "State") (vars compIns source))
    where
      vars :: (CompS -> [Bus]) -> Name -> [Expr]
      vars get nm = sourceExp p2w <$> get (portComp nm comps)
@@ -128,10 +128,9 @@ toNetlist name comps = Module name ins outs [] (nets++assigns)
 -- Maybe then a Reader with the same info for moduleAssigns.
 
 toVerilog :: (Name,DGraph,Report) -> String
-toVerilog (name,graph,report) =
-  printf "%s\n// %s"
+toVerilog (name,graph,_report) =
+  printf "%s"
    (show (V.ppModule (mk_module (toNetlist name graph))))
-   report
 
 saveAsVerilog :: (Name,DGraph,Report) -> IO ()
 saveAsVerilog gg@(name,_,_) = saveVerilog name (toVerilog gg)
@@ -143,17 +142,17 @@ saveVerilog name verilog =
      putStrLn ("Wrote " ++ filePath)
   where
     outDir   = "out"
-    filePath = outDir ++ "/" ++ name ++ ".v.txt"
+    filePath = outDir ++ "/" ++ name ++ ".v"
 
 -- | Produces the assign statements for every Comp except inputs ("In" and
--- "OldState"). Assign statements bind the result of a function (and,or,add
+-- "State"). Assign statements bind the result of a function (and,or,add
 -- etc.) to a variable name which is a wire in verilog parlance eg. w_xor_I1 =
 -- In_0 ^ In_1 // (`^` is xor)
 moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
 isInput, isOutput, isNewState, isTerminal :: String -> Bool
--- isInput  = (`elem` ["In" , "OldState"])
+-- isInput  = (`elem` ["In" , "State"])
 -- isOutput = (`elem` ["Out", "NewState", "InitialState"])
 isInput    = (== "In" )
 isOutput   = (== "Out")
@@ -163,7 +162,7 @@ isTerminal s = isInput s || isOutput s
 moduleAssign :: PinMap -> CompS -> [Decl]
 -- Input comps are never assigned
 moduleAssign _ (CompS _ "In" _ _ _) = [] 
-moduleAssign _ (CompS _ "OldState" _ _ _) = [] 
+moduleAssign _ (CompS _ "State" _ _ _) = [] 
 moduleAssign _ (CompS _ "InitialState" _ _ _) = [] 
 moduleAssign _ (CompS _ "NewState" _ _ _) = [] 
 -- binary operations
@@ -266,8 +265,8 @@ moduleNet c =
     wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
 
 valDecl :: Name -> Ident -> Maybe Range -> Decl
-valDecl "OldState" s r = MemDecl s r Nothing Nothing
-valDecl _          s r = NetDecl s r Nothing
+valDecl "State" s r = MemDecl s Nothing r Nothing
+valDecl _       s r = NetDecl s r Nothing
 
 busRange :: Width -> Range
 busRange wid = Range (lit 0) (lit (wid - 1))
