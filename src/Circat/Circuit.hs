@@ -66,22 +66,14 @@ import qualified Prelude as P
 import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),Alternative(..),liftA2)
+import Control.Monad (unless)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 import Data.Tuple (swap)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
-import Data.Coerce                      -- TODO: imports
-import Unsafe.Coerce -- experiment
-
-import qualified System.Info as SI
-import System.Process (system) -- ,readProcess
-import System.Directory (createDirectoryIfMissing)
-import System.Exit (ExitCode(ExitSuccess))
-
-import Control.Monad (unless)
-import Data.List (intercalate,group,sort)
+import Data.List (intercalate,group,sort,zipWith4,partition)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -89,6 +81,13 @@ import qualified Data.Set as S
 import Data.Sequence (Seq,singleton)
 import Text.Printf (printf)
 import Debug.Trace (trace)
+import Data.Coerce                      -- TODO: imports
+import Unsafe.Coerce -- experiment
+
+import qualified System.Info as SI
+import System.Process (system) -- ,readProcess
+import System.Directory (createDirectoryIfMissing)
+import System.Exit (ExitCode(ExitSuccess))
 
 -- mtl
 import Control.Monad.State (State,evalState,execState,runState,MonadState)
@@ -905,7 +904,8 @@ mkGraph (renameC -> name') uu = (name',graph,report)
 outDotG :: (String,String) -> [Attr] -> (Name,DGraph,Report) -> IO ()
 outDotG (outType,res) attrs (name,graph,report) = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot") (graphDot name attrs graph ++ "\n// "++ report)
+     writeFile (outFile "dot")
+       (graphDot name attrs (knotTie graph) ++ "\n// "++ report)
      -- putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
@@ -919,6 +919,27 @@ outDotG (outType,res) attrs (name,graph,report) =
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
+
+knotTie :: Unop DGraph
+knotTie g0 = delays ++ g3
+ where
+   (new,g1) = gDrop "NewState"     g0
+   (old,g2) = gDrop "OldState"     g1
+   (ini,g3) = gDrop "InitialState" g2
+   delays = zipWith4 delay
+               [compStart ..] (compIns ini) (compIns new) (compOuts old)
+   compStart :: CompNum
+   compStart = maximum (compNum <$> g0) + 1
+   delay :: CompNum -> Bus -> Bus -> Bus -> CompS
+   delay cnum i n o = CompS cnum "delay" [i,n] [o] 0
+   gDrop :: Name -> DGraph -> (CompS,DGraph)
+   gDrop name g =
+     case partition ((== name) . compName) g of
+       ([c],g') -> (c,g')
+       (cs,_)   -> error ("knotTie: " ++ name ++ ": " ++ show cs)
+   
+-- TODO: Rewrite knotTie entirely, with more elegance and efficiency.
+-- Avoid multiple linear list traversals!
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
