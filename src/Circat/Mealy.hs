@@ -10,6 +10,8 @@
 
 #define CircuitConstraint
 
+-- #define Semantics
+
 ----------------------------------------------------------------------
 -- |
 -- Module      :  Circat.Mealy
@@ -21,20 +23,30 @@
 -- Mealy machines
 ----------------------------------------------------------------------
 
-module Circat.Mealy (Mealy(..),ArrowCircuit(..),ArrowCircuitT) where
+module Circat.Mealy
+  ( Mealy(..),ArrowCircuit(..),ArrowCircuitT
+#ifdef Semantics
+  , asStreamFun, asArrow
+#endif
+  ) where
 
 import Prelude hiding (id,(.))
 import Control.Category
+import Control.Arrow
 import Control.Applicative ((<$>), Applicative(..))
 import Data.Tuple (swap)
 import GHC.Prim (Constraint)
-
-import Control.Arrow
 
 import Circat.Misc (dup) -- ,Unit,(:*)
 
 #ifdef CircuitConstraint
 import Circat.Circuit (GenBuses(..)) -- , Machine, unitizeMachine
+#endif
+
+#ifdef Semantics
+import Data.Stream (Stream(..))
+import qualified Control.Arrow.Operations as Op
+import Control.Arrow.Transformer.Stream
 #endif
 
 {--------------------------------------------------------------------
@@ -102,8 +114,8 @@ instance ArrowChoice Mealy where
 instance ArrowLoop Mealy where
   loop (Mealy f s0) = Mealy (loop (rot . f . rot)) s0
    where
-     rot :: ((p,q),r) -> ((p,r),q)
-     rot ((p,q),r) = ((p,r),q)
+     rot :: ((x,y),z) -> ((x,z),y)
+     rot ((x,y),z) = ((x,z),y)
 
 class ArrowLoop k => ArrowCircuit k where
   type CircuitKon k a :: Constraint
@@ -125,6 +137,21 @@ runMealy (Mealy f s0) = go s0
  where
    go _ []     = []
    go s (a:as) = b : go s' as where (b,s') = f (a,s)
+
+#ifdef Semantics
+
+type StreamFun = StreamArrow (->)
+
+asStreamFun :: Mealy a b -> StreamFun a b
+asStreamFun (Mealy f s0) = StreamArrow (go s0)
+ where
+   go s (Cons a as) = Cons b (go s' as) where (b,s') = f (a,s)
+
+asArrow :: Op.ArrowCircuit k =>
+           Mealy a b -> (a `k` b)
+asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
+
+#endif
 
 {--------------------------------------------------------------------
     Some other standard instances for arrows
