@@ -1,7 +1,5 @@
 {-# LANGUAGE CPP #-}
 
-#define MealyToArrow
-
 -- #define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
@@ -27,7 +25,7 @@
 {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -60,10 +58,7 @@ module Circat.Circuit
   , systemSuccess
   , unitize
   , MealyC(..)
-#ifdef MealyToArrow
-  -- , mealyAsArrow  -- <<loop>> :/
-  , runC
-#endif
+  , mealyAsArrow  -- Warning: <<loop>>
   , unitizeMealyC
   ) where
 
@@ -961,11 +956,13 @@ outDotG (outType,res) attrs (name,graph,report) =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
+#define MealyToArrow
+
 -- Replace the state pseudo-components with connected-up delay elements.
 connectState :: Unop DGraph
 #ifdef MealyToArrow
--- connectState = id
-
+connectState = id
+#else
 -- Drop OldState and NewState pseudo-components. Replace uses of OldState's
 -- output with corresponding uses of NewState's inputs.
 connectState g0 = g3
@@ -992,29 +989,7 @@ onInputs :: Unop [Input] -> Unop CompS
 onInputs f (CompS n p i o m) = CompS n p (f i) o m
 
 -- TODO: Rewrite connectState entirely, with more elegance and efficiency. Avoid
--- multiple linear list traversals! Better yet, build the circuit with loopC
--- instead of OldState and NewState, and skip the post-construction patching.
-
-#else
-connectState g0 = delays ++ g3
- where
-   (new,g1) = gDrop "NewState"     g0
-   (old,g2) = gDrop "OldState"     g1
-   (ini,g3) = gDrop "InitialState" g2
-   delays = zipWith4 delay
-               [compStart ..] (compIns ini) (compIns new) (compOuts old)
-   compStart :: CompNum
-   compStart = maximum (compNum <$> g0) + 1
-   delay :: CompNum -> Bus -> Bus -> Bus -> CompS
-   delay cnum i n o = CompS cnum "delay" [i,n] [o] 0
-   gDrop :: Name -> DGraph -> (CompS,DGraph)
-   gDrop name g =
-     case partition ((== name) . compName) g of
-       ([c],g') -> (c,g')
-       (cs,_)   -> error ("connectState: " ++ name ++ ": " ++ show cs)
-
--- TODO: Rewrite connectState entirely, with more elegance and efficiency.
--- Avoid multiple linear list traversals!
+-- multiple linear list traversals!
 #endif
 
 showCounts :: [(PrimName,Int)] -> String
@@ -1689,7 +1664,7 @@ instance DistribCat (:>) where
     Mealy machines
 --------------------------------------------------------------------}
 
-#ifdef MealyToArrow
+data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
 
 loopC :: (a :* c :> b :* c) -> (a :> b)
 loopC (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
@@ -1698,21 +1673,22 @@ loopC (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
 -- Try some experiments
 
 #ifdef TypeDerivation
-
 f :: KC (Buses (a :* c)) (Buses (b :* c))
 arr (uncurry PairB) :: KC (Buses a :* Buses c) (Buses (a :* c))
 arr unPairB :: KC (Buses (b :* c)) (Buses b :* Buses c)
 arr unPairB . f . arr (uncurry PairB)
  :: KC (Buses a :* Buses c) (Buses b :* Buses c)
-
 #endif
 
-data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
+mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
+mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
 
--- mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
--- mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
+unitizeMealyC :: GenBuses a => MealyC a b -> UU
 
-#if 1
+#ifdef MealyToArrow
+unitizeMealyC = unitize . mealyAsArrow
+#else
+unitizeMealyC = unitizeLoopC . preLoopC
 
 -- Ready for loop.
 data LoopC a b = forall s. GenBuses s => LoopC (a :* s :> b :* s)
@@ -1729,42 +1705,6 @@ unitizeLoopC (LoopC f) = undup . f' . dup
       . (namedC "In"  *** namedC "OldState")
    undup :: Unit :* Unit :> Unit
    undup = it
-
-unitizeMealyC :: GenBuses a => MealyC a b -> UU
-unitizeMealyC = unitizeLoopC . preLoopC
-
-#endif
-
-
-#else
-
-data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) (Unit :> s)
-
--- -- Convenient interface for construction from lambda-ccc
--- mkMealyC :: GenBuses s => Unit :> ((a :* s -> b :* s) :* s) -> MealyC a b
--- mkMealyC q = MealyC f s
---  where
---    f = unUnitFun (exl . q)
---    s = exr . q
-
--- Will the replication of q result in replication of work in the circuit?
--- Try it, and find out.
-
--- TODO: consider rolling unitizeMealyC in with mkMealyC.
-
-unitizeMealyC :: GenBuses a => MealyC a b -> UU
-unitizeMealyC (MealyC f s) =
-  (undup . first undup) . (f' *** s') . (first dup . dup)
- where
-   s' = namedC "InitialState" . s
-   f' = (namedC "Out" *** namedC "NewState")
-      . f
-      . (namedC "In"  *** namedC "OldState")
-   undup :: Unit :* Unit :> Unit
-   undup = it
-
--- runMealyC :: GenBuses a => MealyC a b -> [(Comp,Reuses)]
--- runMealyC = runU . unitizeMealyC
 
 #endif
 
