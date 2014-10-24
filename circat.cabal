@@ -28,7 +28,7 @@ Library
                   , constraints
                   , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
-                  , netlist-to-verilog >= 0.1.1, netlist-to-vhdl >= 0.3.1
+                  , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
 --                  , type-encode
 -- , functor-combo >= 0.3.4
 

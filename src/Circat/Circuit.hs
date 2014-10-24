@@ -1,8 +1,8 @@
 {-# LANGUAGE CPP #-}
 
--- #define MealyToArrow
+#define MealyToArrow
 
-#define NoOptimizeCircuit
+-- #define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -27,7 +27,7 @@
 {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -49,7 +49,7 @@
 module Circat.Circuit
   ( CircuitM, (:>)
   , PinId, Width, Bus(..), Source(..)
-  , GenBuses(..), genBusesRep', delayCRep, tyRep, bottomRep
+  , GenBuses(..), genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -61,10 +61,10 @@ module Circat.Circuit
   , unitize
   , MealyC(..)
 #ifdef MealyToArrow
-  , mealyAsArrow, runC
-#else
-  , unitizeMealyC
+  -- , mealyAsArrow  -- <<loop>> :/
+  , runC
 #endif
+  , unitizeMealyC
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -80,7 +80,7 @@ import Data.Foldable (foldMap,toList)
 import Data.Tuple (swap)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
-import Data.List (intercalate,group,sort,zipWith4,partition)
+import Data.List (intercalate,group,sort,zipWith4,partition,stripPrefix)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -239,8 +239,18 @@ instance GenBuses Bool where
   delayC = primDelay
   ty = const BoolT
 
+delayPrefix :: String
+delayPrefix = "Cons "
+              -- "delay "
+
+delayName :: String -> String
+delayName = (delayPrefix ++)
+
+unDelayName :: String -> Maybe String
+unDelayName = stripPrefix delayPrefix
+
 primDelay :: (GenBuses a, Show a) => a -> (a :> a)
-primDelay a0 = namedC ("delay " ++ show a0)
+primDelay a0 = namedC (delayName (show a0))
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
@@ -954,12 +964,42 @@ outDotG (outType,res) attrs (name,graph,report) =
 -- Replace the state pseudo-components with connected-up delay elements.
 connectState :: Unop DGraph
 #ifdef MealyToArrow
-connectState = id
+-- connectState = id
+
+-- Drop OldState and NewState pseudo-components. Replace uses of OldState's
+-- output with corresponding uses of NewState's inputs.
+connectState g0 = g3
+ where
+   (new,g1) = gDrop "NewState" g0
+   (old,g2) = gDrop "OldState" g1
+   g3 = patchG (compOuts old) (compIns new) g2
+   gDrop :: Name -> DGraph -> (CompS,DGraph)
+   gDrop name g =
+     case partition ((== name) . compName) g of
+       ([c],g') -> (c,g')
+       (cs,_)   -> error ("connectState: " ++ name ++ ": " ++ show cs)
+
+patchG :: [Bus] -> [Bus] -> Unop DGraph
+patchG olds news = map patchC
+ where
+   patchC :: Unop CompS
+   patchC = (onInputs.fmap) patchIn
+   patchIn :: Unop Bus
+   patchIn b = fromMaybe b (M.lookup b patchMap)
+   patchMap = M.fromList (olds `zip` news)
+
+onInputs :: Unop [Input] -> Unop CompS
+onInputs f (CompS n p i o m) = CompS n p (f i) o m
+
+-- TODO: Rewrite connectState entirely, with more elegance and efficiency. Avoid
+-- multiple linear list traversals! Better yet, build the circuit with loopC
+-- instead of OldState and NewState, and skip the post-construction patching.
+
 #else
 connectState g0 = delays ++ g3
  where
    (new,g1) = gDrop "NewState"     g0
-   (old,g2) = gDrop "State"        g1
+   (old,g2) = gDrop "OldState"     g1
    (ini,g3) = gDrop "InitialState" g2
    delays = zipWith4 delay
                [compStart ..] (compIns ini) (compIns new) (compOuts old)
@@ -1098,8 +1138,12 @@ data Dir = In | Out deriving Show
 type PortNum = Int
 type CompNum = Int
 
+taggedFrom :: Int -> [a] -> [(Int,a)]
+taggedFrom n = zip [n ..]
+
 tagged :: [a] -> [(Int,a)]
-tagged = zip [0 ..]
+tagged = taggedFrom 0
+-- tagged = zip [0 ..]
 
 recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
@@ -1665,9 +1709,31 @@ arr unPairB . f . arr (uncurry PairB)
 
 data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
 
-mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
-mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
+-- mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
+-- mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
 
+#if 1
+
+-- Ready for loop.
+data LoopC a b = forall s. GenBuses s => LoopC (a :* s :> b :* s)
+
+-- Like mealyAsArrow but without the loopC.
+preLoopC :: GenBuses a => MealyC a b -> LoopC a b
+preLoopC (MealyC f s0) = LoopC (f . second (delayC s0))
+
+unitizeLoopC :: GenBuses a => LoopC a b -> UU
+unitizeLoopC (LoopC f) = undup . f' . dup
+ where
+   f' = (namedC "Out" *** namedC "NewState")
+      . f
+      . (namedC "In"  *** namedC "OldState")
+   undup :: Unit :* Unit :> Unit
+   undup = it
+
+unitizeMealyC :: GenBuses a => MealyC a b -> UU
+unitizeMealyC = unitizeLoopC . preLoopC
+
+#endif
 
 
 #else
@@ -1693,7 +1759,7 @@ unitizeMealyC (MealyC f s) =
    s' = namedC "InitialState" . s
    f' = (namedC "Out" *** namedC "NewState")
       . f
-      . (namedC "In"  *** namedC "State")
+      . (namedC "In"  *** namedC "OldState")
    undup :: Unit :* Unit :> Unit
    undup = it
 
@@ -1703,7 +1769,7 @@ unitizeMealyC (MealyC f s) =
 #endif
 
 outerPrims :: [PrimName]
-outerPrims = ["In","Out", "State","NewState","InitialState"]
+outerPrims = ["In","Out", "OldState","NewState","InitialState"]
 
 isOuterPrim :: PrimName -> Bool
 isOuterPrim = flip S.member (S.fromList outerPrims)

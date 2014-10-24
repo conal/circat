@@ -4,7 +4,7 @@
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
 -- |
--- Module      :  Circat.Circuit
+-- Module      :  Circat.Netlist
 -- Copyright   :  (c) 2013 Tabula, Inc.
 -- License     :  BSD3
 -- 
@@ -38,7 +38,7 @@ import System.Directory (createDirectoryIfMissing)
 import Circat.Circuit
   ( CompS(..), compOuts, compName, compOuts, tagged
   , Width, PinId, Bus(..),Name,DGraph,Report
-  , (:>), GenBuses,unitize,mkGraph
+  , (:>), GenBuses,unitize,mkGraph,unDelayName
   )
 
 import Language.Netlist.AST
@@ -96,11 +96,24 @@ clocked p2w comps
  where
   starts,news,states :: [Expr]
   (starts,news,states) =
-    unzip3 [(v start,v new,v state) | CompS _ "delay" [start,new] [state] _ <- comps]
-  v :: Bus -> Expr
-  v = sourceExp p2w  -- Move to view pattern
+    unzip3 [ (start,var new,var state)
+           | CompS _ (delayStart -> Just start) [new] [state] _ <- comps]
+  var :: Bus -> Expr
+  var = sourceExp p2w  -- Move to view pattern
   updates :: [Expr] -> Stmt
   updates sources = sseq (zipWith Assign states sources)
+
+delayStart :: Name -> Maybe Expr
+delayStart = fmap readLitExpr . unDelayName
+
+readLitExpr :: String -> Expr
+readLitExpr = ExprLit Nothing . lit
+ where
+   lit :: String -> ExprLit
+   lit "False" = ExprBit F
+   lit "True"  = ExprBit T
+   lit (reads -> [(n,"")]) = ExprNum n
+   lit s = error ("Circat.Netlist.clocked.lit: bad lit: " ++ s)
 
 --   always @ (posedge clock)
 --     if (reset == 1'b1) begin s0 <= inits0; ... end
@@ -149,7 +162,8 @@ isTerminal s = isInput s || isOutput s
 moduleAssign :: PinMap -> CompS -> [Decl]
 
 moduleAssign _ (CompS _ "In"    _ _ _) = [] 
-moduleAssign _ (CompS _ "delay" _ _ _) = []   -- see clocked
+
+moduleAssign _ (CompS _ (delayStart -> Just _) _ _ _) = []   -- see clocked
 
 -- binary operations
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
@@ -249,11 +263,14 @@ moduleNet c =
     | (i,Bus o wid) <- tagged outs ]
   where
     outs = compOuts c
-    wireName i = "w_"++instName c++if length outs==1 then "" else "_"++show i
+    wireName i = {-"w_"++-}instName c++if length outs==1 then "" else "_"++show i
 
 valDecl :: Name -> Ident -> Maybe Range -> Decl
-valDecl "delay" s r = MemDecl s Nothing r Nothing
-valDecl _       s r = NetDecl s r Nothing
+valDecl (delayStart -> Just x0) s r = MemDecl s Nothing r (Just [x0])
+valDecl _                       s r = NetDecl s r Nothing
+
+-- TODO: Extract and use initialization value for delay in place of MemDecl's
+-- final Nothing. Then consider dropping the reset.
 
 busRange :: Width -> Range
 busRange wid = Range (lit 0) (lit (wid - 1))
@@ -261,7 +278,14 @@ busRange wid = Range (lit 0) (lit (wid - 1))
    lit = ExprLit Nothing . ExprNum . fromIntegral
 
 instName :: CompS -> String
-instName (CompS num name _ _ _) = name ++"_I"++show num
+instName (CompS num name _ _ _) = name' ++"_I"++show num
+ where
+   name' = map tweak name
+    where
+      -- Added for delay components.
+      tweak ' ' = '_'
+      tweak c   = c
+
 
 type CompStuff = (PinMap,[(Ident, Maybe Range)]) -- TODO: Better name
 
