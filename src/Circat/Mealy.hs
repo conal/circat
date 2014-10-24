@@ -55,7 +55,10 @@ import Control.Arrow.Transformer.Stream
 
 #ifdef CircuitConstraint
 
-type C = GenBuses
+-- type C = GenBuses
+type C a = (GenBuses a, Show a)
+
+-- The Show constraint is helpful for debugging. Perhaps remove later.
 
 #else
 
