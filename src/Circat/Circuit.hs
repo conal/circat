@@ -6,6 +6,8 @@
 -- #define NoIdempotence
 -- #define NoHashCons
 
+-- #define MealyToArrow
+
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
@@ -24,7 +26,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -62,29 +64,33 @@ module Circat.Circuit
   , unitizeMealyC
   ) where
 
-import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
-import qualified Prelude as P
+import Prelude hiding (id,(.),curry,uncurry,sequence)
+-- import qualified Prelude as P
 
 import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..),Alternative(..),liftA2)
-import Control.Monad (unless)
+import Control.Applicative (Applicative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..),loop)
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 import Data.Tuple (swap)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
-import Data.List (intercalate,group,sort,zipWith4,partition,stripPrefix)
+import Data.List (intercalate,group,sort,stripPrefix)
+#ifndef MealyToArrow
+import Data.List (partition)
+#endif
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Set (Set)
+-- import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Sequence (Seq,singleton)
 import Text.Printf (printf)
-import Debug.Trace (trace)
-import Data.Coerce                      -- TODO: imports
+-- import Debug.Trace (trace)
+-- import Data.Coerce                      -- TODO: imports
+#if !defined NoHashCons
 import Unsafe.Coerce -- experiment
+#endif
 
 import qualified System.Info as SI
 import System.Process (system) -- ,readProcess
@@ -92,7 +98,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 
 -- mtl
-import Control.Monad.State (State,evalState,execState,runState,MonadState)
+import Control.Monad.State (State,execState,runState)
 import qualified Control.Monad.State as Mtl
 
 import TypeUnary.Vec hiding (get)
@@ -100,7 +106,6 @@ import TypeUnary.Vec hiding (get)
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
 import Circat.Category
 import Circat.Classes
-import Circat.Rep
 import Circat.Pair
 import qualified Circat.RTree as RTree
 import qualified Circat.LTree as LTree
@@ -475,12 +480,11 @@ primOpt name opt =
   mkCK $ \ a -> let plain = genComp (Prim name) a in
                   case flattenMb a of
                     Nothing   -> plain
-                    Just srcs -> opt srcs >>= P.maybe plain return
+                    Just srcs -> opt srcs >>= maybe plain return
 
 -- primOpt name opt =
 --   mkCK $ \ a -> opt (flattenB ("primOpt/"++name) a)
---                  >>= P.maybe (genComp (Prim name) a) return
-
+--                  >>= maybe (genComp (Prim name) a) return
 
 tryCommute :: a :> a
 tryCommute = mkCK try
@@ -956,8 +960,6 @@ outDotG (outType,res) attrs (name,graph,report) =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
-#define MealyToArrow
-
 -- Replace the state pseudo-components with connected-up delay elements.
 connectState :: Unop DGraph
 #ifdef MealyToArrow
@@ -1040,7 +1042,7 @@ circuitGraph = uuGraph . unitize
 
 type Depth = Int
 
-#define SkipTrim
+-- #define SkipTrim
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
