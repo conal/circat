@@ -557,7 +557,7 @@ instance ProductCat (:>) where
   exl   = C (arr exlB)
   exr   = C (arr exrB)
   dup   = mkCK dupB
-  -- (***) = inCK2 crossB  -- or default
+  (***) = inCK2 crossB  -- or default
   (&&&) = inCK2 forkB   -- or default
 
 instance ClosedCat (:>) where
@@ -1025,8 +1025,6 @@ circuitGraph = uuGraph . unitize
 
 type Depth = Int
 
-type TrimM = State (Map CompS Depth)
-
 #define SkipTrim
 
 -- Remove unused components.
@@ -1036,6 +1034,8 @@ trimDGraph :: DGraph -> (DGraph, Depth)
 #ifdef SkipTrim
 trimDGraph g = (g,0)
 #else
+type TrimM = State (Map CompS Depth)
+
 trimDGraph g =
   (M.keys *** pred . maximum) . swap $
     runState (mapM searchComp startComps) M.empty
@@ -1667,6 +1667,8 @@ data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
 
 mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
 mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
+
+
 
 #else
 
