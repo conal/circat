@@ -233,24 +233,26 @@ testAdder adder = runMealy adder [1..10]
 _testAdders :: [[Int]]
 _testAdders = testAdder <$> [adder0,adder1,adder2,adder3,adder4]
 
-fib0 :: (C a, Num a) => Mealy () a
-fib0 = Mealy (\ ((),(a,b)) -> let c = a+b in (a,(b,c))) (1,1)
-
 fibL1 :: Num a => [a]
-fibL1 = fib' (1,1)
+fibL1 = fib' (0,1)
  where
    fib' (a,b) = a : fib' (b,a+b)
 
 fibL2 :: Num a => [a]
-fibL2 = 1 : 1 : zipWith (+) fibL2 (tail fibL2)
+fibL2 = 0 : 1 : zipWith (+) fibL2 (tail fibL2)
+
+fib0 :: (C a, Num a) => Mealy () a
+fib0 = Mealy (\ ((),(a,b)) -> (a,(b,a+b))) (0,1)
 
 fib1 :: (C a, Num a) => Mealy () a
-fib1 = proc () -> do rec (a,b) <- delay (1,1) -< new
-                         new <- returnA -< (b,a+b)
-                     returnA -< a
+fib1 = loop (arr (\ ((),(a,b)) -> (a,(b,a+b))) . second (delay (0,1)))
 
 fib2 :: (C a, Num a) => Mealy () a
-fib2 = proc () -> do rec a <- delay 1 -< b
+fib2 = proc () -> do rec (a,b) <- delay (0,1) -< (b,a+b)
+                     returnA -< a
+
+fib3 :: (C a, Num a) => Mealy () a
+fib3 = proc () -> do rec a <- delay 0 -< b
                          b <- delay 1 -< c
                          c <- returnA -< a+b
                      returnA -< a
@@ -260,4 +262,4 @@ testFib fib = runMealy fib (replicate 10 ())
 
 
 _testFibs :: [[Int]]
-_testFibs = (take 10 <$> [fibL1,fibL2]) ++ (testFib <$> [fib0,fib1,fib2])
+_testFibs = (take 10 <$> [fibL1,fibL2]) ++ (testFib <$> [fib0,fib1,fib2,fib3])
