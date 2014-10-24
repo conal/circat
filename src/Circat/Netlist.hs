@@ -65,12 +65,8 @@ outV name circ = saveVerilog name' (toVerilog ndr)
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
 
-#ifdef StateMachine
-toNetlist name comps
---   | Left _ <- portCompMb "NewState" comps
---   = Module name' ins outs [] (nets++assigns)
---   | otherwise
-  = Module name' (clockIns++ins) outs [] (nets++assigns++clockDecls)
+toNetlist name comps =
+  Module name' (clockIns++ins) outs [] (nets++assigns++clockDecls)
  where
    (p2wIn,ins)    = modPorts "In"
    (_,outs)       = modPorts "Out"
@@ -116,15 +112,6 @@ sseq :: [Stmt] -> Stmt
 sseq [s] = s
 sseq ss = Seq ss
 
-#else
-toNetlist name comps = Module name ins outs [] (nets++assigns)
-  where (p2wM,ins)  = modulePorts (portComp "In"  comps)
-        (_,outs)    = modulePorts (portComp "Out" comps)
-        (p2wI,nets) = moduleNets comps
-        p2w         = p2wM <> p2wI
-        assigns     = moduleAssigns p2w comps
-#endif
-
 -- TODO: Rework toNetlist with a Writer monad, aggregating a PinMap.
 -- Ditto for modulePorts and moduleNets.
 -- Maybe gather the ins & outs similarly in the monoid.
@@ -154,21 +141,16 @@ saveVerilog name verilog =
 moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
 
-isInput, isOutput, isNewState, isTerminal :: String -> Bool
--- isInput  = (`elem` ["In" , "State"])
--- isOutput = (`elem` ["Out", "NewState", "InitialState"])
-isInput    = (== "In" )
-isOutput   = (== "Out")
-isNewState = (== "NewState")
+isInput, isOutput, isTerminal :: String -> Bool
+isInput  = (== "In" )
+isOutput = (== "Out")
 isTerminal s = isInput s || isOutput s
 
 moduleAssign :: PinMap -> CompS -> [Decl]
--- Input comps are never assigned
-moduleAssign _ (CompS _ "In" _ _ _) = [] 
--- moduleAssign _ (CompS _ "State" _ _ _) = [] 
--- moduleAssign _ (CompS _ "InitialState" _ _ _) = [] 
--- moduleAssign _ (CompS _ "NewState" _ _ _) = [] 
-moduleAssign _ (CompS _ "delay" _ _ _) = []   -- treated specially
+
+moduleAssign _ (CompS _ "In"    _ _ _) = [] 
+moduleAssign _ (CompS _ "delay" _ _ _) = []   -- see clocked
+
 -- binary operations
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
@@ -189,6 +171,7 @@ moduleAssign p2w (CompS _ name [i0,i1] [o] _) =
         _      -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
+
 moduleAssign p2w (CompS _ "if" [a,b,c] [o] _) =
   [NetAssign (busName p2w o)
     (ExprCond (sourceExp p2w a) (sourceExp p2w b) (sourceExp p2w c))]
@@ -219,7 +202,7 @@ moduleAssign p2w (CompS _ name [] [o] _) =
     err = error . ("Circat.Netlist.moduleAssign: " ++)
 
 -- output assignments
-moduleAssign p2w (CompS _ name ps [] _) | isOutput name || isNewState name =
+moduleAssign p2w (CompS _ name ps [] _) | isOutput name =
   map (\ (n,p) -> NetAssign (outPortName n) (sourceExp p2w p)) (tagged ps)
  where
    outPortName = portName name ps
