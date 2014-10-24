@@ -35,6 +35,7 @@ import Control.Category
 import Control.Arrow
 import Control.Applicative ((<$>), Applicative(..))
 import Data.Tuple (swap)
+import Data.List (unfoldr)
 import GHC.Prim (Constraint)
 
 import Circat.Misc (dup) -- ,Unit,(:*)
@@ -238,6 +239,9 @@ fibL1 = fib' (0,1)
  where
    fib' (a,b) = a : fib' (b,a+b)
 
+fibL1' :: Num a => [a]
+fibL1' = unfoldr (\ (a,b) -> Just (a,(b,a+b))) (0,1)
+
 fibL2 :: Num a => [a]
 fibL2 = 0 : 1 : zipWith (+) fibL2 (tail fibL2)
 
@@ -262,4 +266,4 @@ testFib fib = runMealy fib (replicate 10 ())
 
 
 _testFibs :: [[Int]]
-_testFibs = (take 10 <$> [fibL1,fibL2]) ++ (testFib <$> [fib0,fib1,fib2,fib3])
+_testFibs = (take 10 <$> [fibL1,fibL1',fibL2]) ++ (testFib <$> [fib0,fib1,fib2,fib3])
