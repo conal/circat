@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP #-}
 
--- #define NoOptimizeCircuit
+-- #define MealyToArrow
+
+#define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -47,7 +49,7 @@
 module Circat.Circuit
   ( CircuitM, (:>)
   , PinId, Width, Bus(..), Source(..)
-  , GenBuses(..), genBusesRep', tyRep, bottomRep
+  , GenBuses(..), genBusesRep', delayCRep, tyRep, bottomRep
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -57,7 +59,12 @@ module Circat.Circuit
   , simpleComp, tagged
   , systemSuccess
   , unitize
-  , MealyC(..), unitizeMealyC, mkMealyC
+  , MealyC(..)
+#ifdef MealyToArrow
+  , mealyAsArrow, runC
+#else
+  , unitizeMealyC
+#endif
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence,maybe)
@@ -67,7 +74,7 @@ import Data.Monoid (mempty,(<>),Sum)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),Alternative(..),liftA2)
 import Control.Monad (unless)
-import Control.Arrow (arr,Kleisli(..))
+import Control.Arrow (arr,Kleisli(..),loop)
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 import Data.Tuple (swap)
@@ -214,7 +221,8 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
-  ty        :: a -> Ty                         -- dummy argument
+  delayC :: a -> (a :> a)
+  ty :: a -> Ty                         -- dummy argument
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> Sources -> Int -> CircuitM (Buses a,Int)
@@ -223,16 +231,22 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
 
 instance GenBuses Unit where
   genBuses' _ _ o = return (UnitB,o)
+  delayC () = id
   ty = const UnitT
 
 instance GenBuses Bool where
   genBuses' = genBus BoolB  1
+  delayC = primDelay
   ty = const BoolT
+
+primDelay :: (GenBuses a, Show a) => a -> (a :> a)
+primDelay a0 = namedC ("delay " ++ show a0)
 
 -- constComp' :: GenBuses b => String -> CircuitM (Buses b)
 
 instance GenBuses Int  where
   genBuses' = genBus IntB  32
+  delayC = primDelay
   ty = const IntT
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
@@ -240,6 +254,7 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
+  delayC (a,b) = delayC a *** delayC b
   ty ~(a,b) = PairT (ty a) (ty b)
 
 flattenB :: String -> Buses a -> Sources
@@ -265,8 +280,24 @@ pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
 
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
+#if 0
 unPairB (PairB a b) = (a,b)
 unPairB (IsoB _)    = isoErr "unPairB"
+#else
+-- Lazier
+unPairB w = (a,b)
+ where
+--    a = case w of
+--          PairB p _ -> p
+--          IsoB _    -> isoErr "unPairB"
+--    b = case w of
+--          PairB _ q -> q
+--          IsoB _    -> isoErr "unPairB"
+
+   (a,b) = case w of
+             PairB p q -> (p,q)
+             IsoB _    -> isoErr "unPairB"
+#endif
 
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
@@ -274,6 +305,9 @@ unFunB (IsoB _)    = isoErr "unFunB"
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
+
+exrB :: Buses (a :* b) -> Buses b
+exrB = snd . unPairB
 
 abstB :: Buses (Rep a) -> Buses a
 abstB = IsoB
@@ -496,9 +530,6 @@ instance Category (:>) where
   id  = C id
   (.) = inC2 (.)
 
-exrB :: Buses (a :* b) -> Buses b
-exrB = snd . unPairB
-
 -- onPairBM :: Functor m =>
 --             (Buses a :* Buses b -> m (Buses a' :* Buses b'))
 --          -> (Buses (a :* b) -> m (Buses (a' :* b')))
@@ -507,7 +538,7 @@ exrB = snd . unPairB
 crossB :: Applicative m =>
           (Buses a -> m (Buses c)) -> (Buses b -> m (Buses d))
        -> (Buses (a :* b) -> m (Buses (c :* d)))
-crossB f g = (\ (a,b) -> liftA2 PairB (f a) (g b)) . unPairB
+crossB f g = (\ ~(a,b) -> liftA2 PairB (f a) (g b)) . unPairB
 
 -- or drop crossB in favor of forkB with fstB and sndB
 
@@ -526,7 +557,7 @@ instance ProductCat (:>) where
   exl   = C (arr exlB)
   exr   = C (arr exrB)
   dup   = mkCK dupB
-  (***) = inCK2 crossB  -- or default
+  -- (***) = inCK2 crossB  -- or default
   (&&&) = inCK2 forkB   -- or default
 
 instance ClosedCat (:>) where
@@ -922,6 +953,9 @@ outDotG (outType,res) attrs (name,graph,report) =
 
 -- Replace the state pseudo-components with connected-up delay elements.
 connectState :: Unop DGraph
+#ifdef MealyToArrow
+connectState = id
+#else
 connectState g0 = delays ++ g3
  where
    (new,g1) = gDrop "NewState"     g0
@@ -941,6 +975,7 @@ connectState g0 = delays ++ g3
 
 -- TODO: Rewrite connectState entirely, with more elegance and efficiency.
 -- Avoid multiple linear list traversals!
+#endif
 
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
@@ -992,10 +1027,15 @@ type Depth = Int
 
 type TrimM = State (Map CompS Depth)
 
+#define SkipTrim
+
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
 -- Explicitly include other outer prims as well, in case any are ignored.
 trimDGraph :: DGraph -> (DGraph, Depth)
+#ifdef SkipTrim
+trimDGraph g = (g,0)
+#else
 trimDGraph g =
   (M.keys *** pred . maximum) . swap $
     runState (mapM searchComp startComps) M.empty
@@ -1021,6 +1061,7 @@ trimDGraph g =
    sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
 --    comps :: Map CompNum CompS
 --    comps = M.fromList [(compNum c,c) | c <- g]
+#endif
 
 -- The pred eliminates counting both In (constants) *and* Out.
 
@@ -1600,16 +1641,43 @@ instance DistribCat (:>) where
 
 #endif
 
--- Mealy machine
+{--------------------------------------------------------------------
+    Mealy machines
+--------------------------------------------------------------------}
+
+#ifdef MealyToArrow
+
+loopC :: (a :* c :> b :* c) -> (a :> b)
+loopC (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
+
+-- I'm getting a <<loop>> (black hole).
+-- Try some experiments
+
+#ifdef TypeDerivation
+
+f :: KC (Buses (a :* c)) (Buses (b :* c))
+arr (uncurry PairB) :: KC (Buses a :* Buses c) (Buses (a :* c))
+arr unPairB :: KC (Buses (b :* c)) (Buses b :* Buses c)
+arr unPairB . f . arr (uncurry PairB)
+ :: KC (Buses a :* Buses c) (Buses b :* Buses c)
+
+#endif
+
+data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
+
+mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
+mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
+
+#else
 
 data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) (Unit :> s)
 
--- Convenient interface for construction from lambda-ccc
-mkMealyC :: GenBuses s => Unit :> ((a :* s -> b :* s) :* s) -> MealyC a b
-mkMealyC q = MealyC f s
- where
-   f = unUnitFun (exl . q)
-   s = exr . q
+-- -- Convenient interface for construction from lambda-ccc
+-- mkMealyC :: GenBuses s => Unit :> ((a :* s -> b :* s) :* s) -> MealyC a b
+-- mkMealyC q = MealyC f s
+--  where
+--    f = unUnitFun (exl . q)
+--    s = exr . q
 
 -- Will the replication of q result in replication of work in the circuit?
 -- Try it, and find out.
@@ -1629,6 +1697,8 @@ unitizeMealyC (MealyC f s) =
 
 -- runMealyC :: GenBuses a => MealyC a b -> [(Comp,Reuses)]
 -- runMealyC = runU . unitizeMealyC
+
+#endif
 
 outerPrims :: [PrimName]
 outerPrims = ["In","Out", "State","NewState","InitialState"]
@@ -1653,6 +1723,10 @@ bottomRep = abstC . bottomC
 tyRep :: forall a. GenBuses (Rep a) => a -> Ty
 tyRep = const (ty (undefined :: Rep a))
 
+delayCRep :: (HasRep a, GenBuses (Rep a)) => a -> (a :> a)
+delayCRep a0 = abstC . delayC (repr a0) . reprC
+
+
 #if 0
 
 -- class GenBuses a where
@@ -1665,8 +1739,9 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; ty = tyRep };\
-instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where { bottomC = bottomRep };\
+  { genBuses' = genBusesRep' ; delayC = delayCRep ; ty = tyRep }; \
+instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
+  { bottomC = bottomRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
 
 #endif
