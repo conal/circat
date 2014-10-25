@@ -257,8 +257,7 @@ fib2 = proc () -> do rec (a,b) <- delay (0,1) -< (b,a+b)
 
 fib3 :: (C a, Num a) => Mealy () a
 fib3 = proc () -> do rec a <- delay 0 -< b
-                         b <- delay 1 -< c
-                         c <- returnA -< a+b
+                         b <- delay 1 -< a+b
                      returnA -< a
 
 testFib :: (C a, Num a) => Mealy () a -> [a]
