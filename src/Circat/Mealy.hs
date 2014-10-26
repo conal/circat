@@ -25,15 +25,21 @@
 
 module Circat.Mealy
   ( Mealy(..),ArrowCircuit(..),ArrowCircuitT
+  , lscan, scan, foldSP
+  , sumS, productS
+  , sumSP, productSP, dotSP
+  , sumPS, productPS, dotPS
 #ifdef Semantics
   , asStreamFun, asArrow
 #endif
   ) where
 
-import Prelude hiding (id,(.))
+import Prelude hiding (id,(.),sum,product)
 import Control.Category
 import Control.Arrow
 import Control.Applicative ((<$>), Applicative(..))
+import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
+import Data.Foldable (Foldable(..),sum,product)
 import Data.Tuple (swap)
 import Data.List (unfoldr)
 import GHC.Prim (Constraint)
@@ -151,6 +157,8 @@ asStreamFun (Mealy f s0) = StreamArrow (go s0)
  where
    go s (Cons a as) = Cons b (go s' as) where (b,s') = f (a,s)
 
+-- Much more generally:
+
 asArrow :: Op.ArrowCircuit k =>
            Mealy a b -> (a `k` b)
 asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
@@ -171,11 +179,78 @@ instance Applicative (Mealy a) where
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
-{--------------------------------------------------------------------
-    Circuit graph generation
---------------------------------------------------------------------}
 
--- Working here
+-- | Scan via Mealy
+
+lscan :: C b => (a -> b -> b) -> b -> Mealy a b
+lscan op = Mealy (dup . uncurry op)
+
+--       = Mealy (\ (a,b) -> dup (a `op` b))
+
+-- TODO: Generalize lscan to ArrowCircuit
+
+scan :: (Monoid m, C m) => Mealy m m
+scan = lscan (<>) mempty
+
+sumS :: (Num a, GenBuses a, Show a) => Mealy a a
+sumS = arr getSum . scan . arr Sum
+
+-- sumS = Mealy (\ (a,tot) -> dup (tot+a)) 0
+-- sumS = Mealy (dup . uncurry (+)) 0
+
+productS :: (Num a, GenBuses a, Show a) => Mealy a a
+productS = arr getProduct . scan . arr Product
+
+-- productS = Mealy (\ (a,tot) -> dup (tot*a)) 0
+-- productS = Mealy (dup . uncurry (*)) 0
+
+-- Sequential-of-parallel
+
+foldSP :: (Foldable f, Monoid m, C m) => Mealy (f m) m
+foldSP = scan . arr fold
+
+-- Equivalently,
+
+-- foldSP = Mealy (dup . uncurry mappend) mempty . arr fold
+-- foldSP = Mealy (dup . uncurry mappend) mempty . Mealy (first fold) ()
+-- foldSP = Mealy (\ (as,tot) -> dup (fold as <> tot)) mempty
+-- foldSP = lscan (\ as tot -> fold as <> tot) mempty
+
+sumSP :: (Functor f, Foldable f, Num a, C a) => Mealy (f a) a
+sumSP = arr getSum . foldSP . arr (fmap Sum)
+
+productSP :: (Functor f, Foldable f, Num a, C a) => Mealy (f a) a
+productSP = arr getProduct . foldSP . arr (fmap Product)
+
+-- | Dot product with sum over o (outer) and product over i (inner). Note that
+-- this sum/product choice is a bit odd, but I think it's a good fit for
+-- sequential-of-parallel inner products. Otherwise, one can simply transpose
+-- first with @'dotSP' . 'arr' 'transpose'@.
+dotSP :: (Foldable o, Functor o, Foldable i, Num a, C a) =>
+         Mealy (o (i a)) a
+dotSP = sumSP . arr (fmap product)
+
+_dotSP2 :: (Foldable o, Functor o, Foldable i, Num a, C a) =>
+           Mealy (o (i a)) a
+_dotSP2 = Mealy (\ (pas,tot) -> dup (dot pas + tot)) 0
+ where
+   dot = sum . fmap product
+
+-- Parallel-of-sequential
+
+sumPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
+         Mealy (f a) a
+sumPS = arr sum . sumS
+-- sumPS = Mealy (\ (t,tot) -> let tot' = tot+t in (sum tot',tot')) 0
+
+productPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
+             Mealy (f a) a
+productPS = arr product . productS
+-- productPS = Mealy (\ (t,tot) -> let tot' = tot+t in (product tot',tot')) 0
+
+dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GenBuses (o a), Show (o a)) =>
+         Mealy (o (i a)) a
+dotPS = sumPS . arr (fmap product)
 
 {--------------------------------------------------------------------
     Examples
