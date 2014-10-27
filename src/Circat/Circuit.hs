@@ -67,7 +67,7 @@ module Circat.Circuit
 import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
-import Data.Monoid (mempty,(<>),Sum)
+import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Arrow (arr,Kleisli(..),loop)
@@ -1769,6 +1769,6 @@ AbsTy(LTree.Tree Z a)
 AbsTy(LTree.Tree (S n) a)
 AbsTy(Rag.Tree LU a)
 AbsTy(Rag.Tree (BU p q) a)
-
 -- Newtypes. Alternatively, don't use them in external interfaces.
-AbsTy(Sum Int)
+AbsTy(Sum a)
+AbsTy(Product a)
