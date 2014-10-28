@@ -147,6 +147,9 @@ updateP :: Bool -> Unop a -> Unop (Pair a)
 updateP False f (a :# b) = (f a :# b)
 updateP True  f (a :# b) = (a :# f b)
 
+{-# INLINE getP #-}
+{-# INLINE updateP #-}
+
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package
 --------------------------------------------------------------------}

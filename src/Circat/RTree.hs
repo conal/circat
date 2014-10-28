@@ -480,13 +480,15 @@ tree4 a b c d e f g h i j k l m n o p =
 --------------------------------------------------------------------}
 
 getT :: Vec n Bool -> Tree n a -> a
-
 getT ZVec      = unL
 getT (b :< bs) = getT bs . getP b . unB
 
 updateT :: Vec n Bool -> Unop a -> Unop (Tree n a)
 updateT ZVec      _ = id
 updateT (b :< bs) f = B . (updateP b . updateT bs) f . unB
+
+{-# INLINE getT #-}
+{-# INLINE updateT #-}
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package
