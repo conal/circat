@@ -252,7 +252,7 @@ dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GenBuses (o a), S
          Mealy (o (i a)) a
 dotPS = sumPS . arr (fmap product)
 
-#if 1
+#if 0
 
 type GS a = (GenBuses a, Show a)
 
