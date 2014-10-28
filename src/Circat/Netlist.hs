@@ -14,8 +14,6 @@
 -- Circuit to Netlist conversion
 ----------------------------------------------------------------------
 
-#define StateMachine
-
 -- TODO: Use Text.Printf to replace the awkward string formations in this
 -- module.
 
@@ -64,7 +62,6 @@ outV name circ = saveVerilog name' (toVerilog ndr)
 
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
-
 toNetlist name comps =
   Module name' (clockIns++ins) outs [] (nets++assigns++clockDecls)
  where
@@ -82,17 +79,24 @@ toNetlist name comps =
 
 -- TODO: rename "portComp", since it's no longer just about module ports.
 
+-- Whether to handle dynamic reset.
+withReset :: Bool
+withReset = True
+
 clocked :: PinMap -> DGraph -> ([(Ident,Maybe Range)],[Decl])
 clocked p2w comps
   | null states = mempty
   | otherwise =
-      ( [("clock",Nothing),("reset",Nothing)]
+      ( ("clock",Nothing) : if withReset then [("reset",Nothing)] else []
       , [ProcessDecl
            (Event (ExprVar "clock") PosEdge) Nothing
-           (If (ExprBinary Equals
-                 (ExprVar "reset") (ExprLit Nothing (ExprBit T)))
-               (updates starts)
-               (Just (updates news)))] )
+           (if withReset then
+             If (ExprBinary Equals
+                  (ExprVar "reset") (ExprLit Nothing (ExprBit T)))
+                (updates starts)
+                (Just (updates news))
+            else
+              updates news)] )
  where
   starts,news,states :: [Expr]
   (starts,news,states) =
