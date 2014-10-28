@@ -107,7 +107,7 @@ instance IsNat n => HasRep (Nat (S n)) where
 type instance Rep (Maybe a) = Bool :* a
 instance HasRep (Maybe a) where
   repr (Just a) = (True,a)
-  repr Nothing  = (False,bottom) -- error "repr on Maybe: undefined value"
+  repr Nothing  = (False,bottom)
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
 
