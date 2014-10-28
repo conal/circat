@@ -24,6 +24,7 @@ module Circat.Pair
   ( Pair(..)
   , curryP, uncurryP, toP, fromP
   , fstP, sndP
+  , getP, updateP
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,reverse)
@@ -39,7 +40,7 @@ import Data.Data (Data)
 
 -- More in FunctorCombo.Pair
 
-import Circat.Misc ((:*),Reversible(..))
+import Circat.Misc (Unop,(:*),Reversible(..))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
 -- import Circat.If
@@ -132,3 +133,28 @@ fstP (a :# _) = a
 
 sndP :: Pair a -> a
 sndP (_ :# b) = b
+
+{--------------------------------------------------------------------
+    Lookup and update
+--------------------------------------------------------------------}
+
+-- TODO: Class interface
+
+getP :: Bool -> Pair a -> a
+getP b (f :# t) = if b then t else f
+
+updateP :: Bool -> Unop a -> Unop (Pair a)
+updateP False f (a :# b) = (f a :# b)
+updateP True  f (a :# b) = (a :# f b)
+
+{--------------------------------------------------------------------
+    Numeric instances via the applicative-numbers package
+--------------------------------------------------------------------}
+
+-- Generate bogus (error-producing) Enum
+#define INSTANCE_Enum
+
+#define CONSTRAINTS
+#define APPLICATIVE Pair
+
+#include "ApplicativeNumeric-inc.hs"

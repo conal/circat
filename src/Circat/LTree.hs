@@ -40,8 +40,9 @@ import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
 
 import TypeUnary.Nat hiding ((:*:))
+import TypeUnary.Vec (Vec(..))
 
-import Circat.Misc ((<~),Reversible(..)) -- Unop,(:*)
+import Circat.Misc (Unop,(<~),Reversible(..)) -- (:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -393,6 +394,19 @@ tree4 :: a -> a -> a -> a -> a -> a -> a -> a
 tree4 a b c d e f g h i j k l m n o p =
   B (tree3 (a :# b) (c :# d) (e :# f) (g :# h)
            (i :# j) (k :# l) (m :# n) (o :# p))
+
+{--------------------------------------------------------------------
+    Lookup and update
+--------------------------------------------------------------------}
+
+getT :: Vec n Bool -> Tree n a -> a
+
+getT ZVec      = unL
+getT (b :< bs) = getP b . getT bs . unB
+
+updateT :: Vec n Bool -> Unop a -> Unop (Tree n a)
+updateT ZVec      _ = id
+updateT (b :< bs) f = B . (updateT bs . updateP b) f . unB
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package
