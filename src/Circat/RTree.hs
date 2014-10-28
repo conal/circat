@@ -26,6 +26,7 @@
 module Circat.RTree
   ( RTree(..),unB,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4
+  , getT, updateT
   ) where
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
