@@ -137,7 +137,7 @@ instance ArrowCircuit Mealy where
   delay = Mealy swap
   {-# INLINE delay #-}
 
--- delay a = Mealy (\ (s,a) -> (a,s)) a
+-- delay a = Mealy (\ (new,old) -> (old,new)) a
 
 type ArrowCircuitT k a = (ArrowCircuit k, CircuitKon k a)
 
@@ -251,6 +251,22 @@ productPS = arr product . productS
 dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GenBuses (o a), Show (o a)) =>
          Mealy (o (i a)) a
 dotPS = sumPS . arr (fmap product)
+
+#if 1
+
+type GS a = (GenBuses a, Show a)
+
+mac :: (Foldable f, Num a, GS a) =>
+       Mealy (f a) a
+mac = sumS . arr product
+-- mac = Mealy (\ (as,tot) -> dup (tot+product as)) 0
+
+sumMac :: (Foldable o, Foldable i, Num (i a), Num a, GS (i a)) =>
+          Mealy (o (i a)) a
+sumMac = arr sum . mac
+-- sumMac = Mealy (\ (as,tot) -> let tot' = tot+product as in (sum tot',tot')) 0
+
+#endif
 
 {--------------------------------------------------------------------
     Examples
