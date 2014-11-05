@@ -1153,11 +1153,11 @@ recordDots comps = nodes ++ edges
       compEdges (CompS snkComp _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
-           printf "%s -> %s %s"
+           printf "%s -> %s%s"
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
             label 1 = ""
-            label w = printf "[label=\"%d\",fontsize=10]" w
+            label w = printf " [label=\"%d\",fontsize=10]" w
 --          edge (ni, BoolS x) = litComment ni x
 --          edge (ni, IntS  x) = litComment ni x
 --          litComment :: Show a => CompNum -> a -> String
