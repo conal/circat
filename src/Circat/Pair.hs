@@ -24,7 +24,7 @@ module Circat.Pair
   ( Pair(..)
   , curryP, uncurryP, toP, fromP
   , fstP, sndP
-  , getP, updateP
+  , get, update
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,reverse)
@@ -140,15 +140,15 @@ sndP (_ :# b) = b
 
 -- TODO: Class interface
 
-getP :: Bool -> Pair a -> a
-getP b (f :# t) = if b then t else f
+get :: Bool -> Pair a -> a
+get b (f :# t) = if b then t else f
 
-updateP :: Bool -> Unop a -> Unop (Pair a)
-updateP False f (a :# b) = (f a :# b)
-updateP True  f (a :# b) = (a :# f b)
+update :: Bool -> Unop a -> Unop (Pair a)
+update False f (a :# b) = (f a :# b)
+update True  f (a :# b) = (a :# f b)
 
-{-# INLINE getP #-}
-{-# INLINE updateP #-}
+{-# INLINE get #-}
+{-# INLINE update #-}
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package

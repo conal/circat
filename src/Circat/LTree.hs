@@ -26,7 +26,7 @@
 module Circat.LTree
   ( LTree(..),unB,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4
-  , getT, updateT
+  , get, update
   ) where
 
 import Prelude hiding (id,(.),uncurry,zip,zipWith,reverse)
@@ -47,7 +47,8 @@ import Circat.Misc (Unop,(<~),Reversible(..)) -- (:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
-import Circat.Pair
+import Circat.Pair hiding (get,update)
+import qualified Circat.Pair as P
 import Circat.Rep
 -- import Circat.If
 import Circat.Scan
@@ -400,17 +401,16 @@ tree4 a b c d e f g h i j k l m n o p =
     Lookup and update
 --------------------------------------------------------------------}
 
-getT :: Vec n Bool -> Tree n a -> a
+get :: Vec n Bool -> Tree n a -> a
+get ZVec      = unL
+get (b :< bs) = P.get b . get bs . unB
 
-getT ZVec      = unL
-getT (b :< bs) = getP b . getT bs . unB
+update :: Vec n Bool -> Unop a -> Unop (Tree n a)
+update ZVec      f = L . f . unL
+update (b :< bs) f = B . (update bs . P.update b) f . unB
 
-updateT :: Vec n Bool -> Unop a -> Unop (Tree n a)
-updateT ZVec      _ = id
-updateT (b :< bs) f = B . (updateT bs . updateP b) f . unB
-
-{-# INLINE getT #-}
-{-# INLINE updateT #-}
+{-# INLINE get #-}
+{-# INLINE update #-}
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package
