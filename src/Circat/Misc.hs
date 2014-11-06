@@ -40,6 +40,12 @@ xor :: Binop Bool
 xor = (/=)
 {-# NOINLINE xor #-}
 
+boolToInt :: Bool -> Int
+boolToInt c = if c then 1 else 0
+{-# INLINE boolToInt #-}
+
+-- Note: Circat re-introduces a 'boolToInt' circuit primitive.
+
 -- | Unary transformation
 type Unop a = a -> a
 
