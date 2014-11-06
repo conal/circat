@@ -29,6 +29,7 @@ import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Char (isDigit)
 import Text.Printf (printf)
 
 import System.Directory (createDirectoryIfMissing)
@@ -267,7 +268,7 @@ moduleNet c =
     | (i,Bus o wid) <- tagged outs ]
   where
     outs = compOuts c
-    wireName i = {-"w_"++-}instName c++if length outs==1 then "" else "_"++show i
+    wireName i = instName c++if length outs==1 then "" else "_"++show i
 
 valDecl :: Name -> Ident -> Maybe Range -> Decl
 valDecl (delayStart -> Just x0) s r = MemDecl s Nothing r (Just [x0])
@@ -284,12 +285,13 @@ busRange wid = Range (lit 0) (lit (wid - 1))
 instName :: CompS -> String
 instName (CompS num name _ _ _) = name' ++"_I"++show num
  where
-   name' = map tweak name
+   name' = prefix name ++ map tweak name
     where
       -- Added for delay components.
       tweak ' ' = '_'
       tweak c   = c
-
+      prefix (c:_) | isDigit c = "Const_"
+      prefix cs = ""
 
 type CompStuff = (PinMap,[(Ident, Maybe Range)]) -- TODO: Better name
 
