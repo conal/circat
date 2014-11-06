@@ -291,7 +291,7 @@ instName (CompS num name _ _ _) = name' ++"_I"++show num
       tweak ' ' = '_'
       tweak c   = c
       prefix (c:_) | isDigit c = "Const_"
-      prefix cs = ""
+      prefix _                 = ""
 
 type CompStuff = (PinMap,[(Ident, Maybe Range)]) -- TODO: Better name
 
