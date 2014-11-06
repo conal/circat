@@ -398,7 +398,10 @@ constComp str = const (constComp' str)
 -- instead.
 
 constM :: (Show b, GenBuses b) => b -> BCirc a b
-constM b = constComp (show b)
+constM b = constComp (constName b)
+
+constName :: Show b => b -> String
+constName = show
 
 {--------------------------------------------------------------------
     Circuit category
@@ -455,15 +458,19 @@ newComp2 :: (SourceToBuses a, SourceToBuses b) =>
             (a :* b :> c) -> Source -> Source -> CircuitM (Maybe (Buses c))
 newComp2 cir a b = newComp cir (PairB (toBuses a) (toBuses b))
 
-newComp3 :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
-            ((a :* b) :* c :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
-newComp3 cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses c))
+newComp3L :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
+             ((a :* b) :* c :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
+newComp3L cir a b c = newComp cir (PairB (PairB (toBuses a) (toBuses b)) (toBuses c))
+
+newComp3R :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
+             (a :* (b :* c) :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
+newComp3R cir a b c = newComp cir (PairB (toBuses a) (PairB (toBuses b) (toBuses c)))
 
 newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
 constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
-constM' b = constComp' (show b)
+constM' b = constComp' (constName b)
 
 noOpt :: Opt b
 noOpt = const nothingA
@@ -684,7 +691,7 @@ instance BottomCat (:>) where
 #endif
 
 pattern ConstS name <- Source _ name [] 0
-pattern Val x     <- ConstS (reads -> [(x,"")])
+pattern Val x       <- ConstS (reads -> [(x,"")])
 
 pattern TrueS    <- ConstS "True"
 pattern FalseS   <- ConstS "False"
@@ -742,6 +749,8 @@ instance BoolCat (:>) where
            [NotS x,Eql(x)]   -> newVal True
            _            -> nothingA
 
+boolToIntC :: Bool :> Int
+boolToIntC = namedC "boolToInt"
 
 -- instance BoolCat (:>) where
 --   notC = namedC "not"
@@ -755,8 +764,18 @@ instance BoolCat (:>) where
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
+-- Zero or one, yielding the False or True, respectively.
+pattern BitS b <- Source _ (readBit -> Just b) [] 0
+
+readBit :: String -> Maybe Bool
+readBit "0" = Just False
+readBit "1" = Just True
+readBit _   = Nothing
+
 pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
+
+pattern BToIS a <- Source _ "boolToInt" [a] 0
 
 instance NumCat (:>) Int where
  add = primOptSort "add" $ \ case
@@ -807,8 +826,8 @@ ifOptB = \ case
   [a,b ,TrueS]           -> newComp2 (orC  . first notC) a b -- not a || b
   [c,NotS a,Eql(a)]      -> newComp2 xorC c a
   [c,a,b@(NotS(Eql(a)))] -> newComp2 xorC c b
-  [b,c `XorS` a,Eql(a)]  -> newComp3 (xorC . first andC) b c a -- (b && c) `xor` a
-  [b,a `XorS` c,Eql(a)]  -> newComp3 (xorC . first andC) b c a -- ''
+  [b,c `XorS` a,Eql(a)]  -> newComp3L (xorC . first andC) b c a -- (b && c) `xor` a
+  [b,a `XorS` c,Eql(a)]  -> newComp3L (xorC . first andC) b c a -- ''
   _                      -> nothingA
 
 #if !defined NoIfBotOpt
@@ -826,8 +845,35 @@ ifOpt = \ case
 #endif
   _             -> nothingA
 
+ifOptI :: Opt Int
+#if 1
+-- if c then 0 else b == if c then boolToInt False else b
+-- if c then 1 else b == if c then boolToInt True  else b
+-- 
+-- if c then a else 0 == if c then a else boolToInt False
+-- if c then a else 1 == if c then a else boolToInt True
+-- 
+-- if c then boolToInt a else boolToInt b = boolToInt (if c then a else b)
+ifOptI = \ case
+  [c,BitS x,b]         -> newComp2 (ifC . second (bToIConst x &&& id)) c b
+  [c,a,BitS y]         -> newComp2 (ifC . second (id &&& bToIConst y)) c a
+  [c,BToIS a, BToIS b] -> newComp3R (boolToIntC . ifC) c a b
+  _                    -> nothingA
+
+bToIConst :: Bool -> (a :> Int)
+bToIConst x = boolToIntC . constC x
+
+#else
+-- (if c then 1 else 0) = boolToInt c
+-- (if c then 0 else 1) = boolToInt (not c)
+ifOptI = \ case
+  [c,OneS,ZeroS] -> newComp1 boolToIntC c
+  [c,ZeroS,OneS] -> newComp1 (boolToIntC . notC) c
+  _              -> nothingA
+#endif
+
 instance IfCat (:>) Bool where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
-instance IfCat (:>) Int  where ifC = primOpt "if" ifOpt
+instance IfCat (:>) Int  where ifC = primOpt "if" (ifOpt `orOpt` ifOptI)
 
 -- instance IfCat (:>) Bool where ifC = namedC "if"
 -- instance IfCat (:>) Int  where ifC = namedC "if"
@@ -1120,7 +1166,6 @@ taggedFrom n = zip [n ..]
 
 tagged :: [a] -> [(Int,a)]
 tagged = taggedFrom 0
--- tagged = zip [0 ..]
 
 recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
