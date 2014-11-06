@@ -25,7 +25,7 @@
 
 module Circat.Mealy
   ( Mealy(..),ArrowCircuit(..),ArrowCircuitT
-  , lscan, scan, foldSP
+  , scanl, scan, foldSP
   , sumS, productS
   , sumSP, productSP, dotSP
   , sumPS, productPS, dotPS
@@ -34,7 +34,7 @@ module Circat.Mealy
 #endif
   ) where
 
-import Prelude hiding (id,(.),sum,product)
+import Prelude hiding (id,(.),sum,product,scanl)
 import Control.Category
 import Control.Arrow
 import Control.Applicative ((<$>), Applicative(..))
@@ -182,15 +182,15 @@ instance Applicative (Mealy a) where
 
 -- | Scan via Mealy
 
-lscan :: C b => (a -> b -> b) -> b -> Mealy a b
-lscan op = Mealy (dup . uncurry op)
+scanl :: C b => (b -> a -> b) -> b -> Mealy a b
+scanl op = Mealy (\ (a,b) -> dup (b `op` a))
 
---       = Mealy (\ (a,b) -> dup (a `op` b))
+-- scanl op = Mealy (dup . uncurry (flip op))
 
--- TODO: Generalize lscan to ArrowCircuit
+-- TODO: Generalize scanl to ArrowCircuit
 
 scan :: (Monoid m, C m) => Mealy m m
-scan = lscan (<>) mempty
+scan = scanl (<>) mempty
 
 sumS :: (Num a, GenBuses a, Show a) => Mealy a a
 sumS = arr getSum . scan . arr Sum
@@ -214,7 +214,7 @@ foldSP = scan . arr fold
 -- foldSP = Mealy (dup . uncurry mappend) mempty . arr fold
 -- foldSP = Mealy (dup . uncurry mappend) mempty . Mealy (first fold) ()
 -- foldSP = Mealy (\ (as,tot) -> dup (fold as <> tot)) mempty
--- foldSP = lscan (\ as tot -> fold as <> tot) mempty
+-- foldSP = scanl (\ as tot -> fold as <> tot) mempty
 
 sumSP :: (Functor f, Foldable f, Num a, C a) => Mealy (f a) a
 sumSP = arr getSum . foldSP . arr (fmap Sum)
