@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
-#define NoOptimizeCircuit
+-- #define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -76,7 +76,7 @@ import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 -- import Data.Tuple (swap)
 import Data.Function (on)
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe,isJust)
 import Data.List (intercalate,group,sort,stripPrefix)
 #ifndef MealyToArrow
 import Data.List (partition)
@@ -1101,48 +1101,67 @@ type DGraph = [CompS]
 
 type Dot = String
 
-uuGraph :: UU -> (DGraph,Depth)
--- uuGraph = first connectState . trimDGraph . map simpleComp . tagged . runU
-uuGraph = trimDGraph . connectState . map simpleComp . tagged . runU
+type Depth = Int
 
--- Really, I want trimDGraph . connectState, but I get stuck in a loop. Investigating.
+uuGraph :: UU -> (DGraph,Depth)
+uuGraph = (id &&& longestPath) . trimDGraph . connectState . map simpleComp . tagged . runU
 
 circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
 circuitGraph = uuGraph . unitize
--- circuitGraph = trimDGraph . map simpleComp . tagged . runC
 
-type Depth = Int
+-- | Longest path excluding delay/Cons elements.
+longestPath :: DGraph -> Depth
+longestPath g = pred (maximum (M.elems distances))
+ where
+   sComp = sourceComp g
+   distances :: Map CompS Depth
+   distances = M.fromList ((id &&& dist) <$> g)
+   memoDist, dist :: CompS -> Depth
+   memoDist = (distances M.!)
+   -- Greatest distances a starting point.
+   dist c | isStart c = 0
+          | otherwise = 1 + maximum ((memoDist . sComp) <$> compIns c)
+   isStart c = null (compIns c) || isDelay c
+
+-- longestPath is adapted from the linear-time algorithm for *acyclic* longest
+-- path, using lazy evaluation in place of (explicit) topological sort. See
+-- <https://en.wikipedia.org/wiki/Longest_path_problem#Acyclic_graphs_and_critical_paths>.
+
+isDelay :: CompS -> Bool
+isDelay = isJust . unDelayName . compName
 
 -- #define SkipTrim
 
 -- Remove unused components.
 -- Depth-first search from the "Out" component.
 -- Explicitly include other outer prims as well, in case any are ignored.
-trimDGraph :: DGraph -> (DGraph, Depth)
+trimDGraph :: Unop DGraph
 #ifdef SkipTrim
-trimDGraph g = (g,0)
+trimDGraph = id
 #else
 
 type Trimmer = State (S.Set CompS) ()
 
-trimDGraph g = ((,0) . S.elems) $
-               execState (searchComp outComp) S.empty
+trimDGraph g = S.elems $ execState (searchComp outComp) S.empty
  where
    [outComp] = filter (isOut . compName) g
+   sComp = sourceComp g
    searchComp :: CompS -> Trimmer
    searchComp c =
     do seen <- Mtl.gets (S.member c)
        unless seen $
          do Mtl.modify (S.insert c)
-            mapM_ searchOut (compIns c)
-    where
-      searchOut :: Output -> Trimmer
-      searchOut o = searchComp (fromMaybe (error msg) (M.lookup o sourceComps))
-       where
-         msg = printf "trimDGraph: mystery output %s in comp #%d. Graph: %s."
-                       (show o) (compNum c) (show g)
-   sourceComps :: Map Output CompS
-   sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
+            mapM_ (searchComp . sComp) (compIns c)
+
+sourceComp :: DGraph -> (Output -> CompS)
+sourceComp g = \ o -> fromMaybe (error (msg o)) (M.lookup o comps)
+ where
+   msg o = printf "sourceComp: mystery output %s in graph %s."
+             (show o) (show g)
+   comps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
+
+-- It's important that comps is outside of the o lambda, so that it gets
+-- computed just once for g.
 
 #endif
 
