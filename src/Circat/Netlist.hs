@@ -71,7 +71,8 @@ toNetlist name comps =
    (p2wNets,nets) = moduleNets comps
    p2w            = p2wIn <> p2wNets
    assigns        = moduleAssigns p2w comps
-   modPorts str   = modulePorts (portComp str comps)
+   modPorts str   =
+     either (const mempty) modulePorts (portCompE str comps)
    (clockIns,clockDecls) = clocked p2w comps
    name' = map tweak name
     where
@@ -313,16 +314,16 @@ portName :: Show b => String -> [a] -> b  -> Ident
 portName compNm ps i = 
   compNm ++ if length ps == 1 then "" else "_" ++ show i
 
+-- -- | Given a list of simple Comps (CompS), retrieve 
+-- -- the one comp with given name.
+-- portComp :: String -> [CompS] -> CompS
+-- portComp name comps =
+--  either error id (portCompE name comps)
 
 -- | Given a list of simple Comps (CompS), retrieve 
 -- the one comp with given name.
-portComp :: String -> [CompS] -> CompS
-portComp name comps =
- either error id (portCompMb name comps)
-
--- | Like 'portComp' but fails gracefully
-portCompMb :: String -> [CompS] -> Either String CompS
-portCompMb name comps =
+portCompE :: String -> [CompS] -> Either String CompS
+portCompE name comps =
   case fC of
     [c] -> Right c
     _   -> Left eIncorrectComps
