@@ -949,12 +949,12 @@ renameC = id
 #if defined NoIdempotence
         . (++"-no-idem")
 #endif
-#if defined NoHashCons
-        . (++"-no-hash")
-#endif
 #if defined NoIfBotOpt
         . (++"-no-ifbot")
 #endif
+#endif
+#if defined NoHashCons
+        . (++"-no-hash")
 #endif
 
 type Name = String
