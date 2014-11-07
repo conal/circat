@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
 
--- #define NoOptimizeCircuit
+#define NoOptimizeCircuit
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
@@ -70,10 +70,11 @@ import Prelude hiding (id,(.),curry,uncurry,sequence)
 import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
+import Control.Monad (unless)
 import Control.Arrow (arr,Kleisli(..),loop)
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
-import Data.Tuple (swap)
+-- import Data.Tuple (swap)
 import Data.Function (on)
 import Data.Maybe (fromMaybe)
 import Data.List (intercalate,group,sort,stripPrefix)
@@ -98,7 +99,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 
 -- mtl
-import Control.Monad.State (State,execState,runState)
+import Control.Monad.State (State,execState)
 import qualified Control.Monad.State as Mtl
 
 import TypeUnary.Vec hiding (get)
@@ -968,7 +969,7 @@ outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
 outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
 
 mkGraph :: Name -> UU -> (Name,DGraph,Report)
-mkGraph (renameC -> name') uu = (name', connectState graph,report)
+mkGraph (renameC -> name') uu = (name',graph,report)
  where
    (graph,depth) = uuGraph uu
    report | depth == 0 = "No components.\n"  -- except In & Out
@@ -1013,16 +1014,37 @@ connectState = id
 #else
 -- Drop OldState and NewState pseudo-components. Replace uses of OldState's
 -- output with corresponding uses of NewState's inputs.
-connectState g0 = g3
+
+#if 1
+connectState (gDrop "NewState" -> Just (new, gDrop "OldState" -> Just (old, g2))) =
+  patchG (compOuts old) (compIns new) g2
+connectState g = g
+
+gDrop :: Name -> DGraph -> Maybe (CompS,DGraph)
+gDrop name g =
+  case partition ((== name) . compName) g of
+    ([c],g') -> Just (c,g')
+    _        -> Nothing
+#else
+
+
+-- TODO: Try view pattern style below
+
+
+connectState g0 | missing   = g0
+                | otherwise = g3
  where
    (new,g1) = gDrop "NewState" g0
    (old,g2) = gDrop "OldState" g1
    g3 = patchG (compOuts old) (compIns new) g2
+   missing = null (filter ((`elem` ["OldState","NewState"]) . compName) g0)
    gDrop :: Name -> DGraph -> (CompS,DGraph)
    gDrop name g =
      case partition ((== name) . compName) g of
        ([c],g') -> (c,g')
        (cs,_)   -> error ("connectState: " ++ name ++ ": " ++ show cs)
+
+#endif
 
 patchG :: [Bus] -> [Bus] -> Unop DGraph
 patchG olds news = map patchC
@@ -1080,7 +1102,10 @@ type DGraph = [CompS]
 type Dot = String
 
 uuGraph :: UU -> (DGraph,Depth)
-uuGraph = trimDGraph . map simpleComp . tagged . runU
+-- uuGraph = first connectState . trimDGraph . map simpleComp . tagged . runU
+uuGraph = trimDGraph . connectState . map simpleComp . tagged . runU
+
+-- Really, I want trimDGraph . connectState, but I get stuck in a loop. Investigating.
 
 circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
 circuitGraph = uuGraph . unitize
@@ -1097,33 +1122,28 @@ trimDGraph :: DGraph -> (DGraph, Depth)
 #ifdef SkipTrim
 trimDGraph g = (g,0)
 #else
-type TrimM = State (Map CompS Depth)
 
-trimDGraph g =
-  (M.keys *** pred . maximum) . swap $
-    runState (mapM searchComp startComps) M.empty
+type Trimmer = State (S.Set CompS) ()
+
+trimDGraph g = ((,0) . S.elems) $
+               execState (searchComp outComp) S.empty
  where
-   startComps = filter (isOuterPrim . compName) g
-   searchComp :: CompS -> TrimM Depth
+   [outComp] = filter (isOut . compName) g
+   searchComp :: CompS -> Trimmer
    searchComp c =
-    do mb <- Mtl.gets (M.lookup c)
-       case mb of
-         Nothing ->
-           do depths <- mapM searchOut (compIns c)
-              let depth = if null depths then 0 else 1 + maximum depths
-              Mtl.modify (M.insert c depth)
-              return depth
-         Just depth -> return depth
+    do seen <- Mtl.gets (S.member c)
+       unless seen $
+         do Mtl.modify (S.insert c)
+            mapM_ searchOut (compIns c)
     where
-      searchOut :: Output -> TrimM Depth
+      searchOut :: Output -> Trimmer
       searchOut o = searchComp (fromMaybe (error msg) (M.lookup o sourceComps))
        where
          msg = printf "trimDGraph: mystery output %s in comp #%d. Graph: %s."
                        (show o) (compNum c) (show g)
    sourceComps :: Map Output CompS
    sourceComps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
---    comps :: Map CompNum CompS
---    comps = M.fromList [(compNum c,c) | c <- g]
+
 #endif
 
 -- The pred eliminates counting both In (constants) *and* Out.
@@ -1167,6 +1187,9 @@ taggedFrom n = zip [n ..]
 tagged :: [a] -> [(Int,a)]
 tagged = taggedFrom 0
 
+hideNoPorts :: Bool
+hideNoPorts = False
+
 recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
  where
@@ -1176,9 +1199,11 @@ recordDots comps = nodes ++ edges
       -- -- drop if no ins or outs
       -- node (_,prim,[],[]) = "// removed disconnected " ++ prim
       node (CompS nc prim ins outs _) =
-        printf "%s [label=\"{%s%s%s}\"]" (compLab nc) 
+        printf "%s%s [label=\"{%s%s%s}\"]" prefix (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
        where
+         prefix =
+           if hideNoPorts && null ins && null outs then "// " else ""
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
          labs :: Dir -> [Bus] -> String
@@ -1756,10 +1781,14 @@ unitizeLoopC (LoopC f) = undup . f' . dup
 #endif
 
 outerPrims :: [PrimName]
-outerPrims = ["In","Out", "OldState","NewState","InitialState"]
+outerPrims = ["In","Out", "OldState","NewState"]
 
 isOuterPrim :: PrimName -> Bool
 isOuterPrim = flip S.member (S.fromList outerPrims)
+
+isOut :: PrimName -> Bool
+isOut = (== "Out")
+-- isOut = (`elem` ["Out","NewState"])
 
 {--------------------------------------------------------------------
     Type-specific support
