@@ -71,15 +71,12 @@ toNetlist name comps =
    (p2wNets,nets) = moduleNets comps
    p2w            = p2wIn <> p2wNets
    assigns        = moduleAssigns p2w comps
-   modPorts str   =
-     either (const mempty) modulePorts (portCompE str comps)
+   modPorts str   = maybe mempty modulePorts (portComp str comps)
    (clockIns,clockDecls) = clocked p2w comps
    name' = map tweak name
     where
       tweak '-' = '_'
       tweak c   = c
-
--- TODO: rename "portComp", since it's no longer just about module ports.
 
 -- Whether to handle dynamic reset.
 withReset :: Bool
@@ -314,26 +311,12 @@ portName :: Show b => String -> [a] -> b  -> Ident
 portName compNm ps i = 
   compNm ++ if length ps == 1 then "" else "_" ++ show i
 
--- -- | Given a list of simple Comps (CompS), retrieve 
--- -- the one comp with given name.
--- portComp :: String -> [CompS] -> CompS
--- portComp name comps =
---  either error id (portCompE name comps)
-
 -- | Given a list of simple Comps (CompS), retrieve 
 -- the one comp with given name.
-portCompE :: String -> [CompS] -> Either String CompS
-portCompE name comps =
-  case fC of
-    [c] -> Right c
-    _   -> Left eIncorrectComps
-  where 
-    fC = filter ((== name) . compName) comps
-    floc = "Circat.Netlist.portComp"
-    eIncorrectComps = 
-      floc ++ ": Incorrect number of comps named " ++ show name
-           ++ " found in the list of comps. "
-           ++ if length fC > 1 then " Multiple comps found " ++ show fC 
-              else " No comps found."
+portComp :: String -> [CompS] -> Maybe CompS
+portComp name comps =
+  case filter ((== name) . compName) comps of
+    [c] -> Just c
+    _   -> Nothing
 
 -- TODO: Build a Name-to-CompS map and use repeatedly in portComp calls
