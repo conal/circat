@@ -971,7 +971,8 @@ outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
 mkGraph :: Name -> UU -> (Name,DGraph,Report)
 mkGraph (renameC -> name') uu = (name',graph,report)
  where
-   (graph,depth) = uuGraph uu
+   graph = uuGraph uu
+   depth = longestPath graph
    report | depth == 0 = "No components.\n"  -- except In & Out
           | otherwise  =
               printf "Components: %s.%s Depth: %d.\n"
@@ -1103,10 +1104,10 @@ type Dot = String
 
 type Depth = Int
 
-uuGraph :: UU -> (DGraph,Depth)
-uuGraph = (id &&& longestPath) . trimDGraph . connectState . map simpleComp . tagged . runU
+uuGraph :: UU -> DGraph
+uuGraph = trimDGraph . connectState . map simpleComp . tagged . runU
 
-circuitGraph :: GenBuses a => (a :> b) -> (DGraph,Depth)
+circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = uuGraph . unitize
 
 -- | Longest path excluding delay/Cons elements.
