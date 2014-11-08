@@ -168,8 +168,11 @@ asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
 
 #endif
 
+-- | Impossible interpretation in '(->)' but possible in other categories.
+-- To be inlined and re-interpreted.
 asFun :: Mealy a b -> (a -> b)
 asFun (Mealy f s0) = M.loop (f . second (M.delay s0))
+{-# INLINE asFun #-}
 
 {--------------------------------------------------------------------
     Some other standard instances for arrows
