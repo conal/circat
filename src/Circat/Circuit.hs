@@ -7,7 +7,9 @@
 
 -- #define NoHashCons
 
--- #define MealyToArrow
+#define MealyToArrow
+
+#define NoMend
 
 #define NoSums
 -- #define StaticSums
@@ -32,10 +34,9 @@
 #endif
 
 {-# OPTIONS_GHC -Wall #-}
--- {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -1004,6 +1005,9 @@ renameC = id
 #if defined NoHashCons
         . (++"-no-hash")
 #endif
+#if defined NoMend
+        . (++"-no-mend")
+#endif
 
 type Name = String
 type Report = String
@@ -1055,59 +1059,6 @@ outDotG (outType,res) attrs (name,graph,report) =
             "linux"  -> "display" -- was "xdg-open"
             _        -> error "unknown open for OS"
 
--- Replace the state pseudo-components with connected-up delay elements.
-connectState :: Unop DGraph
-#ifdef MealyToArrow
-connectState = id
-#else
--- Drop OldState and NewState pseudo-components. Replace uses of OldState's
--- output with corresponding uses of NewState's inputs.
-
-#if 1
-connectState (gDrop "NewState" -> Just (new, gDrop "OldState" -> Just (old, g2))) =
-  patchG (compOuts old) (compIns new) g2
-connectState g = g
-
-gDrop :: Name -> DGraph -> Maybe (CompS,DGraph)
-gDrop name g =
-  case partition ((== name) . compName) g of
-    ([c],g') -> Just (c,g')
-    _        -> Nothing
-#else
-
--- TODO: Try view pattern style below
-
-connectState g0 | missing   = g0
-                | otherwise = g3
- where
-   (new,g1) = gDrop "NewState" g0
-   (old,g2) = gDrop "OldState" g1
-   g3 = patchG (compOuts old) (compIns new) g2
-   missing = null (filter ((`elem` ["OldState","NewState"]) . compName) g0)
-   gDrop :: Name -> DGraph -> (CompS,DGraph)
-   gDrop name g =
-     case partition ((== name) . compName) g of
-       ([c],g') -> (c,g')
-       (cs,_)   -> error ("connectState: " ++ name ++ ": " ++ show cs)
-
-#endif
-
-patchG :: [Bus] -> [Bus] -> Unop DGraph
-patchG olds news = map patchC
- where
-   patchC :: Unop CompS
-   patchC = (onInputs.fmap) patchIn
-   patchIn :: Unop Bus
-   patchIn b = fromMaybe b (M.lookup b patchM)
-   patchM = M.fromList (olds `zip` news)
-
-onInputs :: Unop [Input] -> Unop CompS
-onInputs f (CompS n p i o m) = CompS n p (f i) o m
-
--- TODO: Rewrite connectState entirely, with more elegance and efficiency. Avoid
--- multiple linear list traversals!
-#endif
-
 showCounts :: [(PrimName,Int)] -> String
 showCounts = intercalate ", "
            . map (\ (nm,num) -> printf "%d %s" num nm)
@@ -1150,7 +1101,12 @@ type Dot = String
 type Depth = Int
 
 uuGraph :: UU -> DGraph
-uuGraph = trimDGraph . connectState . map simpleComp . tagged . runU
+uuGraph = trimDGraph
+        -- . connectState
+        . mendG
+        . map simpleComp
+        . tagged
+        . runU
 
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = uuGraph . unitize
@@ -1188,9 +1144,9 @@ trimDGraph = id
 
 type Trimmer = State (S.Set CompS) ()
 
-trimDGraph g = S.elems $ execState (searchComp outComp) S.empty
+trimDGraph g = S.elems $ execState (mapM_ searchComp outComps) S.empty
  where
-   [outComp] = filter (isOut . compName) g
+   outComps = filter (isOut . compName) g
    sComp = sourceComp g
    searchComp :: CompS -> Trimmer
    searchComp c =
@@ -1198,6 +1154,7 @@ trimDGraph g = S.elems $ execState (searchComp outComp) S.empty
        unless seen $
          do Mtl.modify (S.insert c)
             mapM_ (searchComp . sComp) (compIns c)
+   isOut = isJust . stripPrefix "Out"
 
 sourceComp :: DGraph -> (Output -> CompS)
 sourceComp g = \ o -> fromMaybe (error (msg o)) (M.lookup o comps)
@@ -1301,13 +1258,12 @@ recordDots comps = nodes ++ edges
              (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
           where
             label 1 = ""
-            label w = printf " [label=\"%d\",fontsize=10]" w
+            label w = printf " [label=%d,fontsize=10]" w
 --          edge (ni, BoolS x) = litComment ni x
 --          edge (ni, IntS  x) = litComment ni x
 --          litComment :: Show a => CompNum -> a -> String
 --          litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
    port :: Dir -> (Width,CompNum,PortNum) -> String
-   -- TODO: Use the width, perhaps to label the arrows
    port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
    compLab nc = 'c' : show nc
 
@@ -1833,29 +1789,34 @@ arr unPairB . f . arr (uncurry PairB)
 loopC :: forall a b s. GenBuses s => (a :* s :> b :* s) -> (a :> b)
 loopC h = mkCK f
  where
-   f a = do PinId n <- newPinId
-            sIn <- genRip "In" n UnitB
+   f a = do PinId n  <- newPinId         -- really newPatchId
+            sIn      <- genRip "In" n UnitB
             (b,sOut) <- unPairB <$> unmkCK h (PairB a sIn)
-            () <- unUnitB <$> genRip "Out" n sOut
+            ()       <- unUnitB <$> genRip "Out" n sOut
             return b
 
 -- TODO: Replace "rip" with a word that suggests needing to be riped later.
+
+ripPrefix :: String -> String
+ripPrefix pre = pre++"Rip "
 
 genRip :: GenBuses v => String -> Int -> BCirc u v
 genRip pre n = genComp (Prim (ripName pre n))
 
 ripName :: String -> Int -> String
-ripName pre n = pre++"Rip" ++ show n
+ripName pre n = ripPrefix pre ++ show n
+mendG :: Unop DGraph
+#if defined NoMend
+mendG = id
+#else
+mendG = fixRips . extractRips
 
 unRipName :: String -> String -> Maybe Int
-unRipName pre (stripPrefix (pre++"Rip") -> Just (Read n)) = Just n
+unRipName pre (stripPrefix (ripPrefix pre) -> Just (Read n)) = Just n
 unRipName _ _ = Nothing
 
 pattern InRip  n <- (unRipName "In"  -> Just n)
 pattern OutRip n <- (unRipName "Out" -> Just n)
-
-mendG :: Unop DGraph
-mendG = fixRips . extractRips
 
 type Unripped = (DGraph, (Map Int [Output], Map Int [Input]))
 
@@ -1870,7 +1831,8 @@ extractRips = foldr extract mempty
 -- data CompS = CompS CompNum PrimName [Input] [Output] Reuses
 
 patchMap :: (Map Int [Output], Map Int [Input]) -> Map Output Input
-patchMap oi = M.unions ((M.fromList . uncurry zip) <$> M.elems (uncurry mapZip oi))
+patchMap oi =
+  M.unions ((M.fromList . uncurry zip) <$> M.elems (uncurry mapZip oi))
 
 fixRips :: Unripped -> DGraph
 fixRips (g, patchMap -> pm) = map patchC g
@@ -1880,40 +1842,18 @@ fixRips (g, patchMap -> pm) = map patchC g
    patchIn :: Unop Bus
    patchIn b = fromMaybe b (M.lookup b pm)
 
+onInputs :: Unop [Input] -> Unop CompS
+onInputs f (CompS n p i o m) = CompS n p (f i) o m
+
 mapZip :: Ord k => Map k a -> Map k b -> Map k (a,b)
 mapZip as bs = M.mapWithKey (\ k a -> (a,bs M.! k)) as
 
 -- TODO: Consider more efficient mapZip alternatives. On the other hand, I
 -- expect the maps to be very small, usually having only zero or one element.
 
--- Temp copy for comparison. To be removed.
-#if 0
-
-connectState :: Unop DGraph
-connectState (gDrop "NewState" -> Just (new, gDrop "OldState" -> Just (old, g2))) =
-  patchG (compOuts old) (compIns new) g2
-connectState g = g
-
-gDrop :: Name -> DGraph -> Maybe (CompS,DGraph)
-gDrop name g =
-  case partition ((== name) . compName) g of
-    ([c],g') -> Just (c,g')
-    _        -> Nothing
-
-patchG :: [Bus] -> [Bus] -> Unop DGraph
-patchG olds news = map patchC
- where
-   patchC :: Unop CompS
-   patchC = (onInputs.fmap) patchIn
-   patchIn :: Unop Bus
-   patchIn b = fromMaybe b (M.lookup b patchMap)
-   patchMap = M.fromList (olds `zip` news)
 #endif
 
--- genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
-
 #endif
-
 
 mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
 mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
@@ -1948,10 +1888,6 @@ outerPrims = ["In","Out", "OldState","NewState"]
 
 isOuterPrim :: PrimName -> Bool
 isOuterPrim = flip S.member (S.fromList outerPrims)
-
-isOut :: PrimName -> Bool
-isOut = (== "Out")
--- isOut = (`elem` ["Out","NewState"])
 
 {--------------------------------------------------------------------
     Type-specific support
