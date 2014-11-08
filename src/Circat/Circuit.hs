@@ -4,12 +4,19 @@
 
 -- #define NoIfBotOpt
 -- #define NoIdempotence
+
 -- #define NoHashCons
 
 -- #define MealyToArrow
 
+#define NoSums
+-- #define StaticSums
+-- #define TaggedSums
+-- #define ChurchSums
+
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
+{-# LANGUAGE ViewPatterns, TupleSections #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving, StandaloneDeriving #-}
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
@@ -18,16 +25,17 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecursiveDo #-}
 
--- For Church sum experiment
-{-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes #-}
-{-# LANGUAGE ViewPatterns, TupleSections, EmptyDataDecls #-}
+#ifdef ChurchSums
+{-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes, EmptyDataDecls #-}
+#endif
 
 {-# OPTIONS_GHC -Wall #-}
-{-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
+-- {-# OPTIONS_GHC -fcontext-stack=36 #-} -- for add
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -40,11 +48,6 @@
 -- 
 -- Circuit representation
 ----------------------------------------------------------------------
-
-#define NoSums
--- #define StaticSums
--- #define TaggedSums
--- #define ChurchSums
 
 module Circat.Circuit
   ( CircuitM, (:>)
@@ -71,7 +74,7 @@ import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (unless)
-import Control.Arrow (arr,Kleisli(..),loop)
+import Control.Arrow (arr,Kleisli(..)) --,loop
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 -- import Data.Tuple (swap)
@@ -235,11 +238,6 @@ instance GenBuses Unit where
   delayC () = id
   ty = const UnitT
 
-instance GenBuses Bool where
-  genBuses' = genBus BoolB  1
-  delayC = primDelay
-  ty = const BoolT
-
 delayPrefix :: String
 delayPrefix = "Cons "
               -- "delay "
@@ -253,10 +251,16 @@ unDelayName = stripPrefix delayPrefix
 primDelay :: (GenBuses a, Show a) => a -> (a :> a)
 primDelay a0 = namedC (delayName (show a0))
 
--- constComp' :: GenBuses b => String -> CircuitM (Buses b)
+-- isDelayPrim :: Prim a b -> Bool
+-- isDelayPrim = isJust . unDelayName . primName
+
+instance GenBuses Bool where
+  genBuses' = genBus BoolB 1
+  delayC = primDelay
+  ty = const BoolT
 
 instance GenBuses Int  where
-  genBuses' = genBus IntB  32
+  genBuses' = genBus IntB 32
   delayC = primDelay
   ty = const IntT
 
@@ -282,13 +286,17 @@ flattenMb = fmap toList . flat
    flat (IntB b)    = Just (singleton b)
    flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
-   flat _           = Nothing
+   flat (FunB _)    = Nothing
 
 isoErr :: String -> x
 isoErr nm = error (nm ++ ": IsoB")
 
 pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
+
+unUnitB :: Buses Unit -> Unit
+unUnitB UnitB    = ()
+unUnitB (IsoB _) = isoErr "unUnitB"
 
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 #if 0
@@ -298,16 +306,18 @@ unPairB (IsoB _)    = isoErr "unPairB"
 -- Lazier
 unPairB w = (a,b)
  where
---    a = case w of
---          PairB p _ -> p
---          IsoB _    -> isoErr "unPairB"
---    b = case w of
---          PairB _ q -> q
---          IsoB _    -> isoErr "unPairB"
 
-   (a,b) = case w of
-             PairB p q -> (p,q)
-             IsoB _    -> isoErr "unPairB"
+   a = case w of
+         PairB p _ -> p
+         IsoB _    -> isoErr "unPairB"
+   b = case w of
+         PairB _ q -> q
+         IsoB _    -> isoErr "unPairB"
+
+--    (a,b) = case w of
+--              PairB p q -> (p,q)
+--              IsoB _    -> isoErr "unPairB"
+
 #endif
 
 unFunB :: Buses (a -> b) -> (a :> b)
@@ -364,18 +374,23 @@ type BCirc a b = Buses a -> CircuitM (Buses b)
 -- Instantiate a 'Prim'
 genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
 #if !defined NoHashCons
-genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
-                    case mb of
-                      Just (Comp _ _ b', _) ->
-                        do Mtl.modify (second (M.adjust (second succ) key))
-                           return (unsafeCoerce b')
-                      _                  ->
-                        do b <- genBuses prim ins
-                           let comp = Comp prim a b
-                           Mtl.modify (second (M.insert key (comp,0)))
-                           return b
+genComp prim a =
+  do 
+     mb <- Mtl.gets (M.lookup key . snd)
+--      mb <- if isDelayPrim prim then
+--              return Nothing
+--             else Mtl.gets (M.lookup key . snd)
+     case mb of
+       Just (Comp _ _ b', _) ->
+         do Mtl.modify (second (M.adjust (second succ) key))
+            return (unsafeCoerce b')
+       Nothing               ->
+         do b <- genBuses prim ins
+            let comp = Comp prim a b
+            Mtl.modify (second (M.insert key (comp,0)))
+            return b
  where
-   ins  = flattenB "genComp" a
+   ins  = flattenBHack "genComp" prim a
    name = primName prim
    key  = (name,ins,ty (undefined :: b))
 
@@ -383,10 +398,37 @@ genComp prim a = do mb <- Mtl.gets (M.lookup key . snd)
 -- constants such as bottom (and one day, zero).
 
 #else
-genComp prim a = do b <- genBuses prim (flattenB "genComp" a)
+genComp prim a = do b <- genBuses prim (flattenBHack "genComp" prim a)
                     Mtl.modify (second (Comp prim a b :))
                     return b
 #endif
+
+-- Treat delays specially to avoid optimization loop.
+flattenBHack :: String -> Prim a b -> Buses c -> Sources
+-- flattenBHack _ (Prim (unDelayName -> Just _)) _ = []
+flattenBHack name _ b = flattenB name b
+
+-- flattenBHack name p b = tweak <$> flattenB name b
+--  where
+--    tweak ~(Source bus nm ins n) = Source bus nm' ins' n'
+--     where
+--       (nm',ins',n') | isDelayPrim p = ("bloop",[],0)
+--                     | otherwise     = (nm,ins,n)
+
+-- flattenBHack name p b = tweak <$> flattenB name b
+--  where
+--    tweak ~(Source bus nm ins n) = Source bus nm ins' n
+--     where
+--       ins' = if isDelayPrim p then [] else ins
+
+-- flattenBHack name p b = tweak <$> flattenB name b
+--  where
+--    tweak ~(Source bus nm ins n) = Source bus nm ins' n
+--     where
+--       ins' = if isDelayPrim p then [] else ins
+
+--    tweak | isDelayPrim p = \ ~(Source bus nm _ins n) -> Source bus nm [] n 
+--          | otherwise     = id
 
 constComp' :: GenBuses b => String -> CircuitM (Buses b)
 constComp' str = genComp (Prim str) UnitB
@@ -439,7 +481,8 @@ inCK2 :: (BCirc a a' -> BCirc b b' -> BCirc c c')
 inCK2 = inCK <~ unmkCK
 
 namedC :: GenBuses b => String -> a :> b
-namedC name = primOpt name noOpt
+-- namedC name = primOpt name noOpt
+namedC name = mkCK (genComp (Prim name))
 
 type Opt b = Sources -> CircuitM (Maybe (Buses b))
 
@@ -473,8 +516,8 @@ newVal b = Just <$> constM' b
 constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 constM' b = constComp' (constName b)
 
-noOpt :: Opt b
-noOpt = const nothingA
+-- noOpt :: Opt b
+-- noOpt = const nothingA
 
 orOpt :: Binop (Opt b)
 orOpt f g a = do mb <- f a
@@ -484,15 +527,14 @@ orOpt f g a = do mb <- f a
 
 primOpt, primOptSort :: GenBuses b => String -> Opt b -> a :> b
 #if !defined NoOptimizeCircuit
+
+-- primOpt name _ = mkCK (genComp (Prim name))
+
 primOpt name opt =
   mkCK $ \ a -> let plain = genComp (Prim name) a in
                   case flattenMb a of
                     Nothing   -> plain
                     Just srcs -> opt srcs >>= maybe plain return
-
--- primOpt name opt =
---   mkCK $ \ a -> opt (flattenB ("primOpt/"++name) a)
---                  >>= maybe (genComp (Prim name) a) return
 
 tryCommute :: a :> a
 tryCommute = mkCK try
@@ -691,8 +733,13 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
+
+pattern Read x <- (reads -> [(x,"")])
+
 pattern ConstS name <- Source _ name [] 0
-pattern Val x       <- ConstS (reads -> [(x,"")])
+pattern Val x       <- ConstS (Read x)
+
+-- pattern Val x       <- ConstS (reads -> [(x,"")])
 
 pattern TrueS    <- ConstS "True"
 pattern FalseS   <- ConstS "False"
@@ -1028,9 +1075,7 @@ gDrop name g =
     _        -> Nothing
 #else
 
-
 -- TODO: Try view pattern style below
-
 
 connectState g0 | missing   = g0
                 | otherwise = g3
@@ -1053,8 +1098,8 @@ patchG olds news = map patchC
    patchC :: Unop CompS
    patchC = (onInputs.fmap) patchIn
    patchIn :: Unop Bus
-   patchIn b = fromMaybe b (M.lookup b patchMap)
-   patchMap = M.fromList (olds `zip` news)
+   patchIn b = fromMaybe b (M.lookup b patchM)
+   patchM = M.fromList (olds `zip` news)
 
 onInputs :: Unop [Input] -> Unop CompS
 onInputs f (CompS n p i o m) = CompS n p (f i) o m
@@ -1187,11 +1232,20 @@ graphDot name attrs comps =
 type Statement = String
 
 simpleComp :: (CompNum,(Comp,Reuses)) -> CompS
-simpleComp (n, (Comp prim a b,reuses)) = CompS n name (flat a) (flat b) reuses
+
+simpleComp (n, (Comp prim a b,reuses)) =
+  CompS n name
+    (sourceBus <$> flattenBHack name prim a)
+    (sourceBus <$> flattenB     name      b)
+    reuses
  where
    name = show prim
-   flat :: forall t. Buses t -> [Bus]
-   flat = map sourceBus . flattenB name
+
+-- simpleComp (n, (Comp prim a b,reuses)) = CompS n name (flat a) (flat b) reuses
+--  where
+--    name = show prim
+--    flat :: forall t. Buses t -> [Bus]
+--    flat = map sourceBus . flattenBHack name prim
 
 
 -- Working here in converting away from flattening
@@ -1758,11 +1812,10 @@ instance DistribCat (:>) where
 
 data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
 
+#if 0
+
 loopC :: (a :* c :> b :* c) -> (a :> b)
 loopC (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
-
--- I'm getting a <<loop>> (black hole).
--- Try some experiments
 
 #ifdef TypeDerivation
 f :: KC (Buses (a :* c)) (Buses (b :* c))
@@ -1771,6 +1824,96 @@ arr unPairB :: KC (Buses (b :* c)) (Buses b :* Buses c)
 arr unPairB . f . arr (uncurry PairB)
  :: KC (Buses a :* Buses c) (Buses b :* Buses c)
 #endif
+
+-- I'm getting a <<loop>> (black hole).
+-- Try some experiments
+
+#else
+
+loopC :: forall a b s. GenBuses s => (a :* s :> b :* s) -> (a :> b)
+loopC h = mkCK f
+ where
+   f a = do PinId n <- newPinId
+            sIn <- genRip "In" n UnitB
+            (b,sOut) <- unPairB <$> unmkCK h (PairB a sIn)
+            () <- unUnitB <$> genRip "Out" n sOut
+            return b
+
+-- TODO: Replace "rip" with a word that suggests needing to be riped later.
+
+genRip :: GenBuses v => String -> Int -> BCirc u v
+genRip pre n = genComp (Prim (ripName pre n))
+
+ripName :: String -> Int -> String
+ripName pre n = pre++"Rip" ++ show n
+
+unRipName :: String -> String -> Maybe Int
+unRipName pre (stripPrefix (pre++"Rip") -> Just (Read n)) = Just n
+unRipName _ _ = Nothing
+
+pattern InRip  n <- (unRipName "In"  -> Just n)
+pattern OutRip n <- (unRipName "Out" -> Just n)
+
+mendG :: Unop DGraph
+mendG = fixRips . extractRips
+
+type Unripped = (DGraph, (Map Int [Output], Map Int [Input]))
+
+extractRips :: DGraph -> Unripped
+extractRips = foldr extract mempty
+ where
+   extract :: CompS -> Unop Unripped
+   extract (CompS _ (InRip  r) [] os _) = (second.first ) (M.insert r os)
+   extract (CompS _ (OutRip r) is [] _) = (second.second) (M.insert r is)
+   extract c                            = first (c :)
+
+-- data CompS = CompS CompNum PrimName [Input] [Output] Reuses
+
+patchMap :: (Map Int [Output], Map Int [Input]) -> Map Output Input
+patchMap oi = M.unions ((M.fromList . uncurry zip) <$> M.elems (uncurry mapZip oi))
+
+fixRips :: Unripped -> DGraph
+fixRips (g, patchMap -> pm) = map patchC g
+ where
+   patchC :: Unop CompS
+   patchC = (onInputs.fmap) patchIn
+   patchIn :: Unop Bus
+   patchIn b = fromMaybe b (M.lookup b pm)
+
+mapZip :: Ord k => Map k a -> Map k b -> Map k (a,b)
+mapZip as bs = M.mapWithKey (\ k a -> (a,bs M.! k)) as
+
+-- TODO: Consider more efficient mapZip alternatives. On the other hand, I
+-- expect the maps to be very small, usually having only zero or one element.
+
+-- Temp copy for comparison. To be removed.
+#if 0
+
+connectState :: Unop DGraph
+connectState (gDrop "NewState" -> Just (new, gDrop "OldState" -> Just (old, g2))) =
+  patchG (compOuts old) (compIns new) g2
+connectState g = g
+
+gDrop :: Name -> DGraph -> Maybe (CompS,DGraph)
+gDrop name g =
+  case partition ((== name) . compName) g of
+    ([c],g') -> Just (c,g')
+    _        -> Nothing
+
+patchG :: [Bus] -> [Bus] -> Unop DGraph
+patchG olds news = map patchC
+ where
+   patchC :: Unop CompS
+   patchC = (onInputs.fmap) patchIn
+   patchIn :: Unop Bus
+   patchIn b = fromMaybe b (M.lookup b patchMap)
+   patchMap = M.fromList (olds `zip` news)
+#endif
+
+-- genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
+
+#endif
+
 
 mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
 mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
