@@ -1129,6 +1129,9 @@ longestPath g = pred (maximum (M.elems distances))
 -- path, using lazy evaluation in place of (explicit) topological sort. See
 -- <https://en.wikipedia.org/wiki/Longest_path_problem#Acyclic_graphs_and_critical_paths>.
 
+-- Note: if we measured the depth *before* mending, we wouldn't have to be take
+-- care about cycles.
+
 isDelay :: CompS -> Bool
 isDelay = isJust . unDelayName . compName
 
