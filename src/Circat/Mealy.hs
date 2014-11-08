@@ -32,6 +32,8 @@ module Circat.Mealy
 #ifdef Semantics
   , asStreamFun, asArrow
 #endif
+--   , mealyC  -- experiment
+  , asFun -- experiment
   ) where
 
 import Prelude hiding (id,(.),sum,product,scanl)
@@ -45,9 +47,10 @@ import Data.List (unfoldr)
 import GHC.Prim (Constraint)
 
 import Circat.Misc (dup) -- ,Unit,(:*)
+import qualified Circat.Misc as M
 
 #ifdef CircuitConstraint
-import Circat.Circuit (GenBuses(..)) -- , Machine, unitizeMachine
+import Circat.Circuit (GenBuses)
 #endif
 
 #ifdef Semantics
@@ -164,6 +167,9 @@ asArrow :: Op.ArrowCircuit k =>
 asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
 
 #endif
+
+asFun :: Mealy a b -> (a -> b)
+asFun (Mealy f s0) = M.loop (f . second (M.delay s0))
 
 {--------------------------------------------------------------------
     Some other standard instances for arrows
