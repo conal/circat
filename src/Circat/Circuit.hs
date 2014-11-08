@@ -9,7 +9,7 @@
 
 #define MealyToArrow
 
-#define NoMend
+-- #define NoMend
 
 #define NoSums
 -- #define StaticSums
@@ -1221,6 +1221,11 @@ tagged = taggedFrom 0
 hideNoPorts :: Bool
 hideNoPorts = False
 
+type SourceInfo = (Width,CompS,PortNum)
+
+-- Map each pin to its info about it
+type SourceMap = Map PinId SourceInfo
+
 recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
  where
@@ -1251,37 +1256,33 @@ recordDots comps = nodes ++ edges
    srcMap = sourceMap comps
    edges = concatMap compEdges comps
     where
-      compEdges (CompS snkComp _ ins _ _) = edge <$> tagged ins
+      compEdges c@(CompS _ _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
-           printf "%s -> %s%s"
-             (port Out (srcMap M.! i)) (port In (width,snkComp,ni)) (label width)
+           printf "%s -> %s [%s]"
+             (port Out srcInfo) (port In (width,c,ni))
+             (intercalate "," (attrs width))
           where
-            label 1 = ""
-            label w = printf " [label=%d,fontsize=10]" w
---          edge (ni, BoolS x) = litComment ni x
---          edge (ni, IntS  x) = litComment ni x
---          litComment :: Show a => CompNum -> a -> String
---          litComment ni x = "// "  ++ show x ++ " -> " ++ port In (0,snkComp,ni)
-   port :: Dir -> (Width,CompNum,PortNum) -> String
-   port dir (_w,nc,np) = printf "%s:%s" (compLab nc) (portLab dir np)
+            srcInfo = srcMap M.! i
+            attrs w = label w ++ constraint
+            constraint | isDelay c = ["constraint=false" ]
+                       | otherwise = []
+            label 1 = []
+            label w = [printf "label=%d,fontsize=10" w]
+   port :: Dir -> SourceInfo -> String
+   port dir (_w,comp,np) =
+     printf "%s:%s" (compLab (compNum comp)) (portLab dir np)
    compLab nc = 'c' : show nc
 
 -- showBool :: Bool -> String
 -- showBool False = "F"
 -- showBool True  = "T"
 
--- Map each pin to its width, source component and output port number
-type SourceMap = Map PinId (Width,CompNum,PortNum)
-
 -- TODO: Try removing width.
 
--- data SourceInfo = BusInfo Width CompNum PortNum
---                 | LitInfo String
-
 sourceMap :: [CompS] -> SourceMap
-sourceMap = foldMap $ \ (CompS nc _ _ outs _) ->
-              M.fromList [(p,(wid,nc,np)) | (np,Bus p wid) <- tagged outs ]
+sourceMap = foldMap $ \ c ->
+              M.fromList [(p,(wid,c,np)) | (np,Bus p wid) <- tagged (compOuts c) ]
 
 {-
 
