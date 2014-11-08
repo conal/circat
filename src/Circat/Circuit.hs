@@ -1221,7 +1221,7 @@ tagged = taggedFrom 0
 hideNoPorts :: Bool
 hideNoPorts = False
 
-type SourceInfo = (Width,CompS,PortNum)
+type SourceInfo = (Width,CompNum,PortNum)
 
 -- Map each pin to its info about it
 type SourceMap = Map PinId SourceInfo
@@ -1232,8 +1232,6 @@ recordDots comps = nodes ++ edges
    nodes = node <$> comps
     where
       node :: CompS -> String
-      -- -- drop if no ins or outs
-      -- node (_,prim,[],[]) = "// removed disconnected " ++ prim
       node (CompS nc prim ins outs _) =
         printf "%s%s [label=\"{%s%s%s}\"]" prefix (compLab nc) 
           (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
@@ -1256,11 +1254,11 @@ recordDots comps = nodes ++ edges
    srcMap = sourceMap comps
    edges = concatMap compEdges comps
     where
-      compEdges c@(CompS _ _ ins _ _) = edge <$> tagged ins
+      compEdges c@(CompS cnum _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
            printf "%s -> %s [%s]"
-             (port Out srcInfo) (port In (width,c,ni))
+             (port Out srcInfo) (port In (width,cnum,ni))
              (intercalate "," (attrs width))
           where
             srcInfo = srcMap M.! i
@@ -1270,8 +1268,8 @@ recordDots comps = nodes ++ edges
             label 1 = []
             label w = [printf "label=%d,fontsize=10" w]
    port :: Dir -> SourceInfo -> String
-   port dir (_w,comp,np) =
-     printf "%s:%s" (compLab (compNum comp)) (portLab dir np)
+   port dir (_w,cnum,np) =
+     printf "%s:%s" (compLab cnum) (portLab dir np)
    compLab nc = 'c' : show nc
 
 -- showBool :: Bool -> String
@@ -1282,7 +1280,7 @@ recordDots comps = nodes ++ edges
 
 sourceMap :: [CompS] -> SourceMap
 sourceMap = foldMap $ \ c ->
-              M.fromList [(p,(wid,c,np)) | (np,Bus p wid) <- tagged (compOuts c) ]
+              M.fromList [(p,(wid,compNum c,np)) | (np,Bus p wid) <- tagged (compOuts c) ]
 
 {-
 
