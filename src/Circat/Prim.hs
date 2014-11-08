@@ -26,7 +26,7 @@
 module Circat.Prim
   ( Lit(..), HasLit(..), litSS
   , Prim(..),litP -- ,xor,cond,ifThenElse
-  , primArrow
+  -- , primArrow
   , PrimBasics(..), EvalableP(..)
   ) where
 
@@ -156,6 +156,7 @@ data Prim :: * -> * where
   AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
   BottomP       :: BottomCat (:>) a => Prim (Unit -> a)
+  MealyP        :: (GenBuses s, Show s) => Prim ((a :* s -> b :* s) -> s -> (a -> b))
 
 instance Eq' (Prim a) (Prim b) where
   LitP a    === LitP b    = a === b
@@ -179,6 +180,7 @@ instance Eq' (Prim a) (Prim b) where
   AbstP     === AbstP     = True
   ReprP     === ReprP     = True
   BottomP   === BottomP   = True
+  MealyP    === MealyP    = True
   _         === _         = False
 
 instance Eq (Prim a) where (==) = (===)
@@ -205,8 +207,11 @@ instance Show (Prim a) where
   showsPrec _ AbstP      = showString "abst"
   showsPrec _ ReprP      = showString "repr"
   showsPrec _ BottomP    = showString "bottomC"
+  showsPrec _ MealyP     = showString "Mealy"
 
 instance Show' Prim where showsPrec' = showsPrec
+
+#if 0
 
 primArrow :: Prim (a :=> b) -> (a :> b)
 primArrow NotP      = notC
@@ -230,7 +235,10 @@ primArrow AbstP     = abstC
 primArrow ReprP     = reprC
 primArrow BottomP   = -- bottomC
                       error "primArrow: BottomP"
+primArrow MealyP    = Mealy
 primArrow (LitP _)  = error ("primArrow: LitP with function type?!")
+
+#endif
 
 instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
          (k ~ (:>))
@@ -257,6 +265,8 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow BottomP   = -- bottomC
                         unitFun bottomC
                         -- error "unitArrow on Prim: BottomP"
+  unitArrow MealyP    = error "unitArrow on MealyP: not yet implemented"
+                        -- unitFun (curry mealyC)
   unitArrow (LitP l)  = unitArrow l
 
 --     Variable `k' occurs more often than in the instance head
@@ -285,7 +295,8 @@ instance Evalable (Prim a) where
 #endif
   eval AbstP         = abstC
   eval ReprP         = reprC
-  eval BottomP       = error "eval on Prim: Bottom!"
+  eval BottomP       = error "eval on BottomP"
+  eval MealyP        = error "eval on MealyP"
 
 -- TODO: replace fst with exl, etc.
 
