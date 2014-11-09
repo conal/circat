@@ -64,7 +64,7 @@ module Circat.Circuit
   , systemSuccess
   , unitize
   , MealyC(..)
-  , mealyAsArrow  -- Warning: <<loop>>
+  , mealyAsArrow
   , unitizeMealyC
   ) where
 
@@ -75,7 +75,7 @@ import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (unless)
-import Control.Arrow (arr,Kleisli(..)) --,loop
+import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable (foldMap,toList)
 -- import Data.Typeable                    -- TODO: imports
 -- import Data.Tuple (swap)
@@ -226,7 +226,7 @@ genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
 
 class GenBuses a where
   genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
-  delayC :: a -> (a :> a)
+  delay :: a -> (a :> a)
   ty :: a -> Ty                         -- dummy argument
 
 genBus :: (Source -> Buses a) -> Width
@@ -236,7 +236,7 @@ genBus wrap w prim ins o = do src <- newSource w prim ins o
 
 instance GenBuses Unit where
   genBuses' _ _ o = return (UnitB,o)
-  delayC () = id
+  delay () = id
   ty = const UnitT
 
 delayPrefix :: String
@@ -257,12 +257,12 @@ primDelay a0 = namedC (delayName (show a0))
 
 instance GenBuses Bool where
   genBuses' = genBus BoolB 1
-  delayC = primDelay
+  delay = primDelay
   ty = const BoolT
 
 instance GenBuses Int  where
   genBuses' = genBus IntB 32
-  delayC = primDelay
+  delay = primDelay
   ty = const IntT
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
@@ -270,7 +270,7 @@ instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
-  delayC (a,b) = delayC a *** delayC b
+  delay (a,b) = delay a *** delay b
   ty ~(a,b) = PairT (ty a) (ty b)
 
 flattenB :: String -> Buses a -> Sources
@@ -1229,6 +1229,13 @@ type SourceInfo = (Width,CompNum,PortNum)
 -- Map each pin to its info about it
 type SourceMap = Map PinId SourceInfo
 
+-- Whether to add constraint=false for delay in-edges, which allows the delay
+-- elements to move leftward. Sadly, dot 2.30.1 sometimes seg-faults with
+-- constraint=false. Sigh. Try again sometime with a newer
+-- GraphViz installation. I see that the current stable release is 2.38.0.
+unconstrainDelays :: Bool
+unconstrainDelays = False
+
 recordDots :: [CompS] -> [Statement]
 recordDots comps = nodes ++ edges
  where
@@ -1266,7 +1273,7 @@ recordDots comps = nodes ++ edges
           where
             srcInfo = srcMap M.! i
             attrs w = label w ++ constraint
-            constraint | isDelay c = ["constraint=false" ]
+            constraint | unconstrainDelays && isDelay c = ["constraint=false" ]
                        | otherwise = []
             label 1 = []
             label w = [printf "label=%d,fontsize=10" w]
@@ -1764,6 +1771,10 @@ instance DistribCat (:>) where
 
 #endif
 
+instance DelayCat (:>) where
+  type DelayKon (:>) s = GenBuses s
+  delayC = delay
+
 {--------------------------------------------------------------------
     Mealy machines
 --------------------------------------------------------------------}
@@ -1772,8 +1783,8 @@ data MealyC a b = forall s. GenBuses s => MealyC (a :* s :> b :* s) s
 
 #if 0
 
-loopC :: (a :* c :> b :* c) -> (a :> b)
-loopC (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
+loop :: (a :* c :> b :* c) -> (a :> b)
+loop (C f) = C (loop (arr unPairB . f . arr (uncurry PairB)))
 
 #ifdef TypeDerivation
 f :: KC (Buses (a :* c)) (Buses (b :* c))
@@ -1788,14 +1799,15 @@ arr unPairB . f . arr (uncurry PairB)
 
 #else
 
-loopC :: forall a b s. GenBuses s => (a :* s :> b :* s) -> (a :> b)
-loopC h = mkCK f
- where
-   f a = do PinId n  <- newPinId         -- really newPatchId
-            sIn      <- genRip "In" n UnitB
-            (b,sOut) <- unPairB <$> unmkCK h (PairB a sIn)
-            ()       <- unUnitB <$> genRip "Out" n sOut
-            return b
+instance LoopCat (:>) where
+  type LoopKon (:>) s = GenBuses s
+  loopC h = mkCK f
+   where
+     f a = do PinId n  <- newPinId         -- really newPatchId
+              sIn      <- genRip "In" n UnitB
+              (b,sOut) <- unPairB <$> unmkCK h (PairB a sIn)
+              ()       <- unUnitB <$> genRip "Out" n sOut
+              return b
 
 -- TODO: Replace "rip" with a word that suggests needing to be riped later.
 
@@ -1858,7 +1870,7 @@ mapZip as bs = M.mapWithKey (\ k a -> (a,bs M.! k)) as
 #endif
 
 mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
-mealyAsArrow (MealyC f s0) = loopC (f . second (delayC s0))
+mealyAsArrow (MealyC f s0) = loopC (f . second (delay s0))
 
 unitizeMealyC :: GenBuses a => MealyC a b -> UU
 
@@ -1870,9 +1882,9 @@ unitizeMealyC = unitizeLoopC . preLoopC
 -- Ready for loop.
 data LoopC a b = forall s. GenBuses s => LoopC (a :* s :> b :* s)
 
--- Like mealyAsArrow but without the loopC.
+-- Like mealyAsArrow but without the loop.
 preLoopC :: GenBuses a => MealyC a b -> LoopC a b
-preLoopC (MealyC f s0) = LoopC (f . second (delayC s0))
+preLoopC (MealyC f s0) = LoopC (f . second (delay s0))
 
 unitizeLoopC :: GenBuses a => LoopC a b -> UU
 unitizeLoopC (LoopC f) = undup . f' . dup
@@ -1909,7 +1921,7 @@ tyRep :: forall a. GenBuses (Rep a) => a -> Ty
 tyRep = const (ty (undefined :: Rep a))
 
 delayCRep :: (HasRep a, GenBuses (Rep a)) => a -> (a :> a)
-delayCRep a0 = abstC . delayC (repr a0) . reprC
+delayCRep a0 = abstC . delay (repr a0) . reprC
 
 
 #if 0
@@ -1924,7 +1936,7 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
 
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; delayC = delayCRep ; ty = tyRep }; \
+  { genBuses' = genBusesRep' ; delay = delayCRep ; ty = tyRep }; \
 instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
   { bottomC = bottomRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
