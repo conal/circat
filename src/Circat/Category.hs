@@ -39,6 +39,7 @@ module Circat.Category
   , NatCat(..), natA
   , Rep, HasRep(..), RepCat(..)
 --   , CoerceCat(..)
+  , LoopCat(..), DelayCat(..)
   , BiCCC
   , HasUnitArrow(..), BiCCCC  -- in progress
 #if 0
@@ -375,8 +376,18 @@ instance RepCat (->) where
 
 #endif
 
+class ProductCat k => LoopCat k where
+  type LoopKon k s :: Constraint
+  type LoopKon k s = Yes s
+  loopC :: LoopKon k s => ((a :* s) `k` (b :* s)) -> (a `k` b)
+
+class DelayCat k where
+  type DelayKon k s :: Constraint
+  type DelayKon k s = Yes s
+  delayC :: DelayKon k s => s -> (s `k` s)
+
 -- | 'BiCCC' with constant arrows.
-type BiCCCC k p = (BiCCC k {- , NatCat k -} {-, CoerceCat k-}, RepCat k, HasUnitArrow k p)
+type BiCCCC k p = (BiCCC k, RepCat k, HasUnitArrow k p, LoopCat k, DelayCat k)
 
 #if 0
 {--------------------------------------------------------------------
