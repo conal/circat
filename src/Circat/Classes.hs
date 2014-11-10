@@ -45,6 +45,12 @@ instance BoolCat (->) where
   orC  = P.uncurry (||)
   xorC = P.uncurry (/=)
 
+instance Monad m => BoolCat (Kleisli m) where
+  notC = arr notC
+  andC = arr andC
+  orC  = arr orC
+  xorC = arr xorC
+
 -- HACK: generalize/replace/...
 class NumCat k a where
   add, mul :: (a :* a) `k` a
@@ -56,6 +62,40 @@ instance Num a => NumCat (->) a where
 instance (Monad m, Num a) => NumCat (Kleisli m) a where
   add = arr add
   mul = arr mul
+
+class BoolCat k => EqCat k a where
+  equal, notEqual :: (a :* a) `k` Bool
+  notEqual = notC . equal
+  equal    = notC . notEqual
+  {-# MINIMAL equal | notEqual #-}
+
+instance Eq a => EqCat (->) a where
+  equal    = uncurry (==)
+  notEqual = uncurry (/=)
+
+instance (Monad m, Eq a) => EqCat (Kleisli m) a where
+  equal    = arr equal
+  notEqual = arr notEqual
+
+class EqCat k a => OrdCat k a where
+  lessThan, greaterThan, lessThanOrEqual, greaterThanOrEqual :: (a :* a) `k` Bool
+  greaterThan = lessThan . swapP
+  lessThan = greaterThan . swapP
+  lessThanOrEqual = notC . greaterThan
+  greaterThanOrEqual = notC . lessThan
+  {-# MINIMAL lessThan | greaterThan #-}
+
+instance Ord a => OrdCat (->) a where
+  lessThan           = uncurry (<)
+  greaterThan        = uncurry (>)
+  lessThanOrEqual    = uncurry (<=)
+  greaterThanOrEqual = uncurry (>=)
+
+instance (Monad m, Ord a) => OrdCat (Kleisli m) a where
+  lessThan           = arr lessThan
+  greaterThan        = arr greaterThan
+  lessThanOrEqual    = arr lessThanOrEqual
+  greaterThanOrEqual = arr greaterThanOrEqual
 
 #if 1
 class BottomCat k a where
