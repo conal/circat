@@ -168,8 +168,8 @@ asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
 
 #endif
 
--- | Impossible interpretation in '(->)' but possible in other categories.
--- To be inlined and re-interpreted.
+-- | Impossible interpretation in '(->)' (which doesn't really have delay) but
+-- possible in other categories. To be inlined and re-interpreted.
 asFun :: Mealy a b -> (a -> b)
 asFun (Mealy f s0) = M.loop (f . second (M.delay s0))
 {-# INLINE asFun #-}
@@ -193,6 +193,7 @@ instance Applicative (Mealy a) where
 
 scanl :: C b => (b -> a -> b) -> b -> Mealy a b
 scanl op = Mealy (\ (a,b) -> dup (b `op` a))
+{-# INLINE scanl #-}
 
 -- scanl op = Mealy (dup . uncurry (flip op))
 
@@ -200,15 +201,18 @@ scanl op = Mealy (\ (a,b) -> dup (b `op` a))
 
 scan :: (Monoid m, C m) => Mealy m m
 scan = scanl (<>) mempty
+{-# INLINE scan #-}
 
 sumS :: (Num a, GenBuses a, Show a) => Mealy a a
 sumS = arr getSum . scan . arr Sum
+{-# INLINE sumS #-}
 
 -- sumS = Mealy (\ (a,tot) -> dup (tot+a)) 0
 -- sumS = Mealy (dup . uncurry (+)) 0
 
 productS :: (Num a, GenBuses a, Show a) => Mealy a a
 productS = arr getProduct . scan . arr Product
+{-# INLINE productS #-}
 
 -- productS = Mealy (\ (a,tot) -> dup (tot*a)) 0
 -- productS = Mealy (dup . uncurry (*)) 0
@@ -217,6 +221,7 @@ productS = arr getProduct . scan . arr Product
 
 foldSP :: (Foldable f, Monoid m, C m) => Mealy (f m) m
 foldSP = scan . arr fold
+{-# INLINE foldSP #-}
 
 -- Equivalently,
 
@@ -227,9 +232,11 @@ foldSP = scan . arr fold
 
 sumSP :: (Functor f, Foldable f, Num a, C a) => Mealy (f a) a
 sumSP = arr getSum . foldSP . arr (fmap Sum)
+{-# INLINE sumSP #-}
 
 productSP :: (Functor f, Foldable f, Num a, C a) => Mealy (f a) a
 productSP = arr getProduct . foldSP . arr (fmap Product)
+{-# INLINE productSP #-}
 
 -- | Dot product with sum over o (outer) and product over i (inner). Note that
 -- this sum/product choice is a bit odd, but I think it's a good fit for
@@ -238,6 +245,7 @@ productSP = arr getProduct . foldSP . arr (fmap Product)
 dotSP :: (Foldable o, Functor o, Foldable i, Num a, C a) =>
          Mealy (o (i a)) a
 dotSP = sumSP . arr (fmap product)
+{-# INLINE dotSP #-}
 
 _dotSP2 :: (Foldable o, Functor o, Foldable i, Num a, C a) =>
            Mealy (o (i a)) a
@@ -251,15 +259,18 @@ sumPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
          Mealy (f a) a
 sumPS = arr sum . sumS
 -- sumPS = Mealy (\ (t,tot) -> let tot' = tot+t in (sum tot',tot')) 0
+{-# INLINE sumPS #-}
 
 productPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
              Mealy (f a) a
 productPS = arr product . productS
 -- productPS = Mealy (\ (t,tot) -> let tot' = tot+t in (product tot',tot')) 0
+{-# INLINE productPS #-}
 
 dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GenBuses (o a), Show (o a)) =>
          Mealy (o (i a)) a
 dotPS = sumPS . arr (fmap product)
+{-# INLINE dotPS #-}
 
 #if 0
 
@@ -269,11 +280,13 @@ mac :: (Foldable f, Num a, GS a) =>
        Mealy (f a) a
 mac = sumS . arr product
 -- mac = Mealy (\ (as,tot) -> dup (tot+product as)) 0
+{-# INLINE mac #-}
 
 sumMac :: (Foldable o, Foldable i, Num (i a), Num a, GS (i a)) =>
           Mealy (o (i a)) a
 sumMac = arr sum . mac
 -- sumMac = Mealy (\ (as,tot) -> let tot' = tot+product as in (sum tot',tot')) 0
+{-# INLINE sumMac #-}
 
 #endif
 
