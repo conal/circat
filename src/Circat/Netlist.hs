@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeOperators, ConstraintKinds, FlexibleContexts, CPP #-}
 {-# LANGUAGE ViewPatterns, PatternGuards, ParallelListComp, ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase #-}
 
 {-# OPTIONS_GHC -Wall #-}
 ----------------------------------------------------------------------
@@ -152,7 +153,7 @@ saveVerilog name verilog =
 
 -- | Produces the assign statements for every Comp except inputs ("In" and
 -- "State"). Assign statements bind the result of a function (and,or,add
--- etc.) to a variable name which is a wire in verilog parlance eg. w_xor_I1 =
+-- etc.) to a variable name which is a wire in verilog parlance eg. xor_I1 =
 -- In_0 ^ In_1 // (`^` is xor)
 moduleAssigns :: PinMap -> [CompS] -> [Decl]
 moduleAssigns p2w = concatMap (moduleAssign p2w)
@@ -175,17 +176,18 @@ moduleAssign p2w (CompS _ name [i0,i1] [o] _) =
     i0E = sourceExp p2w i0
     i1E = sourceExp p2w i1
     binOp = 
-      case name of
-        "and"  -> And
-        "or"   -> Or
-        "nor"  -> Nor
-        "xor"  -> Xor
-        "xnor" -> Xnor
-        "eq"   -> Equals
-        "neq"  -> NotEquals
-        "add"  -> Plus
-        "mul"  -> Times
-        _      -> err 
+      case translateBinOp name of
+        Just op -> op
+        Nothing ->
+          case name of
+            "and"    -> And
+            "or"     -> Or
+            "nor"    -> Nor
+            "xor"    -> Xor
+            "xnor"   -> Xnor
+            "add"    -> Plus
+            "mul"    -> Times
+            _        -> err 
     err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
                   ++ show name ++ " not supported."
 
@@ -202,9 +204,9 @@ moduleAssign p2w c@(CompS _ name [i] [o] _) =
   where
     iE = sourceExp p2w i
     unaryOp = case name of
-                "not"   -> Neg
-                "False" -> Neg          -- TODO: remove?
-                _       -> err
+                "not"    -> Neg
+                "negate" -> UMinus
+                _        -> err
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
                   ++ show name ++ " not supported." ++ show c
 
@@ -238,6 +240,16 @@ moduleAssign p2w (CompS _ name is os _) =
 
 -- moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
 --                            ++ " not supported."
+
+translateBinOp :: String -> Maybe BinaryOp
+translateBinOp = \ case
+  "=="     -> Just Equals
+  "/="     -> Just NotEquals
+  "<"      -> Just LessThan
+  ">"      -> Just GreaterEqual
+  "<="     -> Just LessEqual
+  ">="     -> Just GreaterThan
+  _        -> Nothing
 
 -- TODO: Swap arguments in sourceExp, lw, lookupWireDesc
 
@@ -284,15 +296,17 @@ busRange wid = Range (lit 0) (lit (wid - 1))
    lit = ExprLit Nothing . ExprNum . fromIntegral
 
 instName :: CompS -> String
-instName (CompS num name _ _ _) = name' ++"_I"++show num
+instName (CompS num (tweakName -> name') _ _ _) = name' ++"_I"++show num
+
+tweakName :: String -> String
+tweakName (translateBinOp -> Just op) = show op
+tweakName name = prefix name ++ map tweakC name
  where
-   name' = prefix name ++ map tweak name
-    where
-      -- Added for delay components.
-      tweak ' ' = '_'
-      tweak c   = c
-      prefix (c:_) | isDigit c = "Const_"
-      prefix _                 = ""
+   -- Added for delay components.
+   tweakC ' ' = '_'
+   tweakC c   = c
+   prefix (c:_) | isDigit c = "Const_"
+   prefix _                 = ""
 
 type CompStuff = (PinMap,[(Ident, Maybe Range)]) -- TODO: Better name
 
