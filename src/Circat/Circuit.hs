@@ -762,7 +762,7 @@ instance BoolCat (:>) where
            [NotS a]     -> sourceB a
            [Val x]      -> newVal (not x)
            _            -> nothingA
-  andC = primOptSort "and" $ \ case
+  andC = primOptSort "&&" $ \ case
            [TrueS ,y]   -> sourceB y
            [x,TrueS ]   -> sourceB x
            [x@FalseS,_] -> sourceB x
@@ -773,7 +773,7 @@ instance BoolCat (:>) where
            [x,NotS (Eql(x))] -> newVal False
            [NotS x,Eql(x)]   -> newVal False
            _            -> nothingA
-  orC  = primOptSort "or"  $ \ case
+  orC  = primOptSort "||" $ \ case
            [FalseS,y]   -> sourceB y
            [x,FalseS]   -> sourceB x
            [x@TrueS ,_] -> sourceB x
@@ -803,8 +803,8 @@ boolToIntC = namedC "boolToInt"
 
 -- instance BoolCat (:>) where
 --   notC = namedC "not"
---   andC = namedC "and"
---   orC  = namedC "or"
+--   andC = namedC "&&"
+--   orC  = namedC "||"
 --   xorC = namedC "xor"
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
@@ -835,7 +835,7 @@ instance OrdCat (:>) Int where
   lessThanOrEqual    = primOpt "<=" leOpt
   greaterThanOrEqual = primOpt ">=" geOpt
 
--- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
+-- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "*" }
 
 -- Zero or one, yielding the False or True, respectively.
 pattern BitS b <- Source _ (readBit -> Just b) [] 0
@@ -854,12 +854,12 @@ instance NumCat (:>) Int where
  negateC = primOpt "negate" $ \ case
              [Val x] -> newVal (negate x)
              _ -> nothingA
- addC    = primOptSort "add" $ \ case
+ addC    = primOptSort "+" $ \ case
              [Val x, Val y] -> newVal (x+y)
              [ZeroS,y]      -> sourceB y
              [x,ZeroS]      -> sourceB x
              _              -> nothingA
- mulC    = primOptSort "mul" $ \ case
+ mulC    = primOptSort "*" $ \ case
              [Val x, Val y] -> newVal (x*y)
              [OneS ,y]      -> sourceB y
              [x,OneS ]      -> sourceB x
@@ -1288,12 +1288,12 @@ recordDots comps = nodes ++ edges
 --             portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
 --             portSticker (_,BoolS x) = show x  -- or showBool x
 --             portSticker (_,IntS  x) = show x
-         -- Escape angle brackets
+         -- Escape angle brackets and "|"
          escape :: Unop String
          escape [] = []
          escape (c:cs) = mbEsc (c : escape cs)
           where
-             mbEsc | c `elem` "<>" = ('\\' :)
+             mbEsc | c `elem` "<>|" = ('\\' :)
                    | otherwise     = id
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
