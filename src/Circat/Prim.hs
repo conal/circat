@@ -28,6 +28,7 @@ module Circat.Prim
   , Prim(..),litP -- ,xor,cond,ifThenElse
   -- , primArrow
   , PrimBasics(..), EvalableP(..)
+  , CircuitEq, CircuitOrd, CircuitBot
   ) where
 
 -- #define LitSources
@@ -38,7 +39,7 @@ import Prelude hiding (id,(.),curry,uncurry)
 import Data.Constraint (Dict(..))
 
 import Circat.Category
-import Circat.Classes (BoolCat(..),IfCat(..),NumCat(..),BottomCat(..))
+import Circat.Classes
 
 import Circat.Circuit (GenBuses,(:>)
 #ifdef LitSources
@@ -137,28 +138,35 @@ instance HasUnitArrow (:>) Lit where
     Primitives
 --------------------------------------------------------------------}
 
+type CircuitEq  = EqCat     (:>)
+type CircuitOrd = OrdCat    (:>)
+type CircuitBot = BottomCat (:>)
+
 -- | Primitives
 data Prim :: * -> * where
-  LitP          :: Lit a -> Prim a
-  NotP          :: Prim (Bool -> Bool)
-  AndP,OrP,XorP :: Prim (Bool -> Bool -> Bool)
-  AddP,MulP     :: Prim (Int -> Int -> Int)
-  ExlP          :: Prim (a :* b -> a)
-  ExrP          :: Prim (a :* b -> b)
-  InlP          :: Prim (a -> a :+ b)
-  InrP          :: Prim (b -> a :+ b)
-  PairP         :: Prim (a -> b -> a :* b)
+  LitP            :: Lit a -> Prim a
+  NotP            :: Prim (Bool -> Bool)
+  AndP,OrP,XorP   :: Prim (Bool -> Bool -> Bool)
+  NegateP         :: Prim (Int -> Int)                  -- TODO: generalize
+  AddP,MulP       :: Prim (Int -> Int -> Int)           -- ''
+  EqP,NeP         :: CircuitEq  a => Prim (a -> a -> Bool)
+  LtP,GtP,LeP,GeP :: CircuitOrd a => Prim (a -> a -> Bool)
+  ExlP            :: Prim (a :* b -> a)
+  ExrP            :: Prim (a :* b -> b)
+  InlP            :: Prim (a -> a :+ b)
+  InrP            :: Prim (b -> a :+ b)
+  PairP           :: Prim (a -> b -> a :* b)
 #if 0
-  CondBP        :: Prim (Bool :* (Bool :* Bool) -> Bool)  -- mux on Bool
-  CondIP        :: Prim (Bool :* (Int  :* Int ) -> Int )  -- mux on Int
+  CondBP          :: Prim (Bool :* (Bool :* Bool) -> Bool)  -- mux on Bool
+  CondIP          :: Prim (Bool :* (Int  :* Int ) -> Int )  -- mux on Int
 #else
-  IfP           :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
+  IfP             :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
 #endif
-  AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
-  ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
-  BottomP       :: BottomCat (:>) a => Prim (Unit -> a)
---   LoopP         :: GenBuses s => Prim ((a :* s -> b :* s) -> (a -> b))
-  DelayP        :: (GenBuses s, Show s) => s -> Prim (s -> s)
+  AbstP           :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
+  ReprP           :: (HasRep a, Rep a ~ a') => Prim (a -> a')
+  BottomP         :: BottomCat (:>) a => Prim (Unit -> a)
+--   LoopP        :: GenBuses s => Prim ((a :* s -> b :* s) -> (a -> b))
+  DelayP          :: (GenBuses s, Show s) => s -> Prim (s -> s)
 
 instance Eq' (Prim a) (Prim b) where
   LitP a    === LitP b    = a === b
@@ -166,8 +174,15 @@ instance Eq' (Prim a) (Prim b) where
   AndP      === AndP      = True
   OrP       === OrP       = True
   XorP      === XorP      = True
+  NegateP   === NegateP   = True
   AddP      === AddP      = True
   MulP      === MulP      = True
+  EqP       === EqP       = True
+  NeP       === NeP       = True
+  LtP       === LtP       = True
+  GtP       === GtP       = True
+  LeP       === LeP       = True
+  GeP       === GeP       = True
   ExlP      === ExlP      = True
   ExrP      === ExrP      = True
   InlP      === InlP      = True
@@ -194,8 +209,15 @@ instance Show (Prim a) where
   showsPrec _ AndP       = showString "(&&)"
   showsPrec _ OrP        = showString "(||)"
   showsPrec _ XorP       = showString "xor"
+  showsPrec _ NegateP    = showString "negate"
   showsPrec _ AddP       = showString "add"
   showsPrec _ MulP       = showString "mul"
+  showsPrec _ EqP        = showString "(==)"
+  showsPrec _ NeP        = showString "(/=)"
+  showsPrec _ LtP        = showString "(<)"
+  showsPrec _ GtP        = showString "(>)"
+  showsPrec _ LeP        = showString "(<=)"
+  showsPrec _ GeP        = showString "(>=)"
   showsPrec _ ExlP       = showString "exl"
   showsPrec _ InlP       = showString "Left"
   showsPrec _ InrP       = showString "Right"
@@ -222,8 +244,15 @@ primArrow NotP      = notC
 primArrow AndP      = curry andC
 primArrow OrP       = curry orC
 primArrow XorP      = curry xorC
+primArrow NegateP   = negateC
 primArrow AddP      = curry add
 primArrow MulP      = curry mul
+primArrow EqP       = curry equal
+primArrow NeP       = curry notEqual
+primArrow LtP       = curry lessThan
+primArrow GtP       = curry greaterThan
+primArrow LeP       = curry lessThanOrEqual
+primArrow GeP       = curry greaterThanOrEqual
 primArrow ExlP      = exl
 primArrow ExrP      = exr
 primArrow InlP      = inl
@@ -251,8 +280,15 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow AndP       = unitFun (curry andC)
   unitArrow OrP        = unitFun (curry orC)
   unitArrow XorP       = unitFun (curry xorC)
-  unitArrow AddP       = unitFun (curry add)
-  unitArrow MulP       = unitFun (curry mul)
+  unitArrow NegateP    = unitFun negateC
+  unitArrow AddP       = unitFun (curry addC)
+  unitArrow MulP       = unitFun (curry mulC)
+  unitArrow EqP        = unitFun (curry equal)
+  unitArrow NeP        = unitFun (curry notEqual)
+  unitArrow LtP        = unitFun (curry lessThan)
+  unitArrow GtP        = unitFun (curry greaterThan)
+  unitArrow LeP        = unitFun (curry lessThanOrEqual)
+  unitArrow GeP        = unitFun (curry greaterThanOrEqual)
   unitArrow ExlP       = unitFun exl
   unitArrow ExrP       = unitFun exr
   unitArrow InlP       = unitFun inl
@@ -277,8 +313,15 @@ instance Evalable (Prim a) where
   eval AndP          = (&&)
   eval OrP           = (||)
   eval XorP          = xor
+  eval NegateP       = negate
   eval AddP          = (+)
   eval MulP          = (*)
+  eval EqP           = (==)
+  eval NeP           = (/=)
+  eval LtP           = (<)
+  eval GtP           = (>)
+  eval LeP           = (<=)
+  eval GeP           = (>=)
   eval ExlP          = fst
   eval ExrP          = snd
   eval InlP          = Left
