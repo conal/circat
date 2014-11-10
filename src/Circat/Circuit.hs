@@ -807,9 +807,33 @@ boolToIntC = namedC "boolToInt"
 --   orC  = namedC "or"
 --   xorC = namedC "xor"
 
-
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
+
+noOpt :: Opt b
+noOpt = const nothingA
+
+-- TODO: optimizations.
+eqOpt, neOpt :: Opt Bool
+eqOpt = noOpt
+neOpt = noOpt
+
+instance EqCat (:>) Int where
+  equal    = primOpt "==" eqOpt
+  notEqual = primOpt "/=" neOpt
+
+-- TODO: optimizations.
+ltOpt, gtOpt, leOpt, geOpt :: Opt Bool
+ltOpt = noOpt
+gtOpt = noOpt
+leOpt = noOpt
+geOpt = noOpt
+
+instance OrdCat (:>) Int where
+  lessThan           = primOpt "<"  ltOpt
+  greaterThan        = primOpt ">"  gtOpt
+  lessThanOrEqual    = primOpt "<=" leOpt
+  greaterThanOrEqual = primOpt ">=" geOpt
 
 -- instance NumCat (:>) Int  where { add = namedC "add" ; mul = namedC "mul" }
 
@@ -827,18 +851,21 @@ pattern OneS  <- ConstS "1"
 pattern BToIS a <- Source _ "boolToInt" [a] 0
 
 instance NumCat (:>) Int where
- add = primOptSort "add" $ \ case
-         [Val x, Val y] -> newVal (x+y)
-         [ZeroS,y]      -> sourceB y
-         [x,ZeroS]      -> sourceB x
-         _              -> nothingA
- mul = primOptSort "mul" $ \ case
-         [Val x, Val y] -> newVal (x*y)
-         [OneS ,y]      -> sourceB y
-         [x,OneS ]      -> sourceB x
-         [x@ZeroS,_]    -> sourceB x
-         [_,y@ZeroS]    -> sourceB y
-         _              -> nothingA
+ negateC = primOpt "negate" $ \ case
+             [Val x] -> newVal (negate x)
+             _ -> nothingA
+ addC    = primOptSort "add" $ \ case
+             [Val x, Val y] -> newVal (x+y)
+             [ZeroS,y]      -> sourceB y
+             [x,ZeroS]      -> sourceB x
+             _              -> nothingA
+ mulC    = primOptSort "mul" $ \ case
+             [Val x, Val y] -> newVal (x*y)
+             [OneS ,y]      -> sourceB y
+             [x,OneS ]      -> sourceB x
+             [x@ZeroS,_]    -> sourceB x
+             [_,y@ZeroS]    -> sourceB y
+             _              -> nothingA
 
 -- instance NumCat (:>) Int where
 --  add = namedC "add"
@@ -1247,7 +1274,7 @@ recordDots comps = nodes ++ edges
       node :: CompS -> String
       node (CompS nc prim ins outs _) =
         printf "%s%s [label=\"{%s%s%s}\"]" prefix (compLab nc) 
-          (ports "" (labs In ins) "|") prim (ports "|" (labs Out outs) "")
+          (ports "" (labs In ins) "|") (escape prim) (ports "|" (labs Out outs) "")
        where
          prefix =
            if hideNoPorts && null ins && null outs then "// " else ""
@@ -1261,6 +1288,13 @@ recordDots comps = nodes ++ edges
 --             portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
 --             portSticker (_,BoolS x) = show x  -- or showBool x
 --             portSticker (_,IntS  x) = show x
+         -- Escape angle brackets
+         escape :: Unop String
+         escape [] = []
+         escape (c:cs) = mbEsc (c : escape cs)
+          where
+             mbEsc | c `elem` "<>" = ('\\' :)
+                   | otherwise     = id
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
