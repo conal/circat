@@ -1233,6 +1233,9 @@ type SourceMap = Map PinId SourceInfo
 -- elements to move leftward. Sadly, dot 2.30.1 sometimes seg-faults with
 -- constraint=false. Sigh. Try again sometime with a newer
 -- GraphViz installation. I see that the current stable release is 2.38.0.
+-- 
+-- When I use the "edge [attrs] u -> v" notation, dot doesn't crash. However,
+-- some examples look terrible.
 unconstrainDelays :: Bool
 unconstrainDelays = False
 
@@ -1267,9 +1270,15 @@ recordDots comps = nodes ++ edges
       compEdges c@(CompS cnum _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
+#if 0
+           printf "edge [%s] %s -> %s"
+             (intercalate "," (attrs width))
+             (port Out srcInfo) (port In (width,cnum,ni))
+#else
            printf "%s -> %s [%s]"
              (port Out srcInfo) (port In (width,cnum,ni))
              (intercalate "," (attrs width))
+#endif
           where
             srcInfo = srcMap M.! i
             attrs w = label w ++ constraint
