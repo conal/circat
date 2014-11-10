@@ -57,21 +57,6 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
   add = arr add
   mul = arr mul
 
-#if 0
-class MaybeCat k where
-  nothing :: Unit `k` Maybe a
-  just    :: a `k` Maybe a
-  maybe   :: (Unit `k` c) -> (a `k` c) -> (Maybe a `k` c)
-
-instance MaybeCat (->) where
-  nothing   = const Nothing
-  just      = Just
-  maybe n j = P.maybe (n ()) j
-
---   maybe n _ Nothing  = n ()
---   maybe _ j (Just a) = j a
-#endif
-
 #if 1
 class BottomCat k a where
   bottomC :: Unit `k` a
