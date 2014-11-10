@@ -1,4 +1,5 @@
 {-# LANGUAGE TypeOperators, TypeFamilies, MultiParamTypeClasses #-}
+{-# LANGUAGE ExplicitForAll #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -31,21 +32,6 @@ import Unsafe.Coerce (unsafeCoerce)     -- see below
 import Control.Newtype
 import Data.Proof.EQ ((:=:)(..))
 
-dup :: a -> (a,a)
-dup a = (a,a)
-
-infixr 3 `xor`
-
-xor :: Binop Bool
-xor = (/=)
-{-# NOINLINE xor #-}
-
-boolToInt :: Bool -> Int
-boolToInt c = if c then 1 else 0
-{-# INLINE boolToInt #-}
-
--- Note: Circat re-introduces a 'boolToInt' circuit primitive.
-
 -- | Unary transformation
 type Unop a = a -> a
 
@@ -63,6 +49,31 @@ type Unit  = ()
 type (:*)  = (,)
 type (:+)  = Either
 type (:=>) = (->)
+
+dup :: a -> (a,a)
+dup a = (a,a)
+
+infixr 3 `xor`
+
+xor :: Binop Bool
+xor = (/=)
+{-# NOINLINE xor #-}
+
+boolToInt :: Bool -> Int
+boolToInt c = if c then 1 else 0
+{-# INLINE boolToInt #-}
+
+loop :: forall a b s. (a :* s -> b :* s) -> (a -> b)
+loop f a = b where (b,s) = f (a,s)
+{-# NOINLINE loop #-}
+
+delay :: s -> (s -> s)
+delay _ _ = error "There is no delay for functions. Sorry!"
+{-# NOINLINE delay #-}
+
+-- Note: with one or no "_", delay still gets inlined
+
+-- Note: Circat re-introduces a 'boolToInt' circuit primitive.
 
 inNew :: (Newtype n o, Newtype n' o') =>
          (o -> o') -> (n -> n')
