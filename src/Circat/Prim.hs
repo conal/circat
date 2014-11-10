@@ -3,7 +3,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE ExplicitForAll #-}
-{-# LANGUAGE UndecidableInstances #-} -- see below
+-- {-# LANGUAGE UndecidableInstances #-} -- see below
 
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fcontext-stack=35 #-}  -- for N32
@@ -55,6 +55,7 @@ import Circat.Circuit (GenBuses,(:>)
 
 import Circat.Misc
 import Circat.ShowUtils (Show'(..))
+import Circat.Show (showsApp1)
 
 {--------------------------------------------------------------------
     Literals
@@ -156,7 +157,8 @@ data Prim :: * -> * where
   AbstP         :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP         :: (HasRep a, Rep a ~ a') => Prim (a -> a')
   BottomP       :: BottomCat (:>) a => Prim (Unit -> a)
-  MealyP        :: (GenBuses s, Show s) => Prim ((a :* s -> b :* s) -> s -> (a -> b))
+--   LoopP         :: GenBuses s => Prim ((a :* s -> b :* s) -> (a -> b))
+  DelayP        :: (GenBuses s, Show s) => s -> Prim (s -> s)
 
 instance Eq' (Prim a) (Prim b) where
   LitP a    === LitP b    = a === b
@@ -180,7 +182,8 @@ instance Eq' (Prim a) (Prim b) where
   AbstP     === AbstP     = True
   ReprP     === ReprP     = True
   BottomP   === BottomP   = True
-  MealyP    === MealyP    = True
+--   LoopP     === LoopP     = True
+  -- DelayP a  === DelayP a' = a === a'  -- doesn't type-check
   _         === _         = False
 
 instance Eq (Prim a) where (==) = (===)
@@ -207,7 +210,8 @@ instance Show (Prim a) where
   showsPrec _ AbstP      = showString "abst"
   showsPrec _ ReprP      = showString "repr"
   showsPrec _ BottomP    = showString "bottomC"
-  showsPrec _ MealyP     = showString "Mealy"
+--   showsPrec _ LoopP      = showString "loop"
+  showsPrec p (DelayP a) = showsApp1 "delay" p a
 
 instance Show' Prim where showsPrec' = showsPrec
 
@@ -243,31 +247,24 @@ primArrow (LitP _)  = error ("primArrow: LitP with function type?!")
 instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
          (k ~ (:>))
       => HasUnitArrow k Prim where
-  unitArrow NotP      = unitFun notC
-  unitArrow AndP      = unitFun (curry andC)
-  unitArrow OrP       = unitFun (curry orC)
-  unitArrow XorP      = unitFun (curry xorC)
-  unitArrow AddP      = unitFun (curry add)
-  unitArrow MulP      = unitFun (curry mul)
-  unitArrow ExlP      = unitFun exl
-  unitArrow ExrP      = unitFun exr
-  unitArrow InlP      = unitFun inl
-  unitArrow InrP      = unitFun inr
-  unitArrow PairP     = unitFun (curry id)
-#if 0
-  unitArrow CondBP    = unitFun muxB
-  unitArrow CondIP    = unitFun muxI
-#else
-  unitArrow IfP       = unitFun ifC
-#endif
-  unitArrow AbstP     = unitFun abstC
-  unitArrow ReprP     = unitFun reprC
-  unitArrow BottomP   = -- bottomC
-                        unitFun bottomC
-                        -- error "unitArrow on Prim: BottomP"
-  unitArrow MealyP    = error "unitArrow on MealyP: not yet implemented"
-                        -- unitFun (curry mealyC)
-  unitArrow (LitP l)  = unitArrow l
+  unitArrow NotP       = unitFun notC
+  unitArrow AndP       = unitFun (curry andC)
+  unitArrow OrP        = unitFun (curry orC)
+  unitArrow XorP       = unitFun (curry xorC)
+  unitArrow AddP       = unitFun (curry add)
+  unitArrow MulP       = unitFun (curry mul)
+  unitArrow ExlP       = unitFun exl
+  unitArrow ExrP       = unitFun exr
+  unitArrow InlP       = unitFun inl
+  unitArrow InrP       = unitFun inr
+  unitArrow PairP      = unitFun (curry id)
+  unitArrow IfP        = unitFun ifC
+  unitArrow AbstP      = unitFun abstC
+  unitArrow ReprP      = unitFun reprC
+  unitArrow BottomP    = unitFun bottomC
+--   unitArrow LoopP      = unitFun loopC
+  unitArrow (DelayP a) = unitFun (delayC a)
+  unitArrow (LitP l)   = unitArrow l
 
 --     Variable `k' occurs more often than in the instance head
 --       in the constraint: BiCCC k
@@ -296,7 +293,8 @@ instance Evalable (Prim a) where
   eval AbstP         = abstC
   eval ReprP         = reprC
   eval BottomP       = error "eval on BottomP"
-  eval MealyP        = error "eval on MealyP"
+--   eval LoopP         = loop
+  eval (DelayP a)    = delay a
 
 -- TODO: replace fst with exl, etc.
 
