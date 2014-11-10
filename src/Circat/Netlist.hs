@@ -173,23 +173,11 @@ moduleAssign _ (CompS _ (delayStart -> Just _) _ _ _) = []   -- see clocked
 moduleAssign p2w (CompS _ name [i0,i1] [o] _) = 
   [NetAssign (busName p2w o) (ExprBinary binOp i0E i1E)]
   where
-    i0E = sourceExp p2w i0
-    i1E = sourceExp p2w i1
-    binOp = 
-      case translateBinOp name of
-        Just op -> op
-        Nothing ->
-          case name of
-            "and"    -> And
-            "or"     -> Or
-            "nor"    -> Nor
-            "xor"    -> Xor
-            "xnor"   -> Xnor
-            "add"    -> Plus
-            "mul"    -> Times
-            _        -> err 
-    err = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
-                  ++ show name ++ " not supported."
+    i0E   = sourceExp p2w i0
+    i1E   = sourceExp p2w i1
+    binOp = fromMaybe err (translateBinOp name)
+    err   = error $ "Circat.Netlist.moduleAssign: BinaryOp " 
+                    ++ show name ++ " not supported."
 
 moduleAssign p2w (CompS _ "if" [a,b,c] [o] _) =
   [NetAssign (busName p2w o)
@@ -249,6 +237,11 @@ translateBinOp = \ case
   ">"      -> Just GreaterEqual
   "<="     -> Just LessEqual
   ">="     -> Just GreaterThan
+  "+"      -> Just Plus
+  "*"      -> Just Times
+  "&&"     -> Just And
+  "||"     -> Just Or
+  "xor"    -> Just Xor
   _        -> Nothing
 
 -- TODO: Swap arguments in sourceExp, lw, lookupWireDesc
