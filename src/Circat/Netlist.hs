@@ -229,20 +229,22 @@ moduleAssign p2w (CompS _ name is os _) =
 -- moduleAssign _ c = error $ "Circat.Netlist.moduleAssign: Comp " ++ show c 
 --                            ++ " not supported."
 
+-- (x≡y ∨ x≠y) ∧ (x<y ∨ x≥y) ∧ (x>y ∨ x≤y)
+
 translateBinOp :: String -> Maybe BinaryOp
 translateBinOp = \ case
-  "=="     -> Just Equals
-  "/="     -> Just NotEquals
-  "<"      -> Just LessThan
-  ">"      -> Just GreaterEqual
-  "<="     -> Just LessEqual
-  ">="     -> Just GreaterThan
-  "+"      -> Just Plus
-  "*"      -> Just Times
-  "&&"     -> Just And
-  "||"     -> Just Or
-  "xor"    -> Just Xor
-  _        -> Nothing
+  "≡" -> Just Equals
+  "≠" -> Just NotEquals
+  "<" -> Just LessThan
+  ">" -> Just GreaterEqual
+  "≤" -> Just LessEqual
+  "≥" -> Just GreaterThan
+  "+" -> Just Plus
+  "×" -> Just Times
+  "∧" -> Just And
+  "∨" -> Just Or
+  "⊕" -> Just Xor
+  _   -> Nothing
 
 -- TODO: Swap arguments in sourceExp, lw, lookupWireDesc
 

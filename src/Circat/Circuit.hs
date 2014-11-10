@@ -762,7 +762,7 @@ instance BoolCat (:>) where
            [NotS a]     -> sourceB a
            [Val x]      -> newVal (not x)
            _            -> nothingA
-  andC = primOptSort "&&" $ \ case
+  andC = primOptSort "∧" $ \ case
            [TrueS ,y]   -> sourceB y
            [x,TrueS ]   -> sourceB x
            [x@FalseS,_] -> sourceB x
@@ -773,7 +773,7 @@ instance BoolCat (:>) where
            [x,NotS (Eql(x))] -> newVal False
            [NotS x,Eql(x)]   -> newVal False
            _            -> nothingA
-  orC  = primOptSort "||" $ \ case
+  orC  = primOptSort "∨" $ \ case
            [FalseS,y]   -> sourceB y
            [x,FalseS]   -> sourceB x
            [x@TrueS ,_] -> sourceB x
@@ -788,7 +788,7 @@ instance BoolCat (:>) where
            [NotS x, NotS y] -> do o <- unmkCK andC (PairB (BoolB x) (BoolB y))
                                   newComp notC o
            _            -> nothingA
-  xorC = primOptSort "xor" $ \ case
+  xorC = primOptSort "⊕" $ \ case
            [FalseS,y]   -> sourceB y
            [x,FalseS]   -> sourceB x
            [TrueS,y ]   -> newComp1 notC y
@@ -819,8 +819,8 @@ eqOpt = noOpt
 neOpt = noOpt
 
 instance EqCat (:>) Int where
-  equal    = primOpt "==" eqOpt
-  notEqual = primOpt "/=" neOpt
+  equal    = primOpt "≡" eqOpt
+  notEqual = primOpt "≠" neOpt  -- "/="
 
 -- TODO: optimizations.
 ltOpt, gtOpt, leOpt, geOpt :: Opt Bool
@@ -830,12 +830,12 @@ leOpt = noOpt
 geOpt = noOpt
 
 instance OrdCat (:>) Int where
-  lessThan           = primOpt "<"  ltOpt
-  greaterThan        = primOpt ">"  gtOpt
-  lessThanOrEqual    = primOpt "<=" leOpt
-  greaterThanOrEqual = primOpt ">=" geOpt
+  lessThan           = primOpt "<" ltOpt
+  greaterThan        = primOpt ">" gtOpt
+  lessThanOrEqual    = primOpt "≤" leOpt
+  greaterThanOrEqual = primOpt "≥" geOpt
 
--- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "*" }
+-- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "×" }
 
 -- Zero or one, yielding the False or True, respectively.
 pattern BitS b <- Source _ (readBit -> Just b) [] 0
@@ -859,7 +859,7 @@ instance NumCat (:>) Int where
              [ZeroS,y]      -> sourceB y
              [x,ZeroS]      -> sourceB x
              _              -> nothingA
- mulC    = primOptSort "*" $ \ case
+ mulC    = primOptSort "×" $ \ case
              [Val x, Val y] -> newVal (x*y)
              [OneS ,y]      -> sourceB y
              [x,OneS ]      -> sourceB x
