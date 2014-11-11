@@ -821,9 +821,21 @@ eqOpt, neOpt :: Opt Bool
 eqOpt = noOpt
 neOpt = noOpt
 
+instance EqCat (:>) Bool where
+  equal    = primOpt "≡" eqOpt
+  notEqual = primOpt "≠" neOpt  -- "/="
+
 instance EqCat (:>) Int where
   equal    = primOpt "≡" eqOpt
   notEqual = primOpt "≠" neOpt  -- "/="
+
+instance EqCat (:>) () where
+  equal = constC True
+
+instance (EqCat (:>) a, EqCat (:>) b) => EqCat (:>) (a,b) where
+  equal = andC . (equal *** equal) . transposeP
+
+-- TODO: Move to a general definition in Circat.Classes, and reference here.
 
 -- TODO: optimizations.
 ltOpt, gtOpt, leOpt, geOpt :: Opt Bool
@@ -832,11 +844,27 @@ gtOpt = noOpt
 leOpt = noOpt
 geOpt = noOpt
 
+instance OrdCat (:>) Bool where
+  lessThan           = primOpt "<" ltOpt
+  greaterThan        = primOpt ">" gtOpt
+  lessThanOrEqual    = primOpt "≤" leOpt
+  greaterThanOrEqual = primOpt "≥" geOpt
+
 instance OrdCat (:>) Int where
   lessThan           = primOpt "<" ltOpt
   greaterThan        = primOpt ">" gtOpt
   lessThanOrEqual    = primOpt "≤" leOpt
   greaterThanOrEqual = primOpt "≥" geOpt
+
+instance OrdCat (:>) () where
+  lessThan = constC False
+
+-- TODO:
+-- 
+-- instance (OrdCat (:>) a, OrdCat (:>) b) => OrdCat (:>) (a,b) where
+--   ...
+
+-- TODO: Move to a general definition in Circat.Classes, and reference here.
 
 -- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "×" }
 
@@ -1057,15 +1085,12 @@ type GraphInfo = (Name,DGraph,CompDepths,Report)
 mkGraph :: Name -> UU -> GraphInfo
 mkGraph (renameC -> name') uu = (name',graph,depths,report)
  where
-   graph = uuGraph uu
+   graph  = uuGraph uu
    depths = longestPaths graph
-   -- Depths of components with outputs.
-   withOuts = M.filterWithKey (\ c _ -> not (null (compOuts c)))
-   -- Deepest output
-   depth = maximum . M.elems . withOuts $ depths
+   depth  = longestPath depths
    report | depth == 0 = "No components.\n"  -- except In & Out
           | otherwise  =
-              printf "Components: %s.%s Depth: %d.\n"
+              printf "Components: %s.%s Max depth: %d.\n"
                 (summary graph)
 #if False && !defined NoHashCons
                 -- Are the reuse counts legit or an artifact of optimization?
@@ -1174,6 +1199,12 @@ longestPaths g = distances
 -- Note: if we measured the depth *before* mending, we wouldn't have to be take
 -- care about cycles.
 
+-- Greatest depth over components with outputs
+longestPath :: CompDepths -> Depth
+longestPath = maximum . M.elems . withOuts
+ where
+   withOuts = M.filterWithKey (\ c _ -> not (null (compOuts c)))
+
 isDelay :: CompS -> Bool
 isDelay = isJust . unDelayName . compName
 
@@ -1201,17 +1232,17 @@ trimDGraph g = S.elems $ execState (mapM_ searchComp outComps) S.empty
             mapM_ (searchComp . sComp) (compIns c)
    isOut = isJust . stripPrefix "Out"
 
+-- It's important that comps is outside of the o lambda, so that it gets
+-- computed just once for g.
+
+#endif
+
 sourceComp :: DGraph -> (Output -> CompS)
 sourceComp g = \ o -> fromMaybe (error (msg o)) (M.lookup o comps)
  where
    msg o = printf "sourceComp: mystery output %s in graph %s."
              (show o) (show g)
    comps = foldMap (\ c -> M.fromList [(o,c) | o <- compOuts c]) g
-
--- It's important that comps is outside of the o lambda, so that it gets
--- computed just once for g.
-
-#endif
 
 -- The pred eliminates counting both In (constants) *and* Out.
 
