@@ -33,7 +33,7 @@ module Circat.Mealy
   , asStreamFun, asArrow
 #endif
 --   , mealyC  -- experiment
-  , asFun -- experiment
+  , asFun, mealy
   ) where
 
 import Prelude hiding (id,(.),sum,product,scanl)
@@ -171,8 +171,13 @@ asArrow (Mealy f s0) = loop (arr f . second (Op.delay s0))
 -- | Impossible interpretation in '(->)' (which doesn't really have delay) but
 -- possible in other categories. To be inlined and re-interpreted.
 asFun :: Mealy a b -> (a -> b)
-asFun (Mealy f s0) = M.loop (f . second (M.delay s0))
+asFun (Mealy h s0) = mealy h s0
+-- asFun (Mealy h s0) = M.loop (h . second (M.delay s0))
 {-# INLINE asFun #-}
+
+mealy :: C s => ((a,s) -> (b,s)) -> s -> (a -> b)
+mealy h s0 = M.loop (h . second (M.delay s0))
+{-# INLINE mealy #-}
 
 {--------------------------------------------------------------------
     Some other standard instances for arrows
