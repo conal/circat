@@ -9,6 +9,9 @@
 
 #define MealyToArrow
 
+-- -- TODO: Make dynamic, perhaps via display attributes
+-- #define ShowDepths
+
 -- #define NoMend
 
 #define NoSums
@@ -59,7 +62,7 @@ module Circat.Circuit
   -- , (|||*), fromBool, toBool
   , CompS(..), compNum, compName, compIns, compOuts
   , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
-  , UU, outDotG, mkGraph,Name,Report
+  , UU, outDotG, mkGraph,Name,Report,GraphInfo
   , simpleComp, tagged
   , systemSuccess
   , unitize
@@ -758,7 +761,7 @@ sourceB = justA . toBuses
 #define Eql(x) Sat(==(x))
 
 instance BoolCat (:>) where
-  notC = primOpt "not" $ \ case
+  notC = primOpt "¬" $ \ case
            [NotS a]     -> sourceB a
            [Val x]      -> newVal (not x)
            _            -> nothingA
@@ -1035,6 +1038,9 @@ renameC = id
 #if defined NoMend
         . (++"-no-mend")
 #endif
+#if defined ShowDepths
+        . (++"-with-depths")
+#endif
 
 type Name = String
 type Report = String
@@ -1046,16 +1052,23 @@ outGWith ss s ats circ = outGWithU ss s ats (unitize circ)
 outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
 outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
 
-mkGraph :: Name -> UU -> (Name,DGraph,Report)
-mkGraph (renameC -> name') uu = (name',graph,report)
+type GraphInfo = (Name,DGraph,CompDepths,Report)
+
+mkGraph :: Name -> UU -> GraphInfo
+mkGraph (renameC -> name') uu = (name',graph,depths,report)
  where
    graph = uuGraph uu
-   depth = longestPath graph
+   depths = longestPaths graph
+   -- Depths of components with outputs.
+   withOuts = M.filterWithKey (\ c _ -> not (null (compOuts c)))
+   -- Deepest output
+   depth = maximum . M.elems . withOuts $ depths
    report | depth == 0 = "No components.\n"  -- except In & Out
           | otherwise  =
               printf "Components: %s.%s Depth: %d.\n"
                 (summary graph)
-#if !defined NoHashCons
+#if False && !defined NoHashCons
+                -- Are the reuse counts legit or an artifact of optimization?
                 (let reused :: Map PrimName Reuses
                      reused = M.fromListWith (+)
                                [(nm,reuses) | CompS _ nm _ _ reuses <- graph]
@@ -1067,11 +1080,11 @@ mkGraph (renameC -> name') uu = (name',graph,report)
                 ""
 #endif         
                 depth
-outDotG :: (String,String) -> [Attr] -> (Name,DGraph,Report) -> IO ()
-outDotG (outType,res) attrs (name,graph,report) = 
+outDotG :: (String,String) -> [Attr] -> GraphInfo -> IO ()
+outDotG (outType,res) attrs (name,graph,depths,report) = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot")
-       (graphDot name attrs graph ++ "\n// "++ report)
+       (graphDot name attrs graph depths ++ "\n// "++ report)
      -- putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
@@ -1138,9 +1151,11 @@ uuGraph = trimDGraph
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = uuGraph . unitize
 
--- | Longest path excluding delay/Cons elements.
-longestPath :: DGraph -> Depth
-longestPath g = pred (maximum (M.elems distances))
+type CompDepths = Map CompS Depth
+
+-- | Longest paths excluding delay/Cons elements.
+longestPaths :: DGraph -> CompDepths
+longestPaths g = distances
  where
    sComp = sourceComp g
    distances :: Map CompS Depth
@@ -1200,10 +1215,10 @@ sourceComp g = \ o -> fromMaybe (error (msg o)) (M.lookup o comps)
 
 -- The pred eliminates counting both In (constants) *and* Out.
 
-graphDot :: String -> [Attr] -> DGraph -> Dot
-graphDot name attrs comps =
+graphDot :: String -> [Attr] -> DGraph -> CompDepths -> Dot
+graphDot name attrs comps depths =
   printf "digraph %s {\n%s}\n" (tweak <$> name)
-         (concatMap wrap (prelude ++ recordDots comps))
+         (concatMap wrap (prelude ++ recordDots comps depths))
  where
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
@@ -1251,7 +1266,7 @@ tagged = taggedFrom 0
 hideNoPorts :: Bool
 hideNoPorts = False
 
-type SourceInfo = (Width,CompNum,PortNum)
+type SourceInfo = (Width,CompNum,PortNum,Depth)
 
 -- Map each pin to its info about it
 type SourceMap = Map PinId SourceInfo
@@ -1266,9 +1281,12 @@ type SourceMap = Map PinId SourceInfo
 unconstrainDelays :: Bool
 unconstrainDelays = False
 
-recordDots :: [CompS] -> [Statement]
-recordDots comps = nodes ++ edges
+-- TODO: Drop the comps argument, as it's already in depths
+
+recordDots :: [CompS] -> CompDepths -> [Statement]
+recordDots _comps depths = nodes ++ edges
  where
+   comps = M.keys depths
    nodes = node <$> comps
     where
       node :: CompS -> String
@@ -1284,10 +1302,8 @@ recordDots comps = nodes ++ edges
          labs dir bs = intercalate "|" (portSticker <$> tagged bs)
           where
             portSticker :: (Int,Bus) -> String
-            portSticker (p, _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
---             portSticker (p,BusS  _) = bracket (portLab dir p) -- ++ show p -- show p for port # debugging
---             portSticker (_,BoolS x) = show x  -- or showBool x
---             portSticker (_,IntS  x) = show x
+            portSticker (p,b) =
+                 bracket (portLab dir p) ++ showDepth b
          -- Escape angle brackets and "|"
          escape :: Unop String
          escape [] = []
@@ -1295,10 +1311,16 @@ recordDots comps = nodes ++ edges
           where
              mbEsc | c `elem` "<>|" = ('\\' :)
                    | otherwise     = id
+   showDepth :: Bus -> String
+#ifdef ShowDepths
+   showDepth ((srcMap M.!) . busId -> (_,_,_,d)) = show d
+#else
+   showDepth _ = ""
+#endif
    bracket = ("<"++) . (++">")
    portLab :: Dir -> PortNum -> String
    portLab dir np = printf "%s%d" (show dir) np
-   srcMap = sourceMap comps
+   srcMap = sourceMap (M.toList depths)
    edges = concatMap compEdges comps
     where
       compEdges c@(CompS cnum _ ins _ _) = edge <$> tagged ins
@@ -1307,21 +1329,21 @@ recordDots comps = nodes ++ edges
 #if 0
            printf "edge [%s] %s -> %s"
              (intercalate "," (attrs width))
-             (port Out srcInfo) (port In (width,cnum,ni))
+             (port Out (ocnum,opnum)) (port In (cnum,ni))
 #else
            printf "%s -> %s [%s]"
-             (port Out srcInfo) (port In (width,cnum,ni))
+             (port Out (ocnum,opnum)) (port In (cnum,ni))
              (intercalate "," (attrs width))
 #endif
           where
-            srcInfo = srcMap M.! i
+            (_w,ocnum,opnum,_d) = srcMap M.! i
             attrs w = label w ++ constraint
             constraint | unconstrainDelays && isDelay c = ["constraint=false" ]
                        | otherwise = []
             label 1 = []
             label w = [printf "label=%d,fontsize=10" w]
-   port :: Dir -> SourceInfo -> String
-   port dir (_w,cnum,np) =
+   port :: Dir -> (CompNum,PortNum) -> String
+   port dir (cnum,np) =
      printf "%s:%s" (compLab cnum) (portLab dir np)
    compLab nc = 'c' : show nc
 
@@ -1331,9 +1353,10 @@ recordDots comps = nodes ++ edges
 
 -- TODO: Try removing width.
 
-sourceMap :: [CompS] -> SourceMap
-sourceMap = foldMap $ \ c ->
-              M.fromList [(p,(wid,compNum c,np)) | (np,Bus p wid) <- tagged (compOuts c) ]
+sourceMap :: [(CompS,Depth)] -> SourceMap
+sourceMap = foldMap $ \ (comp,depth) ->
+              M.fromList [ (p,(wid,compNum comp,np,depth))
+                         | (np,Bus p wid) <- tagged (compOuts comp) ]
 
 {-
 
