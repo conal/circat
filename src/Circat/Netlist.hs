@@ -37,7 +37,7 @@ import System.Directory (createDirectoryIfMissing)
 
 import Circat.Circuit
   ( CompS(..), compOuts, compName, compOuts, tagged
-  , Width, PinId, Bus(..),Name,DGraph,Report
+  , Width, PinId, Bus(..),Name,DGraph,GraphInfo
   , (:>), GenBuses,unitize,mkGraph,unDelayName
   )
 
@@ -60,7 +60,7 @@ type PinMap = Map PinId PinDesc
 outV :: GenBuses a => Name -> (a :> b) -> IO ()
 outV name circ = saveVerilog name' (toVerilog ndr)
  where
-   ndr@(name',_,_) = mkGraph name (unitize circ)
+   ndr@(name',_,_,_) = mkGraph name (unitize circ)
 
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
@@ -134,13 +134,13 @@ sseq ss = Seq ss
 -- Maybe gather the ins & outs similarly in the monoid.
 -- Maybe then a Reader with the same info for moduleAssigns.
 
-toVerilog :: (Name,DGraph,Report) -> String
-toVerilog (name,graph,_report) =
+toVerilog :: GraphInfo -> String
+toVerilog (name,graph,_report,_depths) =
   printf "%s"
    (show (V.ppModule (mk_module (toNetlist name graph))))
 
-saveAsVerilog :: (Name,DGraph,Report) -> IO ()
-saveAsVerilog gg@(name,_,_) = saveVerilog name (toVerilog gg)
+saveAsVerilog :: GraphInfo -> IO ()
+saveAsVerilog gg@(name,_,_,_) = saveVerilog name (toVerilog gg)
 
 saveVerilog :: Name -> String -> IO ()
 saveVerilog name verilog =
@@ -192,6 +192,7 @@ moduleAssign p2w c@(CompS _ name [i] [o] _) =
   where
     iE = sourceExp p2w i
     unaryOp = case name of
+                "¬"      -> Neg
                 "not"    -> Neg
                 "negate" -> UMinus
                 _        -> err
@@ -233,18 +234,26 @@ moduleAssign p2w (CompS _ name is os _) =
 
 translateBinOp :: String -> Maybe BinaryOp
 translateBinOp = \ case
-  "≡" -> Just Equals
-  "≠" -> Just NotEquals
-  "<" -> Just LessThan
-  ">" -> Just GreaterEqual
-  "≤" -> Just LessEqual
-  "≥" -> Just GreaterThan
-  "+" -> Just Plus
-  "×" -> Just Times
-  "∧" -> Just And
-  "∨" -> Just Or
-  "⊕" -> Just Xor
-  _   -> Nothing
+  "≡"   -> Just Equals
+  "=="  -> Just Equals
+  "≠"   -> Just NotEquals
+  "/="  -> Just NotEquals
+  "<"   -> Just LessThan
+  ">"   -> Just GreaterThan
+  "≤"   -> Just LessEqual
+  "<="  -> Just LessEqual
+  "≥"   -> Just GreaterEqual
+  ">="  -> Just GreaterEqual
+  "+"   -> Just Plus
+  "×"   -> Just Times
+  "*"   -> Just Times
+  "∧"   -> Just And
+  "&&"  -> Just And
+  "∨"   -> Just Or
+  "||"  -> Just Or
+  "⊕"   -> Just Xor
+  "xor" -> Just Xor
+  _     -> Nothing
 
 -- TODO: Swap arguments in sourceExp, lw, lookupWireDesc
 
