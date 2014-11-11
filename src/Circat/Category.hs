@@ -30,6 +30,7 @@ module Circat.Category
   ( module Control.Category
   , ProductCat(..), twiceP, inLassocP, inRassocP, inLassocPF, inRassocPS
   , CoproductCat(..), twiceC
+  , transposeP, transposeS
   , DistribCat(..)
   -- , ConstCat(..), ConstCatWith, ConstUCat, lconst, rconst
   , TerminalCat(..), lunit, runit
@@ -131,6 +132,11 @@ inRassocPS :: ProductCat k =>
            -> (((a :* b) :* c) `k` ((a :* b') :* c'))
 inRassocPS = inRassocP . second
 
+transposeP :: ProductCat k => ((a :* b) :* (c :* d)) `k` ((a :* c) :* (b :* d))
+transposeP = (exl.exl &&& exl.exr) &&& (exr.exl &&& exr.exr)
+
+transposeS :: CoproductCat k => ((p :+ q) :+ (r :+ s)) `k` ((p :+ r) :+ (q :+ s))
+transposeS = (inl.inl ||| inr.inl) ||| (inl.inr ||| inr.inr)
 
 infixr 2 +++, |||
 
