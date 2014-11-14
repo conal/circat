@@ -747,8 +747,8 @@ pattern Val x       <- ConstS (Read x)
 
 pattern TrueS    <- ConstS "True"
 pattern FalseS   <- ConstS "False"
-pattern NotS a   <- Source _ "not" [a] 0
-pattern XorS a b <- Source _ "xor" [a,b] 0
+pattern NotS a   <- Source _ "¬" [a] 0
+pattern XorS a b <- Source _ "⊕" [a,b] 0
 
 class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses Bool where toBuses = BoolB
@@ -805,10 +805,10 @@ boolToIntC :: Bool :> Int
 boolToIntC = namedC "boolToInt"
 
 -- instance BoolCat (:>) where
---   notC = namedC "not"
---   andC = namedC "&&"
---   orC  = namedC "||"
---   xorC = namedC "xor"
+--   notC = namedC "¬"
+--   andC = namedC "∧"
+--   orC  = namedC "∨"
+--   xorC = namedC "⊕"
 
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
