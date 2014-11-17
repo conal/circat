@@ -97,6 +97,10 @@ compose = foldr (.) id
 transpose :: (Traversable t, Applicative f) => t (f a) -> f (t a)
 transpose = sequenceA
 
+inTranspose :: (Traversable t, Applicative t, Traversable f, Applicative f) =>
+               Unop (t (f a)) -> Unop (f (t a))
+inTranspose = transpose <~ transpose
+
 -- TODO: Maybe generalize the type of compose to Unop' (~>) a
 
 class Reversible f where
