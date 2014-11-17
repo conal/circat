@@ -14,6 +14,9 @@
 
 -- #define NoMend
 
+-- -- Whether a delay/cons element is considered further from input
+-- #define ShallowDelay
+
 #define NoSums
 -- #define StaticSums
 -- #define TaggedSums
@@ -906,6 +909,7 @@ instance NumCat (:>) Int where
 -- 
 --   if' (False,(_,a))     = a
 --   if' (True ,(b,_))     = b
+--   if' (not a,(b,c))     = if' (a,(c,b))
 --   if' (_    ,(a,a))     = a
 --   if' (a,(b,bottom))    = b
 --   if' (a,(bottom,c))    = c
@@ -941,10 +945,11 @@ ifOptB = \ case
 pattern BottomS <- ConstS "undefined"
 #endif
 
-ifOpt :: SourceToBuses a => Opt a
+ifOpt :: (IfCat (:>) a, SourceToBuses a) => Opt a
 ifOpt = \ case
   [FalseS,_,a]  -> sourceB a
   [ TrueS,b,_]  -> sourceB b
+  [NotS a,b,c]  -> newComp3R ifC a c b
   [_,a,Eql(a)]  -> sourceB a
 #if !defined NoIfBotOpt
   [_,b,BottomS] -> sourceB b
@@ -1051,7 +1056,7 @@ outG = outGWith ("pdf","")
 renameC :: Unop String
 renameC = id
 #if defined NoOptimizeCircuit
-        . (++"-unopt")
+        . (++"-no-opt")
 #else
 #if defined NoIdempotence
         . (++"-no-idem")
@@ -1069,6 +1074,9 @@ renameC = id
 #if defined ShowDepths
         . (++"-with-depths")
 #endif
+#if defined ShallowDelay
+        . (++"-shallow-delay")
+#endif
 
 type Name = String
 type Report = String
@@ -1080,10 +1088,10 @@ outGWith ss s ats circ = outGWithU ss s ats (unitize circ)
 outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
 outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
 
-type GraphInfo = (Name,DGraph,CompDepths,Report)
+type GraphInfo = (Name,CompDepths,Report)
 
 mkGraph :: Name -> UU -> GraphInfo
-mkGraph (renameC -> name') uu = (name',graph,depths,report)
+mkGraph (renameC -> name') uu = (name',depths,report)
  where
    graph  = uuGraph uu
    depths = longestPaths graph
@@ -1106,11 +1114,11 @@ mkGraph (renameC -> name') uu = (name',graph,depths,report)
 #endif         
                 depth
 outDotG :: (String,String) -> [Attr] -> GraphInfo -> IO ()
-outDotG (outType,res) attrs (name,graph,depths,report) = 
+outDotG (outType,res) attrs (name,depths,report) = 
   do createDirectoryIfMissing False outDir
      writeFile (outFile "dot")
-       (graphDot name attrs graph depths ++ "\n// "++ report)
-     -- putStr report
+       (graphDot name attrs depths ++ "\n// "++ report)
+     putStr report
      systemSuccess $
        printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
      printf "Wrote %s\n" (outFile outType)
@@ -1246,10 +1254,10 @@ sourceComp g = \ o -> fromMaybe (error (msg o)) (M.lookup o comps)
 
 -- The pred eliminates counting both In (constants) *and* Out.
 
-graphDot :: String -> [Attr] -> DGraph -> CompDepths -> Dot
-graphDot name attrs comps depths =
+graphDot :: String -> [Attr] -> CompDepths -> Dot
+graphDot name attrs depths =
   printf "digraph %s {\n%s}\n" (tweak <$> name)
-         (concatMap wrap (prelude ++ recordDots comps depths))
+         (concatMap wrap (prelude ++ recordDots depths))
  where
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
@@ -1302,20 +1310,10 @@ type SourceInfo = (Width,CompNum,PortNum,Depth)
 -- Map each pin to its info about it
 type SourceMap = Map PinId SourceInfo
 
--- Whether to add constraint=false for delay in-edges, which allows the delay
--- elements to move leftward. Sadly, dot 2.30.1 sometimes seg-faults with
--- constraint=false. Sigh. Try again sometime with a newer
--- GraphViz installation. I see that the current stable release is 2.38.0.
--- 
--- When I use the "edge [attrs] u -> v" notation, dot doesn't crash. However,
--- some examples look terrible.
-unconstrainDelays :: Bool
-unconstrainDelays = False
-
 -- TODO: Drop the comps argument, as it's already in depths
 
-recordDots :: [CompS] -> CompDepths -> [Statement]
-recordDots _comps depths = nodes ++ edges
+recordDots :: CompDepths -> [Statement]
+recordDots depths = nodes ++ edges
  where
    comps = M.keys depths
    nodes = node <$> comps
@@ -1354,7 +1352,7 @@ recordDots _comps depths = nodes ++ edges
    srcMap = sourceMap (M.toList depths)
    edges = concatMap compEdges comps
     where
-      compEdges c@(CompS cnum _ ins _ _) = edge <$> tagged ins
+      compEdges (CompS cnum _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
 #if 0
@@ -1369,8 +1367,12 @@ recordDots _comps depths = nodes ++ edges
           where
             (_w,ocnum,opnum,_d) = srcMap M.! i
             attrs w = label w ++ constraint
-            constraint | unconstrainDelays && isDelay c = ["constraint=false" ]
+#ifdef ShallowDelay
+            constraint | isDelay c = ["constraint=false" ]
                        | otherwise = []
+#else
+            constraint = []
+#endif
             label 1 = []
             label w = [printf "label=%d,fontsize=10" w]
    port :: Dir -> (CompNum,PortNum) -> String
