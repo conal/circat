@@ -97,7 +97,8 @@ lproducts = (fmap getProduct *** getProduct) . lscan . fmap Product
 
 -- | Numbers from 0 to n-1. Named for APL iota operation (but 0 based).
 iota :: (LScan f, Traversable f, Applicative f, Num b) => f b
-iota = lsums' (pure 1)
+-- iota = lsums' (pure 1)
+iota = fst (lsums (pure 1))
 
 lsums' :: (LScan f, Traversable f, Num b) => Unop (f b)
 lsums' = snd . shiftR . lsums
