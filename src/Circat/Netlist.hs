@@ -60,7 +60,7 @@ type PinMap = Map PinId PinDesc
 outV :: GenBuses a => Name -> (a :> b) -> IO ()
 outV name circ = saveVerilog name' (toVerilog ndr)
  where
-   ndr@(name',_,_,_) = mkGraph name (unitize circ)
+   ndr@(name',_,_) = mkGraph name (unitize circ)
 
 -- | Converts a Circuit to a Module
 toNetlist :: Name -> DGraph -> Module
@@ -135,12 +135,12 @@ sseq ss = Seq ss
 -- Maybe then a Reader with the same info for moduleAssigns.
 
 toVerilog :: GraphInfo -> String
-toVerilog (name,graph,_report,_depths) =
+toVerilog (name,M.keys -> graph,_report) =
   printf "%s"
    (show (V.ppModule (mk_module (toNetlist name graph))))
 
 saveAsVerilog :: GraphInfo -> IO ()
-saveAsVerilog gg@(name,_,_,_) = saveVerilog name (toVerilog gg)
+saveAsVerilog gg@(name,_,_) = saveVerilog name (toVerilog gg)
 
 saveVerilog :: Name -> String -> IO ()
 saveVerilog name verilog =
@@ -188,14 +188,10 @@ moduleAssign p2w (CompS _ "boolToInt" [i] [o] _) =
 
 -- unary operations                                                  
 moduleAssign p2w c@(CompS _ name [i] [o] _) = 
-  [NetAssign (busName p2w o) (ExprUnary unaryOp iE)]
+  [NetAssign (busName p2w o) (ExprUnary unOp iE)]
   where
     iE = sourceExp p2w i
-    unaryOp = case name of
-                "¬"      -> Neg
-                "not"    -> Neg
-                "negate" -> UMinus
-                _        -> err
+    unOp = fromMaybe err (translateUnOp name)
     err = error $ "Circat.Netlist.moduleAssign: UnaryOp " 
                   ++ show name ++ " not supported." ++ show c
 
@@ -231,6 +227,13 @@ moduleAssign p2w (CompS _ name is os _) =
 --                            ++ " not supported."
 
 -- (x≡y ∨ x≠y) ∧ (x<y ∨ x≥y) ∧ (x>y ∨ x≤y)
+
+translateUnOp  :: String -> Maybe UnaryOp
+translateUnOp  = \ case
+  "¬"      -> Just Neg
+  "not"    -> Just Neg
+  "negate" -> Just UMinus
+  _        -> Nothing
 
 translateBinOp :: String -> Maybe BinaryOp
 translateBinOp = \ case
@@ -303,7 +306,9 @@ instName :: CompS -> String
 instName (CompS num (tweakName -> name') _ _ _) = name' ++"_I"++show num
 
 tweakName :: String -> String
+tweakName (translateUnOp  -> Just op) = show op
 tweakName (translateBinOp -> Just op) = show op
+tweakName "if"                        = "Cond"
 tweakName name = prefix name ++ map tweakC name
  where
    -- Added for delay components.
