@@ -847,6 +847,13 @@ gtOpt = noOpt
 leOpt = noOpt
 geOpt = noOpt
 
+-- ltOpt = \ case
+--   [Val x, Val y] -> newVal (x < y)
+--   _              -> nothingA
+
+--     No instance for (Read a0) arising from a pattern
+--     The type variable ‘a0’ is ambiguous
+
 instance OrdCat (:>) Bool where
   lessThan           = primOpt "<" ltOpt
   greaterThan        = primOpt ">" gtOpt
@@ -887,7 +894,7 @@ pattern BToIS a <- Source _ "boolToInt" [a] 0
 instance NumCat (:>) Int where
  negateC = primOpt "negate" $ \ case
              [Val x] -> newVal (negate x)
-             _ -> nothingA
+             _       -> nothingA
  addC    = primOptSort "+" $ \ case
              [Val x, Val y] -> newVal (x+y)
              [ZeroS,y]      -> sourceB y
@@ -1197,7 +1204,7 @@ longestPaths g = distances
    memoDist = (distances M.!)
    -- Greatest distances a starting point.
    dist c | isStart c = 0
-          | otherwise = 1 + maximum ((memoDist . sComp) <$> compIns c)
+          | otherwise = 1 + maximumD ((memoDist . sComp) <$> compIns c)
    isStart c = null (compIns c) || isDelay c
 
 -- longestPath is adapted from the linear-time algorithm for *acyclic* longest
@@ -1207,9 +1214,13 @@ longestPaths g = distances
 -- Note: if we measured the depth *before* mending, we wouldn't have to be take
 -- care about cycles.
 
+maximumD :: [Depth] -> Depth
+maximumD [] = 0
+maximumD ds = maximum ds
+
 -- Greatest depth over components with outputs
 longestPath :: CompDepths -> Depth
-longestPath = maximum . M.elems . withOuts
+longestPath = maximumD . M.elems . withOuts
  where
    withOuts = M.filterWithKey (\ c _ -> not (null (compOuts c)))
 
@@ -1352,7 +1363,7 @@ recordDots depths = nodes ++ edges
    srcMap = sourceMap (M.toList depths)
    edges = concatMap compEdges comps
     where
-      compEdges (CompS cnum _ ins _ _) = edge <$> tagged ins
+      compEdges _c@(CompS cnum _ ins _ _) = edge <$> tagged ins
        where
          edge (ni, Bus i width) =
 #if 0
@@ -1368,8 +1379,8 @@ recordDots depths = nodes ++ edges
             (_w,ocnum,opnum,_d) = srcMap M.! i
             attrs w = label w ++ constraint
 #ifdef ShallowDelay
-            constraint | isDelay c = ["constraint=false" ]
-                       | otherwise = []
+            constraint | isDelay _c = ["constraint=false" ]
+                       | otherwise  = []
 #else
             constraint = []
 #endif
