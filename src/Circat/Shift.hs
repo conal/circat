@@ -17,7 +17,10 @@
 -- Shift values through structures
 ----------------------------------------------------------------------
 
-module Circat.Shift (accumL, accumR, shiftR, shiftL, shiftRF, shiftLF) where
+module Circat.Shift
+  ( accumL, accumR, shiftR, shiftL, shiftRF, shiftLF
+  , rotateL, rotateR
+  ) where
 
 import Prelude hiding (zip,unzip,zipWith)
 
@@ -25,7 +28,7 @@ import Data.Traversable (Traversable(..)) -- ,mapAccumR
 import Control.Applicative (Applicative(..))
 import Data.Tuple (swap)
 
-import Circat.Misc ((:*))
+import Circat.Misc ((:*),Unop)
 import Circat.Rep
 
 -- Utilities
@@ -80,6 +83,14 @@ shiftL = accumL id
 shiftR :: Traversable t => t a :* a -> a :* t a
 shiftR = accumR id
 -- shiftR (as,a') = mapAccumR (flip (,)) a' as
+
+-- | Like 'shiftL', feeding rightmost value into left end
+rotateL :: Traversable t => Unop (t a)
+rotateL as = as' where (as',a) = shiftL (a,as)
+
+-- | Like 'shiftR', feeding leftmost value into right end
+rotateR :: Traversable t => Unop (t a)
+rotateR as = as' where (a,as') = shiftR (as,a)
 
 -- Note id instead of swap, which I discovered in testing.
 -- To do: rethink.
