@@ -79,7 +79,7 @@ toNetlist name comps =
       tweak '-' = '_'
       tweak c   = c
 
--- Whether to handle dynamic reset.
+-- Whether to handle dynamic reset vs initialization.
 withReset :: Bool
 withReset = True
 
@@ -291,14 +291,13 @@ moduleNet c =
     wireName i = instName c++if length outs==1 then "" else "_"++show i
 
 valDecl :: Name -> Ident -> Maybe Range -> Decl
-valDecl (delayStart -> Just x0) s r = MemDecl s Nothing r (Just [x0])
-valDecl _                       s r = NetDecl s r Nothing
-
--- TODO: Extract and use initialization value for delay in place of MemDecl's
--- final Nothing. Then consider dropping the reset.
+valDecl (delayStart -> Just x0) s r =
+  MemDecl s Nothing r (if withReset then Nothing else Just [x0])
+valDecl _                       s r =
+  NetDecl s r Nothing
 
 busRange :: Width -> Range
-busRange wid = Range (lit 0) (lit (wid - 1))
+busRange wid = Range (lit (wid - 1)) (lit 0)
  where
    lit = ExprLit Nothing . ExprNum . fromIntegral
 
