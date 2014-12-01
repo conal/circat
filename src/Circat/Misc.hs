@@ -109,6 +109,9 @@ class Reversible f where
   regrettable_hack_reverse :: f a
   regrettable_hack_reverse = undefined
 
+instance Reversible [] where
+  reverse = Prelude.reverse
+
 -- TODO: Remove Reversible?
 
 infix 4 ===, ==?
