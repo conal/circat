@@ -24,7 +24,8 @@
 ----------------------------------------------------------------------
 
 module Circat.LTree
-  ( LTree(..),unB,Tree,fromList
+  ( LTree(..),unB,inB,inB2,Tree,fromList
+  , butterfly, butterfly'
   , tree0, tree1, tree2, tree3, tree4
   , get, update
   ) where
@@ -43,7 +44,7 @@ import Data.Typeable (Typeable)
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
 
-import Circat.Misc (Unop,(<~),Reversible(..)) -- (:*)
+import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose) -- (:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -304,6 +305,37 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -- . (fmap . fmap) unB
 
 -}
+
+-- | Split into left and right halves
+topSplit :: IsNat n => LTree (S n) a -> Pair (LTree n a)
+topSplit = split' nat
+ where
+   split' :: Nat n -> Tree (S n) a -> Pair (Tree n a)
+   split' Zero     = transpose . unB
+   split' (Succ m) =
+     fmap B . fmap transpose . transpose . fmap (split' m) . transpose . unB
+
+-- unB :: LTree (S (S m)) a -> LTree (S m) (Pair a)
+-- transpose :: LTree (S m) (Pair a) -> Pair (LTree (S m) a)
+-- fmap (split' m) :: Pair (LTree (S m) a) -> Pair (Pair (LTree m a))
+-- transpose :: Pair (Pair (LTree m a)) -> Pair (Pair (LTree m a))
+-- fmap transpose :: Pair (Pair (LTree m a)) -> Pair (LTree (Pair m a))
+-- fmap B :: Pair (LTree (Pair m a)) -> Pair (LTree (S m) a)
+
+butterfly :: IsNat n => Unop (Pair a) -> Unop (LTree n a)
+butterfly = butterfly' nat
+
+butterfly' :: Nat n -> Unop (Pair a) -> Unop (LTree n a)
+butterfly' Zero     _ = id
+butterfly' (Succ m) f = (inB.inTranspose.fmap.butterfly' m) f
+
+-- unB :: LTree (S m) a -> LTree m (Pair a)
+-- transpose :: LTree m (Pair a) -> Pair (LTree m a)
+-- fmap (butterfly' m f) :: Pair (LTree m a) -> Pair (LTree m a)
+-- transpose :: Pair (LTree m a) -> LTree m (Pair a)
+-- B :: LTree m (Pair a) -> LTree (S m) a
+
+-- TODO: Generalize to (Pair a -> Pair b) -> (LTree n a -> LTree n b)
 
 #if 0
 instance Zippable (Tree Z) where

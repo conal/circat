@@ -24,9 +24,10 @@
 ----------------------------------------------------------------------
 
 module Circat.RTree
-  ( RTree(..),unB,Tree,fromList
+  ( RTree(..),unB,inB,inB2,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4
   , get, update
+  , butterfly, butterfly'
   ) where
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
@@ -43,7 +44,7 @@ import Data.Typeable (Typeable)
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
 
-import Circat.Misc (Unop,(<~),Reversible(..)) -- (:*)
+import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -327,6 +328,105 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -- . (fmap . fmap) unB
 
 -}
+
+-- Bottom-up merge, preserving ordering
+tmerge :: Tree n (Pair a) -> Tree (S n) a
+tmerge (L (a :# b)) = B (L a :# L b)
+tmerge (B ts)       = B (tmerge <$> ts)
+
+-- ts :: Pair (Tree m (Pair a))
+-- pmerge <$> ts : Pair (Tree (S m) a)
+-- B (pmerge <$> ts) : Tree (S (S m)) a
+
+tsplit :: IsNat n => Tree (S n) a -> Tree n (Pair a)
+tsplit = tsplit' nat
+
+tsplit' :: Nat n -> Tree (S n) a -> Tree n (Pair a)
+tsplit' Zero     = L . fmap unL . unB
+                   -- transpose . unB
+                   -- \ (B (L a :# L b)) -> L (a :# b)
+tsplit' (Succ m) = (inB.fmap) (tsplit' m)
+
+-- B p :: Tree (S (S m)) a
+-- p :: Pair (Tree (S m) a)
+-- tsplit' m <$> p :: Pair (Tree m (Pair a))
+-- B (tsplit' m <$> p) :: Tree (S m) (Pair a)
+
+butterfly :: (IsNat n, Ord a) => Unop (Pair a) -> Unop (Tree n a)
+butterfly = butterfly' nat
+
+butterfly' :: Ord a => Nat n -> Unop (Pair a) -> Unop (Tree n a)
+butterfly' Zero     _ = id
+butterfly' (Succ m) f = inB (fmap (butterfly' m f) . (inTranspose.fmap) f)
+{-# INLINE butterfly' #-}
+
+#if 0
+butterfly' (Succ m) f = B . fmap (butterfly' m f) . transpose . fmap f . transpose . unB
+
+unB                   :: RTree (S m) a -> Pair (RTree m a)
+transpose             :: Pair (RTree m a) ->  RTree m (Pair a)
+fmap f                :: RTree m (Pair a) -> RTree m (Pair a)
+transpose             :: RTree m (Pair a) -> Pair (RTree m a)
+fmap (butterfly' m f) :: Pair (RTree m a) -> Pair (RTree m a)
+B                     :: Pair (RTree m a) -> RTree (S m) a
+#endif
+
+-- Equivalently,
+-- 
+--   butterfly' (Succ m) f = inB $ fmap (butterfly' m f) . inTranspose (fmap f)
+--     
+--   butterfly' (Succ m) f = inB $ \ ts -> butterfly' m f <$> inTranspose (fmap f) ts
+--     
+--   butterfly' (Succ m) f = \ (B ts) -> B (butterfly' m f <$> inTranspose (fmap f) ts)
+--     
+--   butterfly' (Succ m) f = \ (B ts) -> B (butterfly' m f <$> transpose (f <$> transpose ts))
+
+-- Split into evens & odds
+bottomSplit :: IsNat n => Tree (S n) a -> Pair (Tree n a)
+bottomSplit = split' nat
+ where
+   split' :: Nat n -> Tree (S n) a -> Pair (Tree n a)
+   split' Zero     = unB
+   split' (Succ m) = fmap B . transpose . fmap (split' m) . unB
+
+--    split' Zero     =  \ (B (L a :# L b)) -> L a :# L b
+--    split' (Succ m) = \ (B ts) -> B <$> ptranspose (split' m <$> ts)
+
+-- Maybe I really want Tree (S n) a -> Tree n (Pair a)
+
+-- fmap (split' m) :: Pair (Tree (S m) a) -> Pair (Pair (Tree m a))
+-- transpose :: Pair (Pair (Tree m a)) -> Pair (Pair (Tree m a))
+-- fmap transpose :: Pair (Pair (Tree m a)) -> Pair (Tree (Pair m a))
+-- fmap B :: Pair (Tree (Pair m a)) -> Pair (Tree (S m) a)
+
+#if 0
+
+unB :: Tree (S (S m)) a -> Pair (Tree (S m) a)
+fmap (split' m) :: Pair (Tree (S m) a) -> Pair (Pair (Tree m a))
+ptranspose :: Pair (Pair (Tree m a)) -> Pair (Pair (Tree m a))
+fmap B :: Pair (Pair (Tree m a)) -> Pair (Tree (S m) a)
+
+#endif
+
+unriffle :: IsNat n => Unop (Tree (S n) a)
+unriffle = B . bottomSplit
+
+-- > toList (unriffle (fromList [1..16] :: Tree N4 Int))
+-- [1,3,5,7,9,11,13,15,2,4,6,8,10,12,14,16]
+
+-- transposeT :: Unop (Tree (S (S m)) a)
+-- transposeT = B . fmap B . ptranspose . fmap unB . unB
+
+-- fmap unB . unB :: Tree (S (S m)) a -> Pair (Pair (Tree m a))
+-- ptranspose :: Pair (Pair (Tree m a)) -> Pair (Pair (Tree m a))
+-- B . fmap B :: Pair (Pair (Tree m a)) -> Tree (S (S m)) a
+
+-- unriffleA :: IsNat n => Unop (Tree (S n) a)
+-- unriffleA = riff' nat
+--  where
+--    riff' :: Nat n -> Unop (Tree (S n) a)
+--    riff' Zero     = id
+--    riff' (Succ m) = 
 
 #if 0
 
