@@ -23,7 +23,8 @@
 module Circat.Pair
   ( Pair(..)
   , curryP, uncurryP, toP, fromP
-  , fstP, sndP
+  , fstP, sndP, firstP, secondP
+  , sortP
   , get, update
   ) where
 
@@ -68,17 +69,23 @@ instance Ord a => Ord (Pair a) where
 -- The derived foldMap inserts a mempty (in GHC 7.0.4).
 instance Foldable Pair where
   foldMap f (a :# b) = f a `mappend` f b
+  {-# INLINE foldMap #-}
 
 instance Applicative Pair where
   pure a = a :# a
   (f :# g) <*> (a :# b) = (f a :# g b)
+  {-# INLINE pure #-}
+  {-# INLINE (<*>) #-}
 
 instance Monad Pair where
   return = pure
   m >>= f = joinP (f <$> m)
+  {-# INLINE return #-}
+  {-# INLINE (>>=) #-}
 
 joinP :: Pair (Pair a) -> Pair a
 joinP ((a :# _) :# (_ :# d)) = a :# d
+{-# INLINE joinP #-}
 
 -- instance Zippable Pair where
 --   (a :# b) `zip` (a' :# b') = (a,a') :# (b,b')
@@ -97,13 +104,19 @@ instance Zippable Pair where
 instance Traversable Pair where
   traverse h (fa :# fb) = liftA2 (:#) (h fa) (h fb)
   -- sequenceA (fa :# fb) = liftA2 (:#) fa fb
+  {-# INLINE traverse #-}
 
 instance LScan Pair where
   lscan (a :# b) = (mempty :# a, a <> b)
+  {-# INLINE lscan #-}
 
 instance Reversible Pair where
   reverse (a :# b) = b :# a
   {-# INLINE reverse #-}
+
+sortP :: Ord a => Unop (Pair a)
+sortP (a :# b) = if a <= b then a :# b else b :# a
+{-# INLINE sortP #-}
 
 #if 0
 
@@ -133,6 +146,12 @@ fstP (a :# _) = a
 
 sndP :: Pair a -> a
 sndP (_ :# b) = b
+
+firstP :: Unop a -> Unop (Pair a)
+firstP f (a :# b) = f a :# b
+
+secondP :: Unop a -> Unop (Pair a)
+secondP f (a :# b) = a :# f b
 
 {--------------------------------------------------------------------
     Lookup and update
