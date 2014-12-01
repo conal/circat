@@ -26,7 +26,7 @@
 module Circat.LTree
   ( LTree(..),unB,inB,inB2,Tree,fromList
   , butterfly, butterfly'
-  , tree0, tree1, tree2, tree3, tree4
+  , tree0, tree1, tree2, tree3, tree4, tree5
   , get, update
   ) where
 
@@ -428,6 +428,16 @@ tree4 :: a -> a -> a -> a -> a -> a -> a -> a
 tree4 a b c d e f g h i j k l m n o p =
   B (tree3 (a :# b) (c :# d) (e :# f) (g :# h)
            (i :# j) (k :# l) (m :# n) (o :# p))
+
+tree5 :: a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> Tree N5 a
+tree5 a a' b b' c c' d d' e e' f f' g g' h h'
+      i i' j j' k k' l l' m m' n n' o o' p p' =
+  B (tree4 (a :# a') (b :# b') (c :# c') (d :# d') (e :# e') (f :# f') (g :# g') (h :# h')
+           (i :# i') (j :# j') (k :# k') (l :# l') (m :# m') (n :# n') (o :# o') (p :# p'))
 
 {--------------------------------------------------------------------
     Lookup and update

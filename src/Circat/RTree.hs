@@ -25,7 +25,7 @@
 
 module Circat.RTree
   ( RTree(..),unB,inB,inB2,Tree,fromList
-  , tree0, tree1, tree2, tree3, tree4
+  , tree0, tree1, tree2, tree3, tree4, tree5
   , get, update
   , butterfly, butterfly'
   ) where
@@ -574,6 +574,16 @@ tree4 :: a -> a -> a -> a -> a -> a -> a -> a
       -> Tree N4 a
 tree4 a b c d e f g h i j k l m n o p =
   B (tree3 a b c d e f g h :# tree3 i j k l m n o p)
+
+tree5 :: a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> Tree N5 a
+tree5 a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  p
+      a' b' c' d' e' f' g' h' i' j' k' l' m' n' o' p' =
+  B (  tree4 a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  p 
+    :# tree4 a' b' c' d' e' f' g' h' i' j' k' l' m' n' o' p')
 
 
 {--------------------------------------------------------------------
