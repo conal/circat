@@ -24,11 +24,12 @@
 ----------------------------------------------------------------------
 
 module Circat.Mealy
-  ( Mealy(..),ArrowCircuit(..),ArrowCircuitT
+  ( Mealy(..),runMealy,ArrowCircuit(..),ArrowCircuitT
   , scanl, scan, foldSP
   , sumS, productS
   , sumSP, productSP, dotSP
   , sumPS, productPS, dotPS
+  , mac, sumMac
 #ifdef Semantics
   , asStreamFun, asArrow
 #endif
@@ -63,10 +64,12 @@ import Control.Arrow.Transformer.Stream
     Experiment with constraining s
 --------------------------------------------------------------------}
 
+type GS a = (GenBuses a, Show a)
+
 #ifdef CircuitConstraint
 
 -- type C = GenBuses
-type C a = (GenBuses a, Show a)
+type C a = GS a
 
 -- The Show constraint is helpful for debugging. Perhaps remove later.
 
@@ -208,14 +211,14 @@ scan :: (Monoid m, C m) => Mealy m m
 scan = scanl (<>) mempty
 {-# INLINE scan #-}
 
-sumS :: (Num a, GenBuses a, Show a) => Mealy a a
+sumS :: (Num a, GS a) => Mealy a a
 sumS = arr getSum . scan . arr Sum
 {-# INLINE sumS #-}
 
 -- sumS = Mealy (\ (a,tot) -> dup (tot+a)) 0
 -- sumS = Mealy (dup . uncurry (+)) 0
 
-productS :: (Num a, GenBuses a, Show a) => Mealy a a
+productS :: (Num a, GS a) => Mealy a a
 productS = arr getProduct . scan . arr Product
 {-# INLINE productS #-}
 
@@ -260,26 +263,22 @@ _dotSP2 = Mealy (\ (pas,tot) -> dup (dot pas + tot)) 0
 
 -- Parallel-of-sequential
 
-sumPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
+sumPS :: (Foldable f, Num (f a), Num a, GS (f a)) =>
          Mealy (f a) a
 sumPS = arr sum . sumS
 -- sumPS = Mealy (\ (t,tot) -> let tot' = tot+t in (sum tot',tot')) 0
 {-# INLINE sumPS #-}
 
-productPS :: (Foldable f, Num (f a), Num a, GenBuses (f a), Show (f a)) =>
+productPS :: (Foldable f, Num (f a), Num a, GS (f a)) =>
              Mealy (f a) a
 productPS = arr product . productS
 -- productPS = Mealy (\ (t,tot) -> let tot' = tot+t in (product tot',tot')) 0
 {-# INLINE productPS #-}
 
-dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GenBuses (o a), Show (o a)) =>
+dotPS :: (Foldable o, Functor o, Foldable i, Num (o a), Num a, GS (o a)) =>
          Mealy (o (i a)) a
 dotPS = sumPS . arr (fmap product)
 {-# INLINE dotPS #-}
-
-#if 0
-
-type GS a = (GenBuses a, Show a)
 
 mac :: (Foldable f, Num a, GS a) =>
        Mealy (f a) a
@@ -292,8 +291,6 @@ sumMac :: (Foldable o, Foldable i, Num (i a), Num a, GS (i a)) =>
 sumMac = arr sum . mac
 -- sumMac = Mealy (\ (as,tot) -> let tot' = tot+product as in (sum tot',tot')) 0
 {-# INLINE sumMac #-}
-
-#endif
 
 {--------------------------------------------------------------------
     Examples
