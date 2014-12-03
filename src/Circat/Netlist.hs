@@ -199,10 +199,10 @@ moduleAssign p2w (CompS _ name [] [o] _) =
   [NetAssign (busName p2w o) (ExprLit Nothing val)]
   where 
     val = case name of 
-            "True"      -> ExprBit T
-            "False"     -> ExprBit F
-            "undefined" -> ExprNum 0  -- default
-            _           ->
+            "True"  -> ExprBit T
+            "False" -> ExprBit F
+            "⊥"     -> ExprNum 0  -- default
+            _       ->
               case reads name of
                 [(n :: Int,"")] -> ExprNum (fromIntegral n)
                 _ -> err $ "Literal " ++ name ++ " not recognized."
@@ -305,9 +305,10 @@ instName :: CompS -> String
 instName (CompS num (tweakName -> name') _ _ _) = name' ++"_I"++show num
 
 tweakName :: String -> String
+-- tweakName "undefined"                 = "⊥"
+-- tweakName "if"                        = "Cond"
 tweakName (translateUnOp  -> Just op) = show op
 tweakName (translateBinOp -> Just op) = show op
-tweakName "if"                        = "Cond"
 tweakName name = prefix name ++ map tweakC name
  where
    -- Added for delay components.
