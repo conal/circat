@@ -559,21 +559,26 @@ halves as = toP (splitAt (length as `div` 2) as)
 
 tree0 :: a -> Tree N0 a
 tree0 = L
+{-# INLINE tree0 #-}
 
 tree1 :: a -> a -> Tree N1 a
 tree1 a b = B (tree0 a :# tree0 b)
+{-# INLINE tree1 #-}
 
 tree2 :: a -> a -> a -> a -> Tree N2 a
 tree2 a b c d = B (tree1 a b :# tree1 c d)
+{-# INLINE tree2 #-}
 
 tree3 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree N3 a
 tree3 a b c d e f g h = B (tree2 a b c d :# tree2 e f g h)
+{-# INLINE tree3 #-}
 
 tree4 :: a -> a -> a -> a -> a -> a -> a -> a
       -> a -> a -> a -> a -> a -> a -> a -> a
       -> Tree N4 a
 tree4 a b c d e f g h i j k l m n o p =
   B (tree3 a b c d e f g h :# tree3 i j k l m n o p)
+{-# INLINE tree4 #-}
 
 tree5 :: a -> a -> a -> a -> a -> a -> a -> a
       -> a -> a -> a -> a -> a -> a -> a -> a
@@ -584,7 +589,26 @@ tree5 a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  p
       a' b' c' d' e' f' g' h' i' j' k' l' m' n' o' p' =
   B (  tree4 a  b  c  d  e  f  g  h  i  j  k  l  m  n  o  p 
     :# tree4 a' b' c' d' e' f' g' h' i' j' k' l' m' n' o' p')
+{-# INLINE tree5 #-}
 
+tree6 :: a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> a -> a -> a -> a -> a -> a -> a -> a
+      -> Tree N6 a
+tree6 a1 b1 c1 d1 e1 f1 g1 h1 i1 j1 k1 l1 m1 n1 o1 p1
+      a2 b2 c2 d2 e2 f2 g2 h2 i2 j2 k2 l2 m2 n2 o2 p2
+      a3 b3 c3 d3 e3 f3 g3 h3 i3 j3 k3 l3 m3 n3 o3 p3
+      a4 b4 c4 d4 e4 f4 g4 h4 i4 j4 k4 l4 m4 n4 o4 p4 =
+  B (  tree5 a1 b1 c1 d1 e1 f1 g1 h1 i1 j1 k1 l1 m1 n1 o1 p1
+             a2 b2 c2 d2 e2 f2 g2 h2 i2 j2 k2 l2 m2 n2 o2 p2
+    :# tree5 a3 b3 c3 d3 e3 f3 g3 h3 i3 j3 k3 l3 m3 n3 o3 p3
+             a4 b4 c4 d4 e4 f4 g4 h4 i4 j4 k4 l4 m4 n4 o4 p4 )
+{-# INLINE tree6 #-}
 
 {--------------------------------------------------------------------
     Lookup and update
