@@ -40,6 +40,7 @@
 #endif
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- for OkayArr
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -68,7 +69,7 @@ module Circat.Circuit
   , UU, outDotG, mkGraph,Name,Report,GraphInfo
   , simpleComp, tagged
   , systemSuccess
-  , unitize
+  , unitize, unitize'
   , MealyC(..)
   , mealyAsArrow
   , unitizeMealyC
@@ -1033,6 +1034,13 @@ runU cir = getComps compInfo
 unitize :: GenBuses a => (a :> b) -> UU
 unitize = namedC "Out" <~ namedC "In"
 
+type instance OkayArr (:>) a b = GenBuses a
+
+unitize' :: Uncurriable (:>) a b u v => (a :> b) -> UU
+unitize' = unitize . uncurries
+
+-- TODO: phase out unitize, and rename unitize'.
+
 {--------------------------------------------------------------------
     Visualize circuit as dot graph
 --------------------------------------------------------------------}
@@ -1273,6 +1281,7 @@ graphDot name attrs depths =
    prelude = [ "rankdir=LR"
              , "node [shape=Mrecord]"
              , "bgcolor=transparent"
+             , "nslimit=20"  -- helps with very large rank graphs
              -- , "ratio=1"
              --, "ranksep=1"
              -- , fixedsize=true
@@ -2049,7 +2058,8 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   { genBuses' = genBusesRep' ; delay = delayCRep ; ty = tyRep }; \
 instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
   { bottomC = bottomRep };\
-instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };
+instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };\
+instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) q_q (abs) where uncurries = id
 
 #endif
 
