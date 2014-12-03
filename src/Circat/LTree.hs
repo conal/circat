@@ -412,15 +412,19 @@ consecs (a:b:as) = (a :# b) : consecs as
 
 tree0 :: a -> Tree N0 a
 tree0 = L
+{-# INLINE tree0 #-}
 
 tree1 :: a -> a -> Tree N1 a
 tree1 a b = B (tree0 (a :# b))
+{-# INLINE tree1 #-}
 
 tree2 :: a -> a -> a -> a -> Tree N2 a
 tree2 a b c d = B (tree1 (a :# b) (c :# d))
+{-# INLINE tree2 #-}
 
 tree3 :: a -> a -> a -> a -> a -> a -> a -> a -> Tree N3 a
 tree3 a b c d e f g h = B (tree2 (a :# b) (c :# d) (e :# f) (g :# h))
+{-# INLINE tree3 #-}
 
 tree4 :: a -> a -> a -> a -> a -> a -> a -> a
       -> a -> a -> a -> a -> a -> a -> a -> a
@@ -428,6 +432,7 @@ tree4 :: a -> a -> a -> a -> a -> a -> a -> a
 tree4 a b c d e f g h i j k l m n o p =
   B (tree3 (a :# b) (c :# d) (e :# f) (g :# h)
            (i :# j) (k :# l) (m :# n) (o :# p))
+{-# INLINE tree4 #-}
 
 tree5 :: a -> a -> a -> a -> a -> a -> a -> a
       -> a -> a -> a -> a -> a -> a -> a -> a
@@ -438,6 +443,7 @@ tree5 a a' b b' c c' d d' e e' f f' g g' h h'
       i i' j j' k k' l l' m m' n n' o o' p p' =
   B (tree4 (a :# a') (b :# b') (c :# c') (d :# d') (e :# e') (f :# f') (g :# g') (h :# h')
            (i :# i') (j :# j') (k :# k') (l :# l') (m :# m') (n :# n') (o :# o') (p :# p'))
+{-# INLINE tree5 #-}
 
 {--------------------------------------------------------------------
     Lookup and update
