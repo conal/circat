@@ -12,10 +12,10 @@
 -- -- TODO: Make dynamic, perhaps via display attributes
 -- #define ShowDepths
 
--- #define NoMend
-
 -- -- Whether a delay/cons element is considered further from input
 -- #define ShallowDelay
+
+-- #define NoMend
 
 #define NoSums
 -- #define StaticSums
@@ -804,8 +804,10 @@ instance BoolCat (:>) where
            [NotS x,Eql(x)]   -> newVal True
            _            -> nothingA
 
+#define BoolToInt "Bool→Int"
+
 boolToIntC :: Bool :> Int
-boolToIntC = namedC "boolToInt"
+boolToIntC = namedC BoolToInt
 
 -- instance BoolCat (:>) where
 --   notC = namedC "¬"
@@ -889,7 +891,7 @@ readBit _   = Nothing
 pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
 
-pattern BToIS a <- Source _ "boolToInt" [a] 0
+pattern BToIS a <- Source _ BoolToInt [a] 0
 
 instance NumCat (:>) Int where
  negateC = primOpt "negate" $ \ case

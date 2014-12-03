@@ -183,7 +183,7 @@ moduleAssign p2w (CompS _ "if" [a,b,c] [o] _) =
   [NetAssign (busName p2w o)
     (ExprCond (sourceExp p2w a) (sourceExp p2w b) (sourceExp p2w c))]
 
-moduleAssign p2w (CompS _ "boolToInt" [i] [o] _) = 
+moduleAssign p2w (CompS _ "Bool→Int" [i] [o] _) = 
   [NetAssign (busName p2w o) (sourceExp p2w i)]  -- implicit conversion
 
 -- unary operations                                                  
