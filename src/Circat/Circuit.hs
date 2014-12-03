@@ -153,9 +153,6 @@ type Sources = [Source]
 
 data Source = Source Bus PrimName Sources Int
 
--- undefinedSource :: Width -> Source
--- undefinedSource w = Source (undefinedBus w) "undefined" [] 0
-
 sourceBus :: Source -> Bus
 sourceBus (Source b _ _ _) = b
 
@@ -704,9 +701,11 @@ constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
 
 #if 1
 
+#define UNDEFINED "⊥"
+
 -- bottomScalar :: GenBuses b => CircuitM (Buses b)
 bottomScalar :: GenBuses b => Unit :> b
-bottomScalar = mkCK (constComp "undefined")
+bottomScalar = mkCK (constComp UNDEFINED)
 
 instance BottomCat (:>) Bool where bottomC = bottomScalar
 instance BottomCat (:>) Int  where bottomC = bottomScalar
@@ -733,7 +732,7 @@ instance GenBuses a => BottomCat (:>) a where
 #elif 0
 instance BottomCat (:>) where
   type BottomKon (:>) a = GenBuses a
-  bottomC = mkCK (const (genBuses (Prim "undefined") []))
+  bottomC = mkCK (const (genBuses (Prim UNDEFINED) []))
 -- See the note at BottomCat
 #elif 0
 instance BottomCat (:>) where
@@ -950,7 +949,7 @@ ifOptB = \ case
   _                      -> nothingA
 
 #if !defined NoIfBotOpt
-pattern BottomS <- ConstS "undefined"
+pattern BottomS <- ConstS UNDEFINED
 #endif
 
 ifOpt :: (IfCat (:>) a, SourceToBuses a) => Opt a
