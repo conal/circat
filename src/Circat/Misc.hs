@@ -38,6 +38,9 @@ type Unop a = a -> a
 -- | Binary transformation
 type Binop a = a -> Unop a
 
+-- | Ternary transformation
+type Ternop a = a -> Binop a
+
 -- Sum & product type synonyms
 
 infixl 7 :*
