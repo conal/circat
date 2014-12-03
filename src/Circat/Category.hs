@@ -2,8 +2,6 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables, CPP #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
--- For Uncurriable
-{-# LANGUAGE FunctionalDependencies #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -481,18 +479,24 @@ if_then_else p f g = (f ||| g) . guard p
 
 type family OkayArr (k :: * -> * -> *) a b :: Constraint
 
-class OkayArr k u v => Uncurriable k a b u v | a b -> u v where
-  uncurries :: (a `k` b) -> (u `k` v)
+class OkayArr k (OkayDom k a b) (OkayRan k a b) => Uncurriable k a b where
+  type OkayDom k a b
+  type OkayRan k a b
+  type OkayDom k a b = a
+  type OkayRan k a b = b
+  uncurries :: (a `k` b) -> (OkayDom k a b `k` OkayRan k a b)
 
-instance (ClosedCat k, Uncurriable k (a :* b) c u v)
-       => Uncurriable k a (b -> c) u v where
+instance (ClosedCat k, Uncurriable k (a :* b) c)
+       => Uncurriable k a (b -> c) where
+  type OkayDom k a (b -> c) = OkayDom k (a :* b) c
+  type OkayRan k a (b -> c) = OkayRan k (a :* b) c
   uncurries = uncurries . uncurry
 
-instance OkayArr k a Bool => Uncurriable k a Bool a Bool where uncurries = id
-instance OkayArr k a Int  => Uncurriable k a Int  a Int  where uncurries = id
-instance OkayArr k a Unit => Uncurriable k a Unit a Unit where uncurries = id
+instance OkayArr k a Bool => Uncurriable k a Bool where uncurries = id
+instance OkayArr k a Int  => Uncurriable k a Int  where uncurries = id
+instance OkayArr k a Unit => Uncurriable k a Unit where uncurries = id
 
-instance OkayArr k a (c :* d) => Uncurriable k a (c :* d) a (c :* d) where uncurries = id
+instance OkayArr k a (c :* d) => Uncurriable k a (c :* d) where uncurries = id
 
 --     Illegal constraint 'OkayArr k a Bool' in a superclass/instance context
 --       (Use UndecidableInstances to permit this)

@@ -1035,7 +1035,7 @@ unitize = namedC "Out" <~ namedC "In"
 
 type instance OkayArr (:>) a b = GenBuses a
 
-unitize' :: Uncurriable (:>) a b u v => (a :> b) -> UU
+unitize' :: Uncurriable (:>) a b => (a :> b) -> UU
 unitize' = unitize . uncurries
 
 -- TODO: phase out unitize, and rename unitize'.
@@ -2058,7 +2058,7 @@ instance GenBuses (Rep (abs)) => GenBuses (abs) where \
 instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
   { bottomC = bottomRep };\
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };\
-instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) q_q (abs) where uncurries = id
+instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) where uncurries = id
 
 #endif
 
