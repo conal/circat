@@ -86,7 +86,6 @@ lscanComp = lscanComp' lscan lscan
 lscanInc :: (LScan f, Traversable f, Monoid b) => Unop (f b)
 lscanInc = snd . shiftR . lscan
 
--- lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums = (fmap getSum *** getSum) . lscan . fmap Sum
 
