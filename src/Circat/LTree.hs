@@ -27,7 +27,7 @@ module Circat.LTree
   ( LTree(..),unB,inB,inB2,Tree,fromList
   , butterfly, butterfly'
   , tree0, tree1, tree2, tree3, tree4, tree5
-  , get, update
+  , get, (!), update
   ) where
 
 import Prelude hiding (id,(.),uncurry,zip,zipWith,reverse)
@@ -452,6 +452,9 @@ tree5 a a' b b' c c' d d' e e' f f' g g' h h'
 get :: Vec n Bool -> Tree n a -> a
 get ZVec      = unL
 get (b :< bs) = P.get b . get bs . unB
+
+(!) :: Tree n a -> Vec n Bool -> a
+(!) = flip get
 
 update :: Vec n Bool -> Unop a -> Unop (Tree n a)
 update ZVec      f = L . f . unL

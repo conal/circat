@@ -26,7 +26,7 @@
 module Circat.RTree
   ( RTree(..),unB,inB,inB2,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4, tree5
-  , get, update
+  , get, (!), update
   , butterfly, butterfly'
   ) where
 
@@ -617,6 +617,9 @@ tree6 a1 b1 c1 d1 e1 f1 g1 h1 i1 j1 k1 l1 m1 n1 o1 p1
 get :: Vec n Bool -> Tree n a -> a
 get ZVec      = unL
 get (b :< bs) = get bs . P.get b . unB
+
+(!) :: Tree n a -> Vec n Bool -> a
+(!) = flip get
 
 update :: Vec n Bool -> Unop a -> Unop (Tree n a)
 update ZVec      f = L . f . unL
