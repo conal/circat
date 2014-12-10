@@ -25,7 +25,7 @@
 
 module Circat.Mealy
   ( Mealy(..),runMealy,ArrowCircuit(..),ArrowCircuitT
-  , scanl, scan, foldSP
+  , scanl, scan, iterateU, foldSP
   , sumS, productS
   , sumSP, productSP, dotSP
   , sumPS, productPS, dotPS
@@ -35,6 +35,7 @@ module Circat.Mealy
 #endif
 --   , mealyC  -- experiment
   , asFun, mealy
+  , double, maybeM
   ) where
 
 import Prelude hiding (id,(.),sum,product,scanl)
@@ -211,6 +212,10 @@ scan :: (Monoid m, C m) => Mealy m m
 scan = scanl (<>) mempty
 {-# INLINE scan #-}
 
+iterateU :: C a => (a -> a) -> a -> Mealy () a
+iterateU f = scanl (\ a () -> f a)
+{-# INLINE iterateU #-}
+
 sumS :: (Num a, GS a) => Mealy a a
 sumS = arr getSum . scan . arr Sum
 {-# INLINE sumS #-}
@@ -291,6 +296,31 @@ sumMac :: (Foldable o, Foldable i, Num (i a), Num a, GS (i a)) =>
 sumMac = arr sum . mac
 -- sumMac = Mealy (\ (as,tot) -> let tot' = tot+product as in (sum tot',tot')) 0
 {-# INLINE sumMac #-}
+
+{--------------------------------------------------------------------
+    Experiments
+--------------------------------------------------------------------}
+
+double :: Mealy a b -> Mealy (a,a) (b,b)
+double (Mealy g s0) = Mealy h s0
+ where
+   h ((a,a'),s) = ((b,b'),s'')
+    where
+      (b ,s' ) = g (a ,s )
+      (b',s'') = g (a',s')
+
+-- double :: Mealy a b -> Mealy a b
+-- double (Mealy f s0) = Mealy h (s0,t0,False)
+--  where
+--    h (a,(s,t,i)) = ...
+--     where
+--       ... = f s
+
+maybeM :: Mealy a b -> Mealy (Maybe a) (Maybe b)
+maybeM (Mealy g s0) = Mealy h s0
+ where
+   h (Nothing,s) = (Nothing,s)
+   h (Just a ,s) = first Just (g (a,s))
 
 {--------------------------------------------------------------------
     Examples
