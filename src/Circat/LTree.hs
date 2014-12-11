@@ -457,8 +457,8 @@ get (b :< bs) = P.get b . get bs . unB
 (!) = flip get
 
 update :: Vec n Bool -> Unop a -> Unop (Tree n a)
-update ZVec      f = L . f . unL
-update (b :< bs) f = B . (update bs . P.update b) f . unB
+update ZVec      = inL
+update (b :< bs) = inB . update bs . P.update b
 
 {-# INLINE get #-}
 {-# INLINE update #-}
