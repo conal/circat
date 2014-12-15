@@ -60,7 +60,7 @@
 module Circat.Circuit
   ( CircuitM, (:>)
   , PinId, Width, Bus(..), Source(..)
-  , GenBuses(..), genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
+  , GenBuses(..), GS, genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
   , namedC, constS, constC
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
@@ -233,6 +233,8 @@ class GenBuses a where
   delay :: a -> (a :> a)
   ty :: a -> Ty                         -- dummy argument
 
+type GS a = (GenBuses a, Show a)
+
 genBus :: (Source -> Buses a) -> Width
        -> String -> Sources -> Int -> CircuitM (Buses a,Int)
 genBus wrap w prim ins o = do src <- newSource w prim ins o
@@ -253,7 +255,7 @@ delayName = (delayPrefix ++)
 unDelayName :: String -> Maybe String
 unDelayName = stripPrefix delayPrefix
 
-primDelay :: (GenBuses a, Show a) => a -> (a :> a)
+primDelay :: GS a => a -> (a :> a)
 primDelay a0 = namedC (delayName (show a0))
 
 -- isDelayPrim :: Prim a b -> Bool
@@ -445,7 +447,7 @@ constComp str = const (constComp' str)
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM :: (Show b, GenBuses b) => b -> BCirc a b
+constM :: GS b => b -> BCirc a b
 constM b = constComp (constName b)
 
 constName :: Show b => b -> String
@@ -515,10 +517,10 @@ newComp3R :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
              (a :* (b :* c) :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
 newComp3R cir a b c = newComp cir (PairB (toBuses a) (PairB (toBuses b) (toBuses c)))
 
-newVal :: (Show b, GenBuses b) => b -> CircuitM (Maybe (Buses b))
+newVal :: GS b => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
-constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+constM' :: GS b => b -> CircuitM (Buses b)
 constM' b = constComp' (constName b)
 
 -- noOpt :: Opt b
@@ -564,7 +566,7 @@ constSM mkB = mkCK (const mkB)
 constS :: Buses b -> (a :> b)
 constS b = constSM (return b)
 
-constC :: (Show b, GenBuses b) => b -> a :> b
+constC :: GS b => b -> a :> b
 constC = mkCK . constM
 
 -- Phasing out constC
@@ -676,7 +678,7 @@ instance TerminalCat (:>) where
   it = C (arr (pure UnitB))
 
 -- instance ConstCat (:>) where
---   type ConstKon (:>) a b = (Show b, GenBuses b)
+--   type ConstKon (:>) a b = GS b
 --   const = constC
 
 #if 0
@@ -695,7 +697,7 @@ maybe n j (a,p) = if p then n else j a
 newtype a :> b = C { unC :: a :+> b }
 type a :+> b = Kleisli CircuitM (Buses a) (Buses b)
 
-constM' :: (Show b, GenBuses b) => b -> CircuitM (Buses b)
+constM' :: GS b => b -> CircuitM (Buses b)
 
 #endif
 
