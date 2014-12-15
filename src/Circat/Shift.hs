@@ -20,6 +20,7 @@
 module Circat.Shift
   ( accumL, accumR, shiftR, shiftL, shiftRF, shiftLF
   , rotateL, rotateR
+  , mapAccumL, mapAccumR
   ) where
 
 import Prelude hiding (zip,unzip,zipWith)
