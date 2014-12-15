@@ -23,9 +23,10 @@ module Circat.Misc where
 
 import Prelude hiding (id,(.))
 
+import Data.Monoid (Monoid(..))
+import Data.Traversable (Traversable(sequenceA))
 import Control.Category (Category(..))
 import Control.Applicative (Applicative)
-import Data.Traversable (Traversable(sequenceA))
 
 import Unsafe.Coerce (unsafeCoerce)     -- see below
 
@@ -61,6 +62,12 @@ infixr 3 `xor`
 xor :: Binop Bool
 xor = (/=)
 {-# NOINLINE xor #-}
+
+newtype Parity = Parity { getParity :: Bool }
+
+instance Monoid Parity where
+  mempty = Parity False
+  Parity a `mappend` Parity b = Parity (a `xor` b)
 
 boolToInt :: Bool -> Int
 boolToInt c = if c then 1 else 0
