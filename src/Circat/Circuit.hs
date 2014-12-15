@@ -554,7 +554,7 @@ tryCommute = mkCK try
 -- (cache hits).
 primOptSort name opt = primOpt name opt . tryCommute
 #else
-primOpt name _ = mkCK (genComp (Prim name))
+primOpt name _ = namedC name
 primOptSort = primOpt
 #endif
 
