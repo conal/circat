@@ -20,22 +20,30 @@
 module Circat.Scan
   ( Zippable(..)
   , LScanTy, LScan(..), lscanInc
-  , lsums, lproducts, lsums', lproducts', iota
+  , lsums, lproducts, lAlls, lAnys, lParities, lsums', lproducts', iota
   , lscanProd, lscanProd', lscanComp, lscanComp'
+  , scanlT
   ) where
 
 import Prelude hiding (zip,unzip,zipWith)
 
-import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
+import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..),All(..),Any(..))
 import Data.Functor ((<$>))
 import Control.Arrow ((***))
 import Data.Traversable (Traversable(..)) -- ,mapAccumR
 import Control.Applicative (Applicative(..),liftA2)
+import Data.Tuple (swap)
 
 import TypeUnary.Vec (Vec,IsNat)
 
-import Circat.Misc (Unop,(:*))
-import Circat.Shift (shiftR)
+import Circat.Misc (Unop,(:*),dup,Parity(..))
+import Circat.Shift (shiftR,mapAccumL)
+
+-- | Generalize the Prelude's 'scanl' on lists
+scanlT :: Traversable t => (b -> a -> b) -> b -> t a -> (t b,b)
+scanlT op e = swap . mapAccumL ((fmap.fmap) dup op) e
+
+-- mapAccumL :: Traversable t => (a -> b -> (a, c)) -> a -> t b -> (a, t c)
 
 type LScanTy f = forall a. Monoid a => f a -> f a :* a
 
@@ -89,8 +97,17 @@ lscanInc = snd . shiftR . lscan
 lsums :: (LScan f, Num b) => f b -> (f b, b)
 lsums = (fmap getSum *** getSum) . lscan . fmap Sum
 
-lproducts :: (LScan f, Traversable f, Num b) => f b -> f b :* b
+lproducts :: (LScan f, Num b) => f b -> f b :* b
 lproducts = (fmap getProduct *** getProduct) . lscan . fmap Product
+
+lAlls :: LScan f => f Bool -> (f Bool, Bool)
+lAlls = (fmap getAll *** getAll) . lscan . fmap All
+
+lAnys :: LScan f => f Bool -> (f Bool, Bool)
+lAnys = (fmap getAny *** getAny) . lscan . fmap Any
+
+lParities :: LScan f => f Bool -> (f Bool, Bool)
+lParities = (fmap getParity *** getParity) . lscan . fmap Parity
 
 -- Variants 
 
