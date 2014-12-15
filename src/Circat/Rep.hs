@@ -29,7 +29,7 @@ import Data.Functor.Identity (Identity(..))
 
 -- import Data.Constraint
 
-import Circat.Misc ((:*),(:+))
+import Circat.Misc ((:*),(:+),Parity(..))
 import TypeUnary.TyNat (Z,S)
 import TypeUnary.Nat (Nat(..),IsNat(..))
 import TypeUnary.Vec (Vec(..))
@@ -87,6 +87,8 @@ WrapRep(Endo a,a->a,Endo)
 WrapRep(WrappedMonad m a,m a,WrapMonad)
 WrapRep(Identity a,a,Identity)
 WrapRep(StateT s m a, s -> m (a,s), StateT)
+
+WrapRep(Parity,Bool,Parity)
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
