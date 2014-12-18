@@ -22,7 +22,7 @@ module Circat.Scan
   , LScanTy, LScan(..), lscanInc
   , lsums, lproducts, lAlls, lAnys, lParities, lsums', lproducts', iota
   , lscanProd, lscanProd', lscanComp, lscanComp'
-  , scanlT
+  , scanlT, scanlTEx
   ) where
 
 import Prelude hiding (zip,unzip,zipWith)
@@ -36,14 +36,16 @@ import Data.Tuple (swap)
 
 import TypeUnary.Vec (Vec,IsNat)
 
-import Circat.Misc (Unop,(:*),dup,Parity(..))
+import Circat.Misc (Unop,(:*),Parity(..))
 import Circat.Shift (shiftR,mapAccumL)
 
 -- | Generalize the Prelude's 'scanl' on lists
 scanlT :: Traversable t => (b -> a -> b) -> b -> t a -> (t b,b)
-scanlT op e = swap . mapAccumL ((fmap.fmap) dup op) e
+scanlT op e = swap . mapAccumL (\ a b -> (a `op` b,a)) e
 
--- mapAccumL :: Traversable t => (a -> b -> (a, c)) -> a -> t b -> (a, t c)
+-- | Like 'scanlT', but drop the last element.
+scanlTEx :: Traversable t => (b -> a -> b) -> b -> t a -> t b
+scanlTEx op e = fst . scanlT op e
 
 type LScanTy f = forall a. Monoid a => f a -> f a :* a
 
