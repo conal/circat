@@ -35,13 +35,15 @@ module Circat.Mealy
 #endif
 --   , mealyC  -- experiment
   , asFun, mealy
+  , Stream, scanlStr, scanStr
   , double, maybeM
   ) where
 
 import Prelude hiding (id,(.),sum,product,scanl)
 import Control.Category
 import Control.Arrow
-import Control.Applicative ((<$>), Applicative(..))
+import Data.Functor ((<$>))
+import Control.Applicative (Applicative(..), liftA2)
 import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
 import Data.Foldable (Foldable(..),sum,product)
 import Data.Tuple (swap)
@@ -197,6 +199,9 @@ instance Applicative (Mealy a) where
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
+instance Monoid b => Monoid (Mealy a b) where
+  mempty = pure mempty
+  mappend = liftA2 mappend
 
 -- | Scan via Mealy
 
@@ -268,6 +273,10 @@ _dotSP2 = Mealy (\ (pas,tot) -> dup (dot pas + tot)) 0
 
 -- Parallel-of-sequential
 
+-- foldPS :: (Foldable f, Monoid (f a), Monoid a, GS (f a)) => Mealy (f a) a
+-- foldPS = arr fold . scan
+-- {-# INLINE foldPS #-}
+
 sumPS :: (Foldable f, Num (f a), Num a, GS (f a)) =>
          Mealy (f a) a
 sumPS = arr sum . sumS
@@ -298,7 +307,21 @@ sumMac = arr sum . mac
 {-# INLINE sumMac #-}
 
 {--------------------------------------------------------------------
-    Experiments
+    An encoding of synchronous streams
+--------------------------------------------------------------------}
+
+type Stream = Mealy ()
+
+-- type StreamFun a b = Stream a -> Stream b
+
+scanlStr :: C b => (b -> a -> b) -> b -> Stream a -> Stream b
+scanlStr op e ma = scanl op e . ma
+
+scanStr :: (Monoid m, C m) => Stream m -> Stream m
+scanStr = scanlStr (<>) mempty
+
+{--------------------------------------------------------------------
+    Misc experiments
 --------------------------------------------------------------------}
 
 double :: Mealy a b -> Mealy (a,a) (b,b)
