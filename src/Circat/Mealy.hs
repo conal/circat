@@ -26,6 +26,7 @@
 module Circat.Mealy
   ( Mealy(..),runMealy,ArrowCircuit(..),ArrowCircuitT
   , scanl, scan, iterateU, foldSP
+  , scanl', scan', iterateU'
   , sumS, productS
   , sumSP, productSP, dotSP
   , sumPS, productPS, dotPS
@@ -35,7 +36,7 @@ module Circat.Mealy
 #endif
 --   , mealyC  -- experiment
   , asFun, mealy
-  , Stream, scanlStr, scanStr
+  , MStream, scanlStr, scanStr
   , double, maybeM
   ) where
 
@@ -221,6 +222,20 @@ iterateU :: C a => (a -> a) -> a -> Mealy () a
 iterateU f = scanl (\ a () -> f a)
 {-# INLINE iterateU #-}
 
+-- | Like 'scanl' but yields the initial value first.
+-- Maybe replace 'scanl' by this variant.
+scanl' :: C b => (b -> a -> b) -> b -> Mealy a b
+scanl' op = Mealy (\ (a,b) -> (b, b `op` a))
+{-# INLINE scanl' #-}
+
+scan' :: (Monoid m, C m) => Mealy m m
+scan' = scanl' (<>) mempty
+{-# INLINE scan' #-}
+
+iterateU' :: C a => (a -> a) -> a -> Mealy () a
+iterateU' f = scanl' (\ a () -> f a)
+{-# INLINE iterateU' #-}
+
 sumS :: (Num a, GS a) => Mealy a a
 sumS = arr getSum . scan . arr Sum
 {-# INLINE sumS #-}
@@ -310,14 +325,14 @@ sumMac = arr sum . mac
     An encoding of synchronous streams
 --------------------------------------------------------------------}
 
-type Stream = Mealy ()
+type MStream = Mealy ()
 
--- type StreamFun a b = Stream a -> Stream b
+-- type StreamFun a b = MStream a -> MStream b
 
-scanlStr :: C b => (b -> a -> b) -> b -> Stream a -> Stream b
+scanlStr :: C b => (b -> a -> b) -> b -> MStream a -> MStream b
 scanlStr op e ma = scanl op e . ma
 
-scanStr :: (Monoid m, C m) => Stream m -> Stream m
+scanStr :: (Monoid m, C m) => MStream m -> MStream m
 scanStr = scanlStr (<>) mempty
 
 {--------------------------------------------------------------------
