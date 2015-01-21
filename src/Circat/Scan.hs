@@ -29,12 +29,12 @@ import Prelude hiding (zip,unzip,zipWith)
 
 import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..),All(..),Any(..))
 import Data.Functor ((<$>))
-import Control.Arrow ((***))
+import Control.Arrow ((***)) -- ,first
 import Data.Traversable (Traversable(..)) -- ,mapAccumR
 import Control.Applicative (Applicative(..),liftA2)
 import Data.Tuple (swap)
 
-import TypeUnary.Vec (Vec,IsNat)
+import TypeUnary.Vec (Vec(..),IsNat)
 
 import Circat.Misc (Unop,(:*),Parity(..))
 import Circat.Shift (shiftR,mapAccumL)
@@ -54,6 +54,20 @@ class Functor f => LScan f where
   -- Temporary hack to avoid newtype-like representation.
   lscanDummy :: f a
   lscanDummy = undefined
+
+#if 0
+
+-- Do we want this instance? It's sequential, and I think it matches scanlT.
+
+instance LScan (Vec n) where
+  lscan = lscanV' mempty
+  {-# INLINE lscan #-}
+
+lscanV' :: Monoid a => a -> Vec n a -> Vec n a :* a
+lscanV' x ZVec      = (ZVec, x)
+lscanV' x (a :< as) = first (x :<) (lscanV' (x <> a) as)
+{-# INLINE lscanV' #-}
+#endif
 
 -- | Scan a product of functors. See also 'lscanProd'.
 lscanProd' :: (Functor g, Monoid a)
