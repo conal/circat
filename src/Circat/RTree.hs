@@ -1,11 +1,16 @@
-{-# LANGUAGE GADTs, KindSignatures, CPP #-}
+{-# LANGUAGE CPP #-}
+-- #define Induction
+{-# LANGUAGE GADTs, KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables, Rank2Types, InstanceSigs, ScopedTypeVariables #-}
-{-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
+{-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
 {-# LANGUAGE UndecidableInstances #-}  -- See below
+#ifdef Induction
+{-# LANGUAGE ConstraintKinds, PatternGuards #-}
+#endif
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -40,6 +45,10 @@ import Data.Foldable
 import Data.Traversable (Traversable(..))
 import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
+
+#ifdef Induction
+import Data.Constraint (Dict(..))
+#endif
 
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
@@ -614,12 +623,28 @@ tree6 a1 b1 c1 d1 e1 f1 g1 h1 i1 j1 k1 l1 m1 n1 o1 p1
     Lookup and update
 --------------------------------------------------------------------}
 
+subtree :: Vec n Bool -> Tree (n :+: m) a -> Tree m a
+subtree ZVec      = id
+subtree (b :< bs) = subtree bs . P.get b . unB
+
+#ifdef Induction
+
+get :: forall n a. IsNat n => Vec n Bool -> Tree n a -> a
+get bs | Dict <- (plusZero :: Dict (PlusZero n)) = unL . subtree bs
+
+(!) :: IsNat n => Tree n a -> Vec n Bool -> a
+(!) = flip get
+
+#else
+
 get :: Vec n Bool -> Tree n a -> a
 get ZVec      = unL
 get (b :< bs) = get bs . P.get b . unB
 
 (!) :: Tree n a -> Vec n Bool -> a
 (!) = flip get
+
+#endif
 
 update :: Vec n Bool -> Unop a -> Unop (Tree n a)
 update ZVec      = inL
