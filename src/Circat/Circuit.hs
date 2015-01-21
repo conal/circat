@@ -255,9 +255,6 @@ delayName = (delayPrefix ++)
 unDelayName :: String -> Maybe String
 unDelayName = stripPrefix delayPrefix
 
-primDelay :: GS a => a -> (a :> a)
-primDelay a0 = namedC (delayName (show a0))
-
 -- isDelayPrim :: Prim a b -> Bool
 -- isDelayPrim = isJust . unDelayName . primName
 
@@ -742,7 +739,6 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
-
 pattern Read x <- (reads -> [(x,"")])
 
 pattern ConstS name <- Source _ name [] 0
@@ -764,6 +760,16 @@ sourceB = justA . toBuses
 
 #define Sat(pred) ((pred) -> True)
 #define Eql(x) Sat(==(x))
+
+primDelay :: (SourceToBuses a, GS a) => a -> (a :> a)
+primDelay a0 = primOpt (delayName a0s) $ \ case
+                 [c@(ConstS (Eql(a0s)))] -> sourceB c
+                 _ -> nothingA
+ where
+   a0s = show a0
+
+-- primDelay a0 = namedC (delayName (show a0))
+
 
 instance BoolCat (:>) where
   notC = primOpt "¬" $ \ case
@@ -797,14 +803,24 @@ instance BoolCat (:>) where
                                   newComp notC o
            _            -> nothingA
   xorC = primOptSort "⊕" $ \ case
-           [FalseS,y]   -> sourceB y
-           [x,FalseS]   -> sourceB x
-           [TrueS,y ]   -> newComp1 notC y
-           [x,TrueS ]   -> newComp1 notC x
-           [x,Eql(x)]   -> newVal False
+           [FalseS,y]        -> sourceB y
+           [x,FalseS]        -> sourceB x
+           [TrueS,y ]        -> newComp1 notC y
+           [x,TrueS ]        -> newComp1 notC x
+           [x,Eql(x)]        -> newVal False
            [x,NotS (Eql(x))] -> newVal True
            [NotS x,Eql(x)]   -> newVal True
-           _            -> nothingA
+#if 1
+           -- not x `xor` y == not (x `xor` y)
+           [NotS x, y]       -> newComp2 (notC . xorC) x y
+           [x, NotS y]       -> newComp2 (notC . xorC) x y
+           -- x `xor` (x `xor` y) == y
+           [x, Eql(x) `XorS` y] -> sourceB y
+           [x, y `XorS` Eql(x)] -> sourceB y
+           [x `XorS` y, Eql(x)] -> sourceB y
+           [y `XorS` x, Eql(x)] -> sourceB y
+#endif
+           _                 -> nothingA
 
 #define BoolToInt "Bool→Int"
 
