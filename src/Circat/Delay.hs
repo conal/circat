@@ -1,4 +1,4 @@
-{-# LANGUAGE ExistentialQuantification, ViewPatterns #-}
+{-# LANGUAGE CPP, ExistentialQuantification, ViewPatterns #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -59,6 +59,8 @@ data DelayU a = forall s. DelayU (s -> Either s a) s
 
 data DelayF a s = LaterF s | NowF a
 
+data DelayU' a = forall s. DelayU' (s -> DelayF a s) s
+
 -- | Semantics
 mu :: DelayU a -> Delay a
 mu (DelayU h s0) = go s0
@@ -88,14 +90,21 @@ instance Monad DelayU where
    where
      bf (Left s) = case af s of
                      Left s' -> Left (Left s')
-                     Right (f -> DelayU bf t0) -> undefined bf t0
+                     Right (f -> d') -> Left (Right d')
+     bf (Right (DelayU h t)) = case h t of
+                                  Left t' -> Left (Right (DelayU h t'))
+                                  Right b -> Right b
 
+-- It's slightly simpler to define join instead (and use the standard definition
+-- ma >>= f == join (fmap f ma)).
 
-
-
--- f :: a -> DelayU b
--- f a :: DelayU b
--- Delay bf t0 = f a
--- bf :: t -> Either t b
--- t0 :: t
+joinU :: DelayU (DelayU a) -> DelayU a
+joinU (DelayU f s0) = DelayU h (Left s0)
+   where
+     h (Left s) = case f s of
+                    Left s' -> Left (Left s')
+                    Right d -> Left (Right d)
+     h (Right (DelayU g t)) = case g t of
+                                Left t' -> Left (Right (DelayU g t'))
+                                Right a -> Right a
 
