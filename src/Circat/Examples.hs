@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds, FlexibleContexts #-}
 
 {-# OPTIONS_GHC -Wall #-}
@@ -15,14 +16,16 @@
 
 module Circat.Examples (outSimples,outAll,bc,outV) where
 
-import Prelude hiding (id,(.),const,not,and,or,curry,uncurry,sequence)
+import Prelude hiding (id,(.),const,curry,uncurry,sequence)
+#if 0
 import TypeUnary.Vec hiding (get)
+#endif
 
 import Circat.Circuit
 import Circat.Misc ((:*),Unop)
 import Circat.Category
 import Circat.Classes
-import Circat.RTree
+-- import Circat.RTree
 
 import Circat.Netlist (outV)
 
@@ -31,10 +34,10 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
-outGV :: IsSourceP2 a b => String -> (a :> b) -> IO ()
-outGV name cir = 
-  do outG name cir
-     outG name cir
+outGV :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
+outGV name attrs cir =
+  do outG name attrs cir
+     outV name       cir
 
 -- outG = outGWith ("pdf","")  -- change as desired.
 
@@ -49,19 +52,19 @@ c0 :: BoolCat k => Bool `k` Bool
 c0 = id
 
 c1 :: BoolCat k => Bool `k` Bool
-c1 = not . not
+c1 = notC . notC
 
 c2 :: BoolCat k => (Bool :* Bool) `k` Bool
-c2 = not . and
+c2 = notC . andC
 
 c3 :: BoolCat k => (Bool :* Bool) `k` Bool
-c3 = not . and . (not *** not)
+c3 = notC . andC . (notC *** notC)
 
 c4 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
 c4 = swapP  -- no components
 
 c5 :: BoolCat k => (Bool :* Bool) `k` (Bool :* Bool)
-c5 = xor &&& and   -- half-adder
+c5 = xorC &&& andC   -- half-adder
 
 c6 :: () :> Bool
 c6 = constC False
@@ -71,14 +74,17 @@ c7 = constC False
 
 outSimples :: IO ()
 outSimples = 
-  do outGV "c0" c0
-     outGV "c1" c1
-     outGV "c2" c2
-     outGV "c3" c3
-     outGV "c4" c4
-     outGV "c5" c5
-     outGV "c6" c6
-     outGV "c7" c7
+  do out "c0" c0
+     out "c1" c1
+     out "c2" c2
+     out "c3" c3
+     out "c4" c4
+     out "c5" c5
+     out "c6" c6
+     out "c7" c7
+ where
+   out :: GenBuses a => String -> (a :> b) -> IO ()
+   out = flip outGV []
 
 {- For instance,
 
@@ -120,6 +126,8 @@ digraph {
 -}
 -- Vectors
 
+#if 0
+
 addV1 :: AddVP N1
 addV1 = adds
 
@@ -143,7 +151,11 @@ outVecs = do
   outGV "addV8"  addV8
   outGV "addV16" addV16
 
+#endif
+
 -- Trees (identical results)
+
+#if 0
 
 addT1 :: AddTP N0
 addT1 = adds
@@ -168,13 +180,15 @@ outTrees = do
   outGV "addT8"  addT8
   outGV "addT16" addT16
 
+#endif
+
 ----
 
 {-
 
 -- Stateful addition via StateFun
 
-outSG :: (IsSourceP s, IsSourceP2 a b, StateCatWith sk (:>) s) =>
+outSG :: (IsSourceP s, GenBuses a, StateCatWith sk (:>) s) =>
          String -> (a `sk` b) -> IO ()
 outSG name = outG name . runState
 
@@ -236,4 +250,4 @@ addVS16 = addS
 ----
 
 outAll :: IO ()
-outAll = do outSimples ; outVecs ; outTrees
+outAll = do outSimples -- ; outVecs -- ; outTrees

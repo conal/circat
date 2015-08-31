@@ -1,5 +1,5 @@
-{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs #-}
-{-# LANGUAGE Rank2Types, MultiParamTypeClasses #-}
+{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds, GADTs, CPP #-}
+{-# LANGUAGE ScopedTypeVariables, Rank2Types, MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
 
@@ -24,219 +24,215 @@ module Circat.Classes where
 
 -- TODO: explicit exports
 
-import Prelude hiding (id,(.),const,not,and,or)
+import Prelude hiding (id,(.),curry,uncurry)
 import qualified Prelude as P
 import Control.Arrow (arr,Kleisli)
+-- import GHC.Prim (Constraint)
 
-import GHC.Prim (Constraint)
-
-import TypeUnary.Vec (Vec(..),Z,S,Nat(..),IsNat(..))
-
-import Circat.Misc ((:*),(<~))
-import Circat.Category -- (Category(..),ProductCat(..),inRassocP,UnitCat(..))
-import Circat.Pair
-import Circat.State -- (StateCat(..),pureState,StateFun)
+import Circat.Misc ((:*),Unit)
+import Circat.Category
 
 -- | Category with boolean operations.
 class ProductCat k => BoolCat k where
-  not :: Bool `k` Bool
-  and, or, xor :: (Bool :* Bool) `k` Bool
+  notC :: Bool `k` Bool
+  andC, orC, xorC :: (Bool :* Bool) `k` Bool
 
 -- The Category superclass is just for convenience.
 
 instance BoolCat (->) where
-  not = P.not
-  and = P.uncurry (&&)
-  or  = P.uncurry (||)
-  xor = P.uncurry (/=)
+  notC = not
+  andC = P.uncurry (&&)
+  orC  = P.uncurry (||)
+  xorC = P.uncurry (/=)
 
-class BoolCat k => EqCat k where
-  type EqKon k a :: Constraint
-  type EqKon k a = Yes a
-  eq, neq :: (Eq a, EqKon k a) => (a :* a) `k` Bool
-  neq = not . eq
+instance Monad m => BoolCat (Kleisli m) where
+  notC = arr notC
+  andC = arr andC
+  orC  = arr orC
+  xorC = arr xorC
 
--- TODO: Revisit the type constraints for EqCat.
+-- HACK: generalize/replace/...
+class NumCat k a where
+  negateC :: a `k` a
+  addC, mulC :: (a :* a) `k` a
 
-instance EqCat (->) where
-  type EqKon (->) a = Yes a
-  eq  = P.uncurry (==)
-  neq = P.uncurry (/=)
+instance Num a => NumCat (->) a where
+  negateC = negate
+  addC    = uncurry (+)
+  mulC    = uncurry (*)
 
-class (UnitCat k, ProductCat k) => VecCat k where
-  toVecZ :: () `k` Vec Z a
-  unVecZ :: Vec Z a `k` ()
-  toVecS :: (a :* Vec n a) `k` Vec (S n) a
-  unVecS :: Vec (S n) a `k` (a :* Vec n a)
+instance (Monad m, Num a) => NumCat (Kleisli m) a where
+  negateC = arr negateC
+  addC    = arr addC
+  mulC    = arr mulC
 
-reVecZ :: VecCat k => Vec Z a `k` Vec Z b
-reVecZ = toVecZ . unVecZ
+class (BoolCat k, Eq a) => EqCat k a where
+  equal, notEqual :: (a :* a) `k` Bool
+  notEqual = notC . equal
+  equal    = notC . notEqual
+  {-# MINIMAL equal | notEqual #-}
 
-inVecS :: VecCat k =>
-          ((a :* Vec m a) `k` (b :* Vec n b))
-       -> (Vec  (S m)  a `k` Vec  (S n)   b)
-inVecS = toVecS <~ unVecS
+instance Eq a => EqCat (->) a where
+  equal    = uncurry (==)
+  notEqual = uncurry (/=)
 
-instance VecCat (->) where
-  toVecZ ()        = ZVec
-  unVecZ ZVec      = ()
-  toVecS (a,as)    = a :< as
-  unVecS (a :< as) = (a,as)
+instance (Monad m, Eq a) => EqCat (Kleisli m) a where
+  equal    = arr equal
+  notEqual = arr notEqual
 
-instance Monad m => VecCat (Kleisli m) where
-  toVecZ = arr toVecZ
-  unVecZ = arr unVecZ
-  toVecS = arr toVecS
-  unVecS = arr unVecS
+class (EqCat k a, Ord a) => OrdCat k a where
+  lessThan, greaterThan, lessThanOrEqual, greaterThanOrEqual :: (a :* a) `k` Bool
+  greaterThan = lessThan . swapP
+  lessThan = greaterThan . swapP
+  lessThanOrEqual = notC . greaterThan
+  greaterThanOrEqual = notC . lessThan
+  {-# MINIMAL lessThan | greaterThan #-}
 
-instance VecCat k => VecCat (StateFun k s) where
-  toVecZ = pureState toVecZ
-  unVecZ = pureState unVecZ
-  toVecS = pureState toVecS
-  unVecS = pureState unVecS
+instance Ord a => OrdCat (->) a where
+  lessThan           = uncurry (<)
+  greaterThan        = uncurry (>)
+  lessThanOrEqual    = uncurry (<=)
+  greaterThanOrEqual = uncurry (>=)
 
-instance (ClosedCatWith k s, VecCat k) => VecCat (StateExp k s) where
-  toVecZ = pureState toVecZ
-  unVecZ = pureState unVecZ
-  toVecS = pureState toVecS
-  unVecS = pureState unVecS
+instance (Monad m, Ord a) => OrdCat (Kleisli m) a where
+  lessThan           = arr lessThan
+  greaterThan        = arr greaterThan
+  lessThanOrEqual    = arr lessThanOrEqual
+  greaterThanOrEqual = arr greaterThanOrEqual
 
-class (PairCat k, BoolCat k) => AddCat k where
-  -- | Half adder: addends in; sum and carry out. Default via logic.
-  halfAdd :: (Bool :* Bool) `k` (Bool :* Bool)
-  halfAdd = xor &&& and
-  -- | Full adder: carry and addend pairs in; sum and carry out.
-  -- Default via 'halfAdd'.
-  fullAdd :: (Bool :* Pair Bool) `k` (Bool :* Bool)
-  fullAdd = second or . inLassocP (first halfAdd) . second (halfAdd . unPair)
+#if 1
+class BottomCat k a where
+  bottomC :: Unit `k` a
 
--- TODO: Why use Pair Bool in fullAdd, and Bool :* Bool in halfAdd?
+instance BottomCat (->) a where bottomC = error "bottom"
 
-{-
-
-second (halfAdd.unPair) :: C * A       -> C * (C * S)
-lassocP                 :: C * (S * C) -> (C * S) * C
-first halfAdd           :: (C * S) * C -> (S * C) * C
-rassocP                 :: (S * C) * C -> S * (C * C)
-second or               :: S * (C * C) -> S * C
-
--}
-
-instance AddCat (->)  -- use defaults
-
--- Structure addition with carry in & out
-
-type Adds k f = 
-  (Bool :* f (Pair Bool)) `k` (f Bool :* Bool)
-
-class AddCat k => AddsCat k f where
-  adds :: Adds k f
-
-type AddK k = (ConstUCat k (Vec Z Bool), AddCat k, VecCat k)
-
-instance (AddK k, IsNat n) => AddsCat k (Vec n) where
-  adds = addVN nat
-
--- Illegal irreducible constraint ConstKon k () in superclass/instance head
--- context (Use -XUndecidableInstances to permit this)
-
-type AddVP n = forall k. AddK k => Adds k (Vec n)
-
-addVN :: Nat n -> AddVP n
-addVN Zero     = lconst ZVec . exl
-
-addVN (Succ n) = first toVecS . lassocP . second (addVN n)
-               . rassocP . first fullAdd . lassocP
-               . second unVecS
-
-{- Derivation:
-
--- C carry, A addend pair, R result
-
-second unVecS    :: C :* As (S n) `k` C :* (A :* As n)
-lassocP          ::               `k` (C :* A) :* As n
-first fullAdd    ::               `k` (S :* C) :* As n
-rassocP          ::               `k` S :* (C :* As n)
-second (addVN n) ::               `k` S :* (Rs n :* C)
-lassocP          ::               `k` (S :* Rs n) :* C
-first toVecS     ::               `k` Rs (S n) :* C
-
--}
-
--- TODO: Do I really need CTraversableKon, or can I make k into an argument?
--- Try, and rename "CTraversable" to "TraversableCat". The Kon becomes superclass constraints.
-
-class CTraversable t where
-  type CTraversableKon t k :: Constraint
-  type CTraversableKon t k = () ~ () -- or just (), if it works
-  traverseC :: CTraversableKon t k => (a `k` b) -> (t a `k` t b)
-
-type CTraversableWith t k = (CTraversable t, CTraversableKon t k)
-
-instance CTraversable (Vec Z) where
-  type CTraversableKon (Vec Z) k = VecCat k
-  traverseC _ = reVecZ
-
-instance CTraversable (Vec n) => CTraversable (Vec (S n)) where
-  type CTraversableKon (Vec (S n)) k =
-    (VecCat k, CTraversableKon (Vec n) k)
-  traverseC f = inVecS (f *** traverseC f)
-
-instance CTraversable Pair where
-  type CTraversableKon Pair k = PairCat k
-  traverseC f = inPair (f *** f)
-
--- TODO: Maybe move Vec support to a new Vec module, alongside the RTree module.
-
-traverseCurry :: 
-  ( ConstUCat k (t b), CTraversableWith t k, StrongCat k t
-  , StrongKon k t a b ) =>
-  t b -> ((a :* b) `k` c) -> (a `k` t c)
-traverseCurry q h = traverseC h . lstrength . rconst q
-
-{- Derivation:
-
-q :: t b
-h :: a :* b :> c
-
-rconst q    :: a          `k` (a :* t b)
-lstrength   :: a :* t b   `k` t (a :* b)
-traverseC h :: t (a :* b) `k` t c
-
-traverse h . lstrength . rconst idTrie :: a `k` t c
-
--}
-
--- Special case. To remove.
-
--- trieCurry :: ( HasTrie b, StrongCat k (Trie b)
---              , CTraversableWith (Trie b) k
---              , UnitCat k, ConstUCat k (b :->: b) ) =>
---              ((a :* b) `k` c) -> (a `k` (b :->: c))
--- trieCurry = traverseCurry idTrie
-
--- TODO: Move CTraversable and trieCurry to Category.
-
+#else
+#if 0
+class BottomCat k where
+  type BottomKon k a :: Constraint
+  type BottomKon k a = Yes a
+  bottomC :: BottomKon k a => Unit `k` a
+-- The constraint is problematic for the HasUnitArrow instance on Prim in
+-- LambdaCCC.Prim. Drop the constraint, and add BotB in Circat.Circuit.
+#else
+class BottomCat k where
+  bottomC :: Unit `k`a
+instance BottomCat (->) where bottom = error "bottom"
+#endif
+#endif
 
 {--------------------------------------------------------------------
-    Addition via state and traversal
+    Misc
 --------------------------------------------------------------------}
 
-type AddState sk =
-  (StateCat sk, StateKon sk, StateT sk ~ Bool, AddCat (StateBase sk))
+#if 0
 
--- Simpler but exposes k:
+-- | One-bit mux
+class MuxCat k where
+  muxB :: (Bool :* (Bool :* Bool)) `k` Bool
+  muxI :: (Bool :* (Int  :* Int )) `k` Int
+
+-- TODO: Simplify & generalize. How to keep MuxCat having only one parameter, as
+-- needed for the HasUnitArrow k Prim instance in LambdaCCC.Prim?
+
+muxF :: (Bool :* (a :* a)) -> a
+muxF (i,(e,t)) = if i then t else e
+
+instance MuxCat (->) where
+  muxB = muxF
+  muxI = muxF
+
+#endif
+
+#if 0
+
+-- Experiment
+class Muxy a where
+  mux :: (ClosedCat k, MuxCat k) => (Bool :* (a :* a)) `k` a
+
+-- The ClosedCat constraint is unfortunate here. I need ProductCat for the
+-- product Muxy instance and ClosedCat for the function Muxy instance.
+-- TODO: Find an alternative. Maybe Muxy k a.
+
+instance Muxy Int  where mux = muxI
+instance Muxy Bool where mux = muxB
+
+instance (Muxy a, Muxy b) => Muxy (a :* b) where
+  mux = half exl &&& half exr
+   where
+     half f = mux . second (twiceP f)
+
+instance (Muxy a, Muxy b) => Muxy (a -> b) where
+ mux = curry (mux . (exl . exl &&& (half exl &&& half exr)))
+  where
+    half h = apply . first (h . exr)
+
+repMux :: (ClosedCat k, MuxCat k, RepCat k, HasRep a, Muxy (Rep a)) =>
+          (Bool :* (a :* a)) `k` a
+repMux = abstC . mux . second (twiceP reprC)
+
+-- I can't give a single instance around repMux, because it would overlap
+-- everything else. Instead, write instances via repMux. For instance,
 -- 
---   type AddState sk k b =
---     (StateCatWith sk k b, AddCat k, b ~ Bool)
+--   instance Muxy a            => Muxy (Pair  a) where mux = repMux
+--   instance (IsNat n, Muxy a) => Muxy (Vec n a) where mux = repMux
 
--- | Full adder with 'StateCat' interface
-fullAddS :: AddState sk => Pair Bool `sk` Bool
-fullAddS = state fullAdd
+#endif
 
--- | Structure adder with 'StateCat' interface
-addS :: (AddState sk, CTraversableWith f sk, b ~ Bool) =>
-        f (Pair b) `sk` f b
-addS = traverseC fullAddS
+type IfT k a = (Bool :* (a :* a)) `k` a
 
--- TODO: Rewrite halfAdd & fullAdd via StateCat. Hopefully much simpler.
+class IfCat k a where ifC :: IfT k a
+
+instance IfCat (->) a where
+  ifC (i,(t,e)) = if i then t else e
+
+unitIf :: TerminalCat k => IfT k ()
+unitIf = it
+
+prodIf :: forall k a b. (ProductCat k, IfCat k a, IfCat k b) => IfT k (a :* b)
+prodIf = half exl &&& half exr
+  where
+    half :: IfCat k c => (u `k` c) -> ((Bool :* (u :* u)) `k` c)
+    half f = ifC . second (twiceP f)
+
+#if 0
+
+   prodIf
+== \ (c,((a,b),(a',b'))) -> (ifC (c,(a,a')), ifC (c,(b,b')))
+== (\ (c,((a,b),(a',b'))) -> ifC (c,(a,a'))) &&& ...
+== (ifC . (\ (c,((a,b),(a',b'))) -> (c,(a,a')))) &&& ...
+== (ifC . first (\ ((a,b),(a',b')) -> (a,a'))) &&& ...
+== (ifC . first (twiceP exl)) &&& (ifC . first (twiceP exr))
+
+#endif
+
+funIf :: forall k a b. (ClosedCat k, IfCat k b) => IfT k (a -> b)
+funIf = curry (ifC . (exl . exl &&& (half exl &&& half exr)))
+ where
+   half :: (u `k` (a -> b)) -> (((_Bool :* u) :* a) `k` b)
+   half h = apply . first (h . exr)
+
+-- funIf = curry (ifC . (exl . exl &&& (apply . first (exl . exr) &&& apply . first (exr . exr))))
+
+#if 0
+
+   funIf
+== \ (c,(f,f')) -> \ a -> ifC (c,(f a,f' a))
+== curry (\ ((c,(f,f')),a) -> ifC (c,(f a,f' a)))
+== curry (ifC . \ ((c,(f,f')),a) -> (c,(f a,f' a)))
+== curry (ifC . ((exl.exl) &&& \ ((c,(f,f')),a) -> (f a,f' a)))
+== curry (ifC . ((exl.exl) &&& ((\ ((c,(f,f')),a) -> f a) &&& (\ ((c,(f,f')),a) -> f' a))))
+== curry (ifC . ((exl.exl) &&& (apply (first (exl.exr)) &&& (apply (first (exl.exr))))))
+
+#endif
+
+repIf :: (RepCat k, ProductCat k, HasRep a, IfCat k (Rep a)) => IfT k a
+repIf = abstC . ifC . second (twiceP reprC)
+
+#if 0
+   repIf
+== \ (c,(a,a')) -> abstC (ifC (c,(reprC a,reprC a')))
+== \ (c,(a,a')) -> abstC (ifC (c,(twiceP reprC (a,a'))))
+== \ (c,(a,a')) -> abstC (ifC (second (twiceP reprC) (c,((a,a')))))
+== abstC . ifC . second (twiceP reprC)
+#endif
