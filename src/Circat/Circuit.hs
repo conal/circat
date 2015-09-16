@@ -34,6 +34,7 @@
 {-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecursiveDo #-}
+{-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
 
 #ifdef ChurchSums
 {-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes, EmptyDataDecls #-}
@@ -73,6 +74,7 @@ module Circat.Circuit
   , MealyC(..)
   , mealyAsArrow
   , unitizeMealyC
+  , Complex(..)
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
@@ -97,6 +99,8 @@ import qualified Data.Map as M
 -- import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Sequence (Seq,singleton)
+import Data.Typeable (Typeable)
+import Data.Data (Data)
 import Text.Printf (printf)
 -- import Debug.Trace (trace)
 -- import Data.Coerce                      -- TODO: imports
@@ -267,6 +271,25 @@ instance GenBuses Int  where
   genBuses' = genBus IntB 32
   delay = primDelay
   ty = const IntT
+
+-- dbanas: I don't want to be constrained to RealFloat, yet. So, I'm making my own Complex type.
+infixl 1 :+
+data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
+
+instance Num a => Num (Complex a) where
+    (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
+    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+    (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
+    -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
+    abs _ = error "Abs not implemented."
+    signum (x :+ _) = signum x :+ 0
+    fromInteger x   = fromInteger x :+ 0
+
+type instance Rep (Complex a) = a :* a
+instance HasRep (Complex a) where
+  repr (a :+ a') = (a,a')
+  abst (a,a') = (a :+ a')
+-- ------------------------------------------------------------------
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
@@ -2095,6 +2118,7 @@ AbsTy(LTree.Tree Z a)
 AbsTy(LTree.Tree (S n) a)
 AbsTy(Rag.Tree LU a)
 AbsTy(Rag.Tree (BU p q) a)
+AbsTy(Complex a)
 -- Newtypes. Alternatively, don't use them in external interfaces.
 AbsTy(Sum a)
 AbsTy(Product a)
