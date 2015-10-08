@@ -29,10 +29,11 @@
 ----------------------------------------------------------------------
 
 module Circat.RTree
-  ( RTree(..),unB,inB,inB2,Tree,fromList
+  ( RTree(..),toB,unB,inB,inB2,Tree,fromList
   , tree0, tree1, tree2, tree3, tree4, tree5
   , get, (!), update
   , butterfly, butterfly'
+  , tmerge, bottomSplit
   ) where
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
