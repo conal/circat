@@ -278,7 +278,8 @@ data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
 
 instance Num a => Num (Complex a) where
     (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
-    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+    -- (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+    negate = fmap negate
     (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
     -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
     abs _ = error "Abs not implemented."
