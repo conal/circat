@@ -398,6 +398,7 @@ bottomSplit = split' nat
    split' :: Nat n -> Tree (S n) a -> Pair (Tree n a)
    split' Zero     = unB
    split' (Succ m) = fmap B . transpose . fmap (split' m) . unB
+   {-# INLINE split' #-}
 
 --    split' Zero     =  \ (B (L a :# L b)) -> L a :# L b
 --    split' (Succ m) = \ (B ts) -> B <$> ptranspose (split' m <$> ts)
