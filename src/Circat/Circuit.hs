@@ -933,21 +933,28 @@ readBit _   = Nothing
 pattern ZeroS <- ConstS "0"
 pattern OneS  <- ConstS "1"
 
+pattern NegateS a <- Source _ "negate" [a] 0
+
 pattern BToIS a <- Source _ BoolToInt [a] 0
 
 instance NumCat (:>) Int where
   negateC = primOpt "negate" $ \ case
-              [Val x] -> newVal (negate x)
-              _       -> nothingA
+              [Val x]     -> newVal (negate x)
+              [NegateS x] -> sourceB x
+              _           -> nothingA
   addC    = primOptSort "+" $ \ case
               [Val x, Val y] -> newVal (x+y)
               [ZeroS,y]      -> sourceB y
               [x,ZeroS]      -> sourceB x
+              [x,NegateS y]  -> newComp2 subC x y
+              [NegateS x,y]  -> newComp2 subC y x
               _              -> nothingA
   subC    = primOpt     "−" $ \ case
               [Val x, Val y] -> newVal (x-y)
               [ZeroS,y]      -> newComp1 negateC y
               [x,ZeroS]      -> sourceB x
+              [x,NegateS y]  -> newComp2 addC x y
+              [NegateS x,y]  -> newComp2 (negateC . addC) x y
               _              -> nothingA
   mulC    = primOptSort "×" $ \ case
               [Val x, Val y] -> newVal (x*y)
