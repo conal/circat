@@ -54,16 +54,18 @@ instance Monad m => BoolCat (Kleisli m) where
 -- HACK: generalize/replace/...
 class NumCat k a where
   negateC :: a `k` a
-  addC, mulC :: (a :* a) `k` a
+  addC, subC, mulC :: (a :* a) `k` a
 
 instance Num a => NumCat (->) a where
   negateC = negate
   addC    = uncurry (+)
+  subC    = uncurry (-)
   mulC    = uncurry (*)
 
 instance (Monad m, Num a) => NumCat (Kleisli m) a where
   negateC = arr negateC
   addC    = arr addC
+  subC    = arr subC
   mulC    = arr mulC
 
 class (BoolCat k, Eq a) => EqCat k a where

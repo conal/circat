@@ -278,8 +278,8 @@ data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
 
 instance Num a => Num (Complex a) where
     (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
-    -- (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
-    negate = fmap negate
+    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+    -- negate = fmap negate
     (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
     -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
     abs _ = error "Abs not implemented."
@@ -936,21 +936,26 @@ pattern OneS  <- ConstS "1"
 pattern BToIS a <- Source _ BoolToInt [a] 0
 
 instance NumCat (:>) Int where
- negateC = primOpt "negate" $ \ case
-             [Val x] -> newVal (negate x)
-             _       -> nothingA
- addC    = primOptSort "+" $ \ case
-             [Val x, Val y] -> newVal (x+y)
-             [ZeroS,y]      -> sourceB y
-             [x,ZeroS]      -> sourceB x
-             _              -> nothingA
- mulC    = primOptSort "×" $ \ case
-             [Val x, Val y] -> newVal (x*y)
-             [OneS ,y]      -> sourceB y
-             [x,OneS ]      -> sourceB x
-             [x@ZeroS,_]    -> sourceB x
-             [_,y@ZeroS]    -> sourceB y
-             _              -> nothingA
+  negateC = primOpt "negate" $ \ case
+              [Val x] -> newVal (negate x)
+              _       -> nothingA
+  addC    = primOptSort "+" $ \ case
+              [Val x, Val y] -> newVal (x+y)
+              [ZeroS,y]      -> sourceB y
+              [x,ZeroS]      -> sourceB x
+              _              -> nothingA
+  subC    = primOptSort "−" $ \ case
+              [Val x, Val y] -> newVal (x-y)
+              [ZeroS,y]      -> newComp1 negateC y
+              [x,ZeroS]      -> sourceB x
+              _              -> nothingA
+  mulC    = primOptSort "×" $ \ case
+              [Val x, Val y] -> newVal (x*y)
+              [OneS ,y]      -> sourceB y
+              [x,OneS ]      -> sourceB x
+              [x@ZeroS,_]    -> sourceB x
+              [_,y@ZeroS]    -> sourceB y
+              _              -> nothingA
 
 -- instance NumCat (:>) Int where
 --  add = namedC "add"

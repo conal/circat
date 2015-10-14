@@ -148,7 +148,7 @@ data Prim :: * -> * where
   NotP            :: Prim (Bool -> Bool)
   AndP,OrP,XorP   :: Prim (Bool -> Bool -> Bool)
   NegateP         :: Prim (Int -> Int)                  -- TODO: generalize
-  AddP,MulP       :: Prim (Int -> Int -> Int)           -- ''
+  AddP,SubP,MulP  :: Prim (Int -> Int -> Int)           -- ''
   EqP,NeP         :: CircuitEq  a => Prim (a -> a -> Bool)
   LtP,GtP,LeP,GeP :: CircuitOrd a => Prim (a -> a -> Bool)
   ExlP            :: Prim (a :* b -> a)
@@ -176,6 +176,7 @@ instance Eq' (Prim a) (Prim b) where
   XorP      === XorP      = True
   NegateP   === NegateP   = True
   AddP      === AddP      = True
+  SubP      === SubP      = True
   MulP      === MulP      = True
   EqP       === EqP       = True
   NeP       === NeP       = True
@@ -211,6 +212,7 @@ instance Show (Prim a) where
   showsPrec _ XorP       = showString "xor"
   showsPrec _ NegateP    = showString "negate"
   showsPrec _ AddP       = showString "add"
+  showsPrec _ SubP       = showString "sub"
   showsPrec _ MulP       = showString "mul"
   showsPrec _ EqP        = showString "(==)"
   showsPrec _ NeP        = showString "(/=)"
@@ -246,6 +248,7 @@ primArrow OrP       = curry orC
 primArrow XorP      = curry xorC
 primArrow NegateP   = negateC
 primArrow AddP      = curry add
+primArrow SubP      = curry sub
 primArrow MulP      = curry mul
 primArrow EqP       = curry equal
 primArrow NeP       = curry notEqual
@@ -282,6 +285,7 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow XorP       = unitFun (curry xorC)
   unitArrow NegateP    = unitFun negateC
   unitArrow AddP       = unitFun (curry addC)
+  unitArrow SubP       = unitFun (curry subC)
   unitArrow MulP       = unitFun (curry mulC)
   unitArrow EqP        = unitFun (curry equal)
   unitArrow NeP        = unitFun (curry notEqual)
@@ -315,6 +319,7 @@ instance Evalable (Prim a) where
   eval XorP          = xor
   eval NegateP       = negate
   eval AddP          = (+)
+  eval SubP          = (-)
   eval MulP          = (*)
   eval EqP           = (==)
   eval NeP           = (/=)

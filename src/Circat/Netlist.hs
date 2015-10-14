@@ -248,6 +248,7 @@ translateBinOp = \ case
   "≥"   -> Just GreaterEqual
   ">="  -> Just GreaterEqual
   "+"   -> Just Plus
+  "−"   -> Just Minus
   "×"   -> Just Times
   "*"   -> Just Times
   "∧"   -> Just And
