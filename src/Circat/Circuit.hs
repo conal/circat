@@ -944,7 +944,7 @@ instance NumCat (:>) Int where
               [ZeroS,y]      -> sourceB y
               [x,ZeroS]      -> sourceB x
               _              -> nothingA
-  subC    = primOptSort "−" $ \ case
+  subC    = primOpt     "−" $ \ case
               [Val x, Val y] -> newVal (x-y)
               [ZeroS,y]      -> newComp1 negateC y
               [x,ZeroS]      -> sourceB x
