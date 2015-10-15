@@ -52,7 +52,7 @@ instance Monad m => BoolCat (Kleisli m) where
   xorC = arr xorC
 
 -- HACK: generalize/replace/...
-class NumCat k a where
+class Num a => NumCat k a where
   negateC :: a `k` a
   addC, subC, mulC :: (a :* a) `k` a
 

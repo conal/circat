@@ -28,7 +28,7 @@ module Circat.Prim
   , Prim(..),litP -- ,xor,cond,ifThenElse
   -- , primArrow
   , PrimBasics(..), EvalableP(..)
-  , CircuitEq, CircuitOrd, CircuitBot
+  , CircuitEq, CircuitOrd, CircuitBot, CircuitNum
   ) where
 
 -- #define LitSources
@@ -141,14 +141,15 @@ instance HasUnitArrow (:>) Lit where
 type CircuitEq  = EqCat     (:>)
 type CircuitOrd = OrdCat    (:>)
 type CircuitBot = BottomCat (:>)
+type CircuitNum = NumCat    (:>)
 
 -- | Primitives
 data Prim :: * -> * where
   LitP            :: Lit a -> Prim a
   NotP            :: Prim (Bool -> Bool)
   AndP,OrP,XorP   :: Prim (Bool -> Bool -> Bool)
-  NegateP         :: Prim (Int -> Int)                  -- TODO: generalize
-  AddP,SubP,MulP  :: Prim (Int -> Int -> Int)           -- ''
+  NegateP         :: CircuitNum a => Prim (a -> a)
+  AddP,SubP,MulP  :: CircuitNum a => Prim (a -> a -> a)
   EqP,NeP         :: CircuitEq  a => Prim (a -> a -> Bool)
   LtP,GtP,LeP,GeP :: CircuitOrd a => Prim (a -> a -> Bool)
   ExlP            :: Prim (a :* b -> a)
