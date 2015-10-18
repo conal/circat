@@ -22,7 +22,7 @@
 
 module Circat.Pair
   ( Pair(..)
-  , curryP, uncurryP, toP, fromP
+  , curryP, uncurryP, toP, fromP, inP
   , fstP, sndP, firstP, secondP
   , sortP
   , get, update
@@ -140,6 +140,9 @@ toP (a,b) = a :# b
 
 fromP :: Pair a -> (a,a)
 fromP (a :# b) = (a,b)
+
+inP :: ((a, a) -> (a, a)) -> Pair a -> Pair a
+inP g = toP . g . fromP
 
 fstP :: Pair a -> a
 fstP (a :# _) = a
