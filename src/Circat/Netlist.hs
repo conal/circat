@@ -204,7 +204,10 @@ moduleAssign p2w (CompS _ name [] [o] _) =
             "⊥"     -> ExprNum 0  -- default
             _       ->
               case reads name of
-                [(n :: Int,"")] -> ExprNum (fromIntegral n)
+                [(n :: Int   ,"")] -> ExprNum (fromIntegral n)
+                -- Uh oh! There doesn't seem to be a Netlist representation for
+                -- real-valued literals, although at least Verilog supports it.
+                -- [(x :: Double,"")] -> ExprNum (fromIntegral n)
                 _ -> err $ "Literal " ++ name ++ " not recognized."
     err = error . ("Circat.Netlist.moduleAssign: " ++)
 

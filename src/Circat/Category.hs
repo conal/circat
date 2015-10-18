@@ -492,9 +492,10 @@ instance (ClosedCat k, Uncurriable k (a :* b) c)
   type OkayRan k a (b -> c) = OkayRan k (a :* b) c
   uncurries = uncurries . uncurry
 
-instance OkayArr k a Bool => Uncurriable k a Bool where uncurries = id
-instance OkayArr k a Int  => Uncurriable k a Int  where uncurries = id
-instance OkayArr k a Unit => Uncurriable k a Unit where uncurries = id
+instance OkayArr k a Unit   => Uncurriable k a Unit   where uncurries = id
+instance OkayArr k a Bool   => Uncurriable k a Bool   where uncurries = id
+instance OkayArr k a Int    => Uncurriable k a Int    where uncurries = id
+instance OkayArr k a Double => Uncurriable k a Double where uncurries = id
 
 instance OkayArr k a (c :* d) => Uncurriable k a (c :* d) where uncurries = id
 

@@ -195,16 +195,15 @@ newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
 
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
 data Buses :: * -> * where
-  UnitB  :: Buses Unit
-  BoolB  :: Source -> Buses Bool
-  IntB   :: Source -> Buses Int
-  DoubleB  :: Source -> Buses Double
-  PairB  :: Buses a -> Buses b -> Buses (a :* b)
---   MaybeB :: Buses a -> Buses Bool -> Buses (Maybe a)
-  FunB   :: (a :> b) -> Buses (a -> b)
+  UnitB   :: Buses Unit
+  BoolB   :: Source -> Buses Bool
+  IntB    :: Source -> Buses Int
+  DoubleB :: Source -> Buses Double
+  PairB   :: Buses a -> Buses b -> Buses (a :* b)
+  FunB    :: (a :> b) -> Buses (a -> b)
   -- | Isomorphic form. Note: b must not have one of the standard forms.
   -- If it does, we'll get a run-time error when consuming.
-  IsoB   :: Buses (Rep a) -> Buses a
+  IsoB    :: Buses (Rep a) -> Buses a
 
 instance Eq (Buses a) where
   UnitB     == UnitB        = True
@@ -222,13 +221,13 @@ instance Eq (Buses a) where
 -- Deriving would need GenBuses a.
 
 instance Show (Buses a) where
-  show UnitB        = "()"
-  show (BoolB b)    = show b
-  show (IntB b)     = show b
-  show (DoubleB b)  = show b
-  show (PairB a b)  = "("++show a++","++show b++")"
-  show (FunB _)     = "<function>"
-  show (IsoB b)     = "IsoB ("++show b++")"
+  show UnitB       = "()"
+  show (BoolB b)   = show b
+  show (IntB b)    = show b
+  show (DoubleB b) = show b
+  show (PairB a b) = "("++show a++","++show b++")"
+  show (FunB _)    = "<function>"
+  show (IsoB b)    = "IsoB ("++show b++")"
 
 -- TODO: Improve to Show instance with showsPrec
 
@@ -278,7 +277,7 @@ instance GenBuses Int  where
   ty = const IntT
 
 instance GenBuses Double  where
-  genBuses' = genBus DoubleB 32
+  genBuses' = genBus DoubleB 64
   delay = primDelay
   ty = const DoubleT
 
@@ -787,8 +786,8 @@ pattern NotS a   <- Source _ "¬" [a] 0
 pattern XorS a b <- Source _ "⊕" [a,b] 0
 
 class SourceToBuses a where toBuses :: Source -> Buses a
-instance SourceToBuses Bool where toBuses = BoolB
-instance SourceToBuses Int  where toBuses = IntB
+instance SourceToBuses Bool   where toBuses = BoolB
+instance SourceToBuses Int    where toBuses = IntB
 instance SourceToBuses Double where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
@@ -942,38 +941,46 @@ readBit "0" = Just False
 readBit "1" = Just True
 readBit _   = Nothing
 
-pattern ZeroS <- ConstS "0"
-pattern OneS  <- ConstS "1"
+-- pattern ZeroS <- ConstS "0"
+-- pattern OneS  <- ConstS "1"
+
+-- More robust (works for Double as well):
+
+#define ValT(x,ty) (Val (x :: ty))
+
+#define ZeroT(ty) ValT(0,ty)
+#define  OneT(ty) ValT(1,ty)
 
 pattern NegateS a <- Source _ "negate" [a] 0
 
 pattern BToIS a <- Source _ BoolToInt [a] 0
 
-instance NumCat (:>) Int where
+instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+      => NumCat (:>) a where
   negateC = primOpt "negate" $ \ case
-              [Val x]     -> newVal (negate x)
-              [NegateS x] -> sourceB x
-              _           -> nothingA
+              [Val x]        -> newVal (negate x)
+              [NegateS x]    -> sourceB x
+              _              -> nothingA
   addC    = primOptSort "+" $ \ case
               [Val x, Val y] -> newVal (x+y)
-              [ZeroS,y]      -> sourceB y
-              [x,ZeroS]      -> sourceB x
+              [ZeroT(a),y]   -> sourceB y
+              [x,ZeroT(a)]   -> sourceB x
               [x,NegateS y]  -> newComp2 subC x y
               [NegateS x,y]  -> newComp2 subC y x
               _              -> nothingA
   subC    = primOpt     "−" $ \ case
               [Val x, Val y] -> newVal (x-y)
-              [ZeroS,y]      -> newComp1 negateC y
-              [x,ZeroS]      -> sourceB x
+              [ZeroT(a),y]   -> newComp1 negateC y
+              [x,ZeroT(a)]   -> sourceB x
               [x,NegateS y]  -> newComp2 addC x y
               [NegateS x,y]  -> newComp2 (negateC . addC) x y
               _              -> nothingA
   mulC    = primOptSort "×" $ \ case
               [Val x, Val y] -> newVal (x*y)
-              [OneS ,y]      -> sourceB y
-              [x,OneS ]      -> sourceB x
-              [x@ZeroS,_]    -> sourceB x
-              [_,y@ZeroS]    -> sourceB y
+              [OneT(a) ,y]   -> sourceB y
+              [x,OneT(a) ]   -> sourceB x
+              [x@ZeroT(a),_] -> sourceB x
+              [_,y@ZeroT(a)] -> sourceB y
               _              -> nothingA
 
 -- instance NumCat (:>) Int where
