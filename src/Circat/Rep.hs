@@ -21,6 +21,7 @@
 module Circat.Rep (Rep,HasRep(..),bottom) where
 
 import Data.Monoid
+import Data.Newtypes.PrettyDouble
 import Control.Applicative (WrappedMonad(..))
 
 import Control.Monad.Trans.State (StateT(..))
@@ -79,6 +80,7 @@ type instance Rep (abstT) = reprT; \
 instance HasRep (abstT) where { repr (con a) = a ; abst a = con a }
 
 WrapRep(Sum a,a,Sum)
+WrapRep(PrettyDouble,Double,PrettyDouble)
 WrapRep(Product a,a,Product)
 WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)

@@ -80,7 +80,9 @@ module Circat.Circuit
 import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
+import Data.Complex
 import Data.Monoid (mempty,(<>),Sum,Product)
+import Data.Newtypes.PrettyDouble
 import Data.Functor ((<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (unless)
@@ -99,8 +101,8 @@ import qualified Data.Map as M
 -- import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Sequence (Seq,singleton)
-import Data.Typeable (Typeable)
-import Data.Data (Data)
+-- import Data.Typeable (Typeable)
+-- import Data.Data (Data)
 import Text.Printf (printf)
 -- import Debug.Trace (trace)
 -- import Data.Coerce                      -- TODO: imports
@@ -196,6 +198,7 @@ data Buses :: * -> * where
   UnitB  :: Buses Unit
   BoolB  :: Source -> Buses Bool
   IntB   :: Source -> Buses Int
+  DoubleB  :: Source -> Buses Double
   PairB  :: Buses a -> Buses b -> Buses (a :* b)
 --   MaybeB :: Buses a -> Buses Bool -> Buses (Maybe a)
   FunB   :: (a :> b) -> Buses (a -> b)
@@ -207,6 +210,7 @@ instance Eq (Buses a) where
   UnitB     == UnitB        = True
   BoolB s   == BoolB s'     = s == s'
   IntB s    == IntB s'      = s == s'
+  DoubleB s == DoubleB s'   = s == s'
   PairB a b == PairB a' b'  = a == a' && b == b'
   IsoB r    == IsoB r'      = r == r'
   FunB _    == FunB _       = False             -- TODO: reconsider
@@ -221,13 +225,14 @@ instance Show (Buses a) where
   show UnitB        = "()"
   show (BoolB b)    = show b
   show (IntB b)     = show b
+  show (DoubleB b)  = show b
   show (PairB a b)  = "("++show a++","++show b++")"
   show (FunB _)     = "<function>"
   show (IsoB b)     = "IsoB ("++show b++")"
 
 -- TODO: Improve to Show instance with showsPrec
 
-data Ty = UnitT | BoolT | IntT | PairT Ty Ty deriving (Eq,Ord)
+data Ty = UnitT | BoolT | IntT | DoubleT | PairT Ty Ty deriving (Eq,Ord)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
 genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
@@ -272,20 +277,25 @@ instance GenBuses Int  where
   delay = primDelay
   ty = const IntT
 
+instance GenBuses Double  where
+  genBuses' = genBus DoubleB 32
+  delay = primDelay
+  ty = const DoubleT
+
 -- dbanas: I don't want to be constrained to RealFloat, yet. So, I'm making my own Complex type.
-infixl 1 :+
-data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
-
-instance Num a => Num (Complex a) where
-    (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
-    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
-    -- negate = fmap negate
-    (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
-    -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
-    abs _ = error "Abs not implemented."
-    signum (x :+ _) = signum x :+ 0
-    fromInteger x   = fromInteger x :+ 0
-
+-- infixl 1 :+
+-- data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
+-- 
+-- instance Num a => Num (Complex a) where
+--     (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
+--     (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+--     -- negate = fmap negate
+--     (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
+--     -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
+--     abs _ = error "Abs not implemented."
+--     signum (x :+ _) = signum x :+ 0
+--     fromInteger x   = fromInteger x :+ 0
+-- 
 type instance Rep (Complex a) = a :* a
 instance HasRep (Complex a) where
   repr (a :+ a') = (a,a')
@@ -312,6 +322,7 @@ flattenMb = fmap toList . flat
    flat UnitB       = Just mempty
    flat (BoolB b)   = Just (singleton b)
    flat (IntB b)    = Just (singleton b)
+   flat (DoubleB b) = Just (singleton b)
    flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
    flat (FunB _)    = Nothing
@@ -778,6 +789,7 @@ pattern XorS a b <- Source _ "⊕" [a,b] 0
 class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses Bool where toBuses = BoolB
 instance SourceToBuses Int  where toBuses = IntB
+instance SourceToBuses Double where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
 sourceB = justA . toBuses
@@ -2134,4 +2146,5 @@ AbsTy(Rag.Tree (BU p q) a)
 AbsTy(Complex a)
 -- Newtypes. Alternatively, don't use them in external interfaces.
 AbsTy(Sum a)
+AbsTy(PrettyDouble)
 AbsTy(Product a)

@@ -67,6 +67,7 @@ data Lit :: * -> * where
   UnitL  :: Unit -> Lit Unit
   BoolL  :: Bool -> Lit Bool
   IntL   :: Int  -> Lit Int
+  DoubleL :: Double  -> Lit Double
 
 -- The Unit argument is just for uniformity
 
@@ -74,6 +75,7 @@ instance Eq' (Lit a) (Lit b) where
   UnitL x === UnitL y = x == y
   BoolL x === BoolL y = x == y
   IntL  x === IntL  y = x == y
+  DoubleL x === DoubleL y = x == y
   _       === _       = False
 
 instance Eq (Lit a) where (==) = (===)
@@ -84,6 +86,7 @@ class HasLit a where toLit :: a -> Lit a
 instance HasLit Unit where toLit = UnitL
 instance HasLit Bool where toLit = BoolL
 instance HasLit Int  where toLit = IntL
+instance HasLit Double where toLit = DoubleL
 
 -- TODO: Do I still need this stuff?
 
@@ -93,6 +96,7 @@ litHasShow :: Lit a -> Dict (Show a)
 litHasShow (UnitL _) = Dict
 litHasShow (BoolL _) = Dict
 litHasShow (IntL  _) = Dict
+litHasShow (DoubleL _) = Dict
 
 #define LSh (litHasShow -> Dict)
 
@@ -108,6 +112,7 @@ litGenBuses :: Lit a -> Dict (GenBuses a)
 litGenBuses (UnitL _) = Dict
 litGenBuses (BoolL _) = Dict
 litGenBuses (IntL  _) = Dict
+litGenBuses (DoubleL _) = Dict
 
 #define LSo (litGenBuses -> Dict)
 
@@ -121,6 +126,7 @@ instance Evalable (Lit a) where
   eval (UnitL x) = x
   eval (BoolL x) = x
   eval (IntL  x) = x
+  eval (DoubleL x) = x
 
 instance HasUnitArrow (->) Lit where
   unitArrow x = const (eval x)
@@ -130,6 +136,7 @@ instance HasUnitArrow (:>) Lit where
   unitArrow (UnitL x) = litUnit x
   unitArrow (BoolL x) = litBool x
   unitArrow (IntL  x) = litInt  x
+  unitArrow (DoubleL x) = litDouble  x
 #else
   unitArrow l@LS = constC (eval l)
 #endif
