@@ -22,6 +22,8 @@
 -- #define TaggedSums
 -- #define ChurchSums
 
+#define CustomComplex
+
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE ViewPatterns, TupleSections #-}
@@ -74,13 +76,17 @@ module Circat.Circuit
   , MealyC(..)
   , mealyAsArrow
   , unitizeMealyC
-  , Complex(..)
+  , Complex(..),cis
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
+#ifdef CustomComplex
+import Data.Data (Data,Typeable)
+#else
 import Data.Complex
+#endif
 import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Newtypes.PrettyDouble
 import Data.Functor ((<$>))
@@ -281,25 +287,32 @@ instance GenBuses Double  where
   delay = primDelay
   ty = const DoubleT
 
--- dbanas: I don't want to be constrained to RealFloat, yet. So, I'm making my own Complex type.
--- infixl 1 :+
--- data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
--- 
--- instance Num a => Num (Complex a) where
---     (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
---     (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
---     -- negate = fmap negate
---     (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
---     -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
---     abs _ = error "Abs not implemented."
---     signum (x :+ _) = signum x :+ 0
---     fromInteger x   = fromInteger x :+ 0
--- 
+#if defined CustomComplex
+-- dbanas: I don't want to be constrained to RealFloat yet,
+-- so I'm making my own Complex type.
+
+infixl 1 :+
+data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
+
+instance Num a => Num (Complex a) where
+    (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
+    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
+    -- negate = fmap negate
+    (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
+    -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
+    abs _ = error "Abs not implemented."
+    signum (x :+ _) = signum x :+ 0
+    fromInteger x   = fromInteger x :+ 0
+
+cis :: RealFloat a => a -> Complex a
+cis theta = cos theta :+ sin theta
+#endif
+
 type instance Rep (Complex a) = a :* a
 instance HasRep (Complex a) where
   repr (a :+ a') = (a,a')
   abst (a,a') = (a :+ a')
--- ------------------------------------------------------------------
+
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
