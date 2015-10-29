@@ -487,14 +487,7 @@ B (zipWith (zipWith f) u v) :: Tree (S n) c
 
 #endif
 
-
-#if 0
-instance LScan (Tree Z) where
-  lscan (L a) = (L mempty, a)
-
-instance LScan (Tree n) => LScan (Tree (S n)) where
-  lscan (B ts)  = first B (lscanComp ts)
-#elif 1
+#if 1
 instance IsNat n => LScan (Tree n) where lscan = lscan' nat
 
 lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
@@ -502,20 +495,11 @@ lscan' Zero     = \ (L a)  -> (L mempty, a)
 lscan' (Succ m) = \ (B ts) -> first B (lscanComp' lscan (lscan' m) ts)
 {-# INLINE lscan' #-}
 #else
-instance LScan (Tree Z) where lscan = lscan' nat
+instance LScan (Tree Z) where
+  lscan (L a) = (L mempty, a)
 
-lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
-lscan' Zero     = \ (L a)  -> (L mempty, a)
-lscan' (Succ m) = lscanS m
-
-## working here ##
-
-lscanS :: Monoid a => Nat n -> Tree (S n) a -> (Tree (S n) a, a)
--- lscanS m = \ (B ts) -> first B (lscanComp' lscan (lscan' m) ts)
-
-lscanS Zero (B (L a :# L b)) = (B 
-
-{-# INLINE lscanS #-}
+instance LScan (Tree n) => LScan (Tree (S n)) where
+  lscan (B ts)  = first B (lscanComp ts)
 #endif
 
 #if 0
