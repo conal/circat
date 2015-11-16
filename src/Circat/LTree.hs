@@ -10,7 +10,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -25,6 +25,7 @@
 
 module Circat.LTree
   ( LTree(..),unB,inB,inB2,Tree,fromList
+  , jux, topSplit
   , butterfly, butterfly'
   , tree0, tree1, tree2, tree3, tree4, tree5
   , get, (!), update
@@ -155,15 +156,21 @@ instance IsNat n => Applicative (Tree n) where
 -- _    `ap` _    = error "(<*>) on Tree n: impossible case"
 -- {-# INLINE ap #-}
 
+#if 0
+
 liftA2' :: Nat m -> (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
 liftA2' Zero     f = inL2 f
 liftA2' (Succ n) f = inB2 (liftA2' n (liftA2 f))
 {-# INLINE liftA2' #-}
 
+#endif
+
 liftA2'' :: (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
 liftA2'' f (L a ) = \ (L b ) -> L (f a b)
 liftA2'' f (B as) = \ (B bs) -> B (liftA2'' (liftA2 f) as bs)
 {-# INLINE liftA2'' #-}
+
+#if 0
 
 liftA2''' :: (a -> b -> c) -> Tree m a -> Tree m b -> Tree m c
 liftA2''' f (L a ) = inL (f a)
@@ -175,6 +182,8 @@ liftA2''' f (B as) = inB (liftA2''' (liftA2 f) as)
 -- -- ap' (Succ n) = inB2 (liftA2 (ap' n))
 -- ap' (Succ n) = inB2 (liftA2' n (<*>))
 -- {-# INLINE ap' #-}
+
+#endif
 
 pure' :: Nat n -> a -> Tree n a
 pure' Zero     a = L a
@@ -305,6 +314,14 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -- . (fmap . fmap) unB
 
 -}
+
+-- | Juxtapose two trees into a single, deeper one
+jux :: IsNat n => Tree n a -> Tree n a -> Tree (S n) a
+jux = jux' nat
+
+jux' :: Nat n -> Tree n a -> Tree n a -> Tree (S n) a
+jux' Zero     = \ (L a ) (L b ) -> B (L (a :# b))
+jux' (Succ m) = \ (B as) (B bs) -> B (jux' m as bs)
 
 -- | Split into left and right halves
 topSplit :: IsNat n => LTree (S n) a -> Pair (LTree n a)
