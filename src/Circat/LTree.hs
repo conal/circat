@@ -315,13 +315,21 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 
 -}
 
--- | Juxtapose two trees into a single, deeper one
-jux :: IsNat n => Pair (Tree n a) -> Tree (S n) a
+-- | Juxtapose a pair of trees into a tree of pairs. Add another 'B' constructor
+-- to make @Tree (S n) a@. Note: unlike 'transpose', which pairs corresponding
+-- elements.
+jux :: IsNat n => Pair (Tree n a) -> Tree n (Pair a)
 jux = jux' nat
 
-jux' :: Nat n -> Pair (Tree n a) -> Tree (S n) a
-jux' Zero     = B .    L   . fmap unL
+jux' :: Nat n -> Pair (Tree n a) -> Tree n (Pair a)
+jux' Zero     = L . fmap unL
 jux' (Succ m) = B . jux' m . fmap unB
+
+-- jux' Zero     = \ (L a  :# L b ) -> L (a :# b)
+-- jux' (Succ m) = \ (B as :# B bs) -> B (jux' m (as :# bs))
+
+-- jux' Zero     = \ ls -> L (unL <$> ls)
+-- jux' (Succ m) = \ bs -> B (jux' m (unB <$> bs))
 
 -- | Split into left and right halves
 topSplit :: IsNat n => LTree (S n) a -> Pair (LTree n a)
