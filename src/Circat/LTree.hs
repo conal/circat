@@ -325,6 +325,8 @@ jux' :: Nat n -> Pair (Tree n a) -> Tree n (Pair a)
 jux' Zero     = L . fmap unL
 jux' (Succ m) = B . jux' m . fmap unB
 
+-- Equivalently,
+
 -- jux' Zero     = \ (L a  :# L b ) -> L (a :# b)
 -- jux' (Succ m) = \ (B as :# B bs) -> B (jux' m (as :# bs))
 
