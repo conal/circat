@@ -316,12 +316,12 @@ joinT' (Succ m) = B . fmap (joinT' m) . join . fmap sequenceA . unB . fmap unB
 -}
 
 -- | Juxtapose two trees into a single, deeper one
-jux :: IsNat n => Tree n a -> Tree n a -> Tree (S n) a
+jux :: IsNat n => Pair (Tree n a) -> Tree (S n) a
 jux = jux' nat
 
-jux' :: Nat n -> Tree n a -> Tree n a -> Tree (S n) a
-jux' Zero     = \ (L a ) (L b ) -> B (L (a :# b))
-jux' (Succ m) = \ (B as) (B bs) -> B (jux' m as bs)
+jux' :: Nat n -> Pair (Tree n a) -> Tree (S n) a
+jux' Zero     = B .    L   . fmap unL
+jux' (Succ m) = B . jux' m . fmap unB
 
 -- | Split into left and right halves
 topSplit :: IsNat n => LTree (S n) a -> Pair (LTree n a)
