@@ -40,6 +40,7 @@ Library
                     Circat.Pair
                     Circat.RTree
                     Circat.LTree
+                    Circat.ApproxEq
                     Circat.RaggedTree
                     Circat.Shift
                     Circat.Mealy

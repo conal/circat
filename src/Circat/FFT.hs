@@ -55,6 +55,7 @@ import Circat.Scan (LScan,lproducts,lsums,scanlT)
 import Circat.Pair
 import qualified Circat.LTree as L
 import qualified Circat.RTree as R
+import Circat.ApproxEq (ApproxEq(..))
 
 {--------------------------------------------------------------------
     Statically sized functors
@@ -258,34 +259,9 @@ tests = do test p1
            test t1
            mapM_ test t2s
 
-infix 4 ===
-(===) :: Eq b => (a -> b) -> (a -> b) -> a -> Bool
-(f === g) x = f x == g x
-
-infix 4 =~
-class ApproxEq a where
-  (=~) :: a -> a -> Bool
-
-closeNum :: (Ord a, Fractional a) => a -> a -> Bool
-closeNum x y = abs (x - y) < 1.0e-3
-
-instance ApproxEq Float  where (=~) = closeNum
-instance ApproxEq Double where (=~) = closeNum
-
-instance ApproxEq a => ApproxEq (Complex a) where
-  (a :+ b) =~ (a' :+ b') = a =~ a' && b =~ b'
-
--- PrettyDouble Eq already works this way
-instance ApproxEq PrettyDouble where (=~) = (==)
-
-instance ApproxEq a => ApproxEq [a] where
-  as =~ bs = length as == length bs && and (zipWith (=~) as bs)
-
-approxEqFoldable :: (ApproxEq a, Foldable f) => f a -> f a -> Bool
-approxEqFoldable as bs = toList as =~ toList bs
-
-instance ApproxEq a => ApproxEq (L.Tree n a) where (=~) = approxEqFoldable
-instance ApproxEq a => ApproxEq (R.Tree n a) where (=~) = approxEqFoldable
+-- infix 4 ===
+-- (===) :: Eq b => (a -> b) -> (a -> b) -> a -> Bool
+-- (f === g) x = f x == g x
 
 infix 4 =~=
 (=~=) :: ApproxEq b => (a -> b) -> (a -> b) -> a -> Bool
