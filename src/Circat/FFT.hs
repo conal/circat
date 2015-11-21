@@ -137,14 +137,6 @@ twiddles = outerProduct pows muls
    pows = powers    omega :: g (Complex a)
    muls = multiples omega :: f (Complex a)
 
--- | Generalized outer product
-outer :: (Functor g, Functor f) => (a -> b -> c) -> g a -> f b -> g (f c)
-outer h ga fb = (\ a -> h a <$> fb) <$> ga
-
--- | Outer product
-outerProduct :: (Functor g, Functor f, Num a) => g a -> f a -> g (f a)
-outerProduct = outer (*)
-
 {--------------------------------------------------------------------
     Specialized FFT instances
 --------------------------------------------------------------------}
@@ -185,7 +177,17 @@ powers = fst . lproducts . pure
 multiples :: (LScan f, Applicative f, Num a) => a -> f a
 multiples = fst . lsums . pure
 
--- powers is also in TreeTest. Consolidate.
+-- TODO: Consolidate with powers in TreeTest. Move powers and multiples to
+-- LScan, and rename sensibly. Maybe use "Inc" and "Exc" suffixes to distinguish
+-- inclusive and exclusive cases.
 
 i :: Num a => Complex a
 i = 0 :+ 1
+
+-- | Generalized outer product
+outer :: (Functor g, Functor f) => (a -> b -> c) -> g a -> f b -> g (f c)
+outer h ga fb = (\ a -> h a <$> fb) <$> ga
+
+-- | Outer product
+outerProduct :: (Functor g, Functor f, Num a) => g a -> f a -> g (f a)
+outerProduct = outer (*)
