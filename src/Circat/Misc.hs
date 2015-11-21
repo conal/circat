@@ -107,9 +107,9 @@ compose = foldr (.) id
 transpose :: (Traversable t, Applicative f) => t (f a) -> f (t a)
 transpose = sequenceA
 
-inTranspose :: (Traversable t, Applicative t, Traversable f, Applicative f) =>
-               Unop (t (f a)) -> Unop (f (t a))
-inTranspose = transpose <~ transpose
+inTranspose :: (Applicative f, Traversable t, Applicative f', Traversable t')
+            => (f (t a) -> t' (f' a)) -> (t (f a) -> f' (t' a))
+inTranspose h = transpose . h . transpose
 
 -- TODO: Maybe generalize the type of compose to Unop' (~>) a
 
