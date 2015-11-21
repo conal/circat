@@ -22,6 +22,7 @@ Library
   hs-Source-Dirs:   src/
   Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
                   , transformers, constraints
+                  , QuickCheck >= 2.7.3
                   , type-unary>=0.2.19
                   , TypeCompose
                   , ty >= 0.1.5

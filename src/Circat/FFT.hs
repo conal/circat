@@ -4,6 +4,7 @@
 {-# LANGUAGE ConstraintKinds, ParallelListComp #-}
 {-# LANGUAGE FlexibleContexts, TypeSynonymInstances #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 {-# LANGUAGE UndecidableInstances #-} -- See below
 
@@ -40,6 +41,8 @@ import Data.Foldable (Foldable,sum,toList)
 import Data.Traversable
 import Control.Applicative (Applicative(..),liftA2)
 import Data.Complex (Complex(..))
+
+import Test.QuickCheck.All (quickCheckAll)
 
 import Control.Compose ((:.)(..),inO,unO)
 import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2)
@@ -195,6 +198,8 @@ dft xs = [ sum [ x * ok^n | x <- xs | n <- [0 :: Int ..] ]
  where
    om = omega (length xs)
 
+-- TODO: Generalize to traversables
+
 {--------------------------------------------------------------------
     Tests
 --------------------------------------------------------------------}
@@ -204,7 +209,7 @@ dft xs = [ sum [ x * ok^n | x <- xs | n <- [0 :: Int ..] ]
 -- > powers 2 :: L.Tree N3 Int
 -- B (B (B (L (((1 :# 2) :# (4 :# 8)) :# ((16 :# 32) :# (64 :# 128))))))
 
-type C = Complex PrettyDouble
+type C = Complex {-Pretty-}Double
 
 fftl :: (FFT f f', Foldable f', RealFloat a) => f (Complex a) -> [Complex a]
 fftl = toList . fft
@@ -253,6 +258,78 @@ tests = do test p1
            test t1
            mapM_ test t2s
 
+infix 4 ===
+(===) :: Eq b => (a -> b) -> (a -> b) -> a -> Bool
+(f === g) x = f x == g x
+
+infix 4 =~
+class ApproxEq a where
+  (=~) :: a -> a -> Bool
+
+closeNum :: (Ord a, Fractional a) => a -> a -> Bool
+closeNum x y = abs (x - y) < 1.0e-3
+
+instance ApproxEq Float  where (=~) = closeNum
+instance ApproxEq Double where (=~) = closeNum
+
+instance ApproxEq a => ApproxEq (Complex a) where
+  (a :+ b) =~ (a' :+ b') = a =~ a' && b =~ b'
+
+-- PrettyDouble Eq already works this way
+instance ApproxEq PrettyDouble where (=~) = (==)
+
+instance ApproxEq a => ApproxEq [a] where
+  as =~ bs = length as == length bs && and (zipWith (=~) as bs)
+
+approxEqFoldable :: (ApproxEq a, Foldable f) => f a -> f a -> Bool
+approxEqFoldable as bs = toList as =~ toList bs
+
+instance ApproxEq a => ApproxEq (L.Tree n a) where (=~) = approxEqFoldable
+instance ApproxEq a => ApproxEq (R.Tree n a) where (=~) = approxEqFoldable
+
+infix 4 =~=
+(=~=) :: ApproxEq b => (a -> b) -> (a -> b) -> a -> Bool
+(f =~= g) x = f x =~ g x
+
+fftIsDft :: (FFT f f', Foldable f, Foldable f', RealFloat a, ApproxEq a) =>
+            f (Complex a) -> Bool
+fftIsDft = toList . fft =~= dft . toList
+
+-- PrettyDouble doesn't yet have an Arbitrary instance, so use Double for now
+type C' = Complex Double
+
+prop_fft_p :: Pair C' -> Bool
+prop_fft_p = fftIsDft
+
+prop_fft_L1 :: L.Tree N1 C' -> Bool
+prop_fft_L1 = fftIsDft
+
+prop_fft_L2 :: L.Tree N2 C' -> Bool
+prop_fft_L2 = fftIsDft
+
+prop_fft_L3 :: L.Tree N3 C' -> Bool
+prop_fft_L3 = fftIsDft
+
+prop_fft_L4 :: L.Tree N4 C' -> Bool
+prop_fft_L4 = fftIsDft
+
+prop_fft_R1 :: R.Tree N1 C' -> Bool
+prop_fft_R1 = fftIsDft
+
+prop_fft_R2 :: R.Tree N2 C' -> Bool
+prop_fft_R2 = fftIsDft
+
+prop_fft_R3 :: R.Tree N3 C' -> Bool
+prop_fft_R3 = fftIsDft
+
+prop_fft_R4 :: R.Tree N4 C' -> Bool
+prop_fft_R4 = fftIsDft
+
+-- TH oddity
+return []
+
+runTests :: IO Bool
+runTests = $quickCheckAll
+
 -- end of tests
 #endif
-

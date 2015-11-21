@@ -41,6 +41,7 @@ import Data.Foldable
 import Data.Traversable (Traversable(..))
 import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
+import Test.QuickCheck (Gen,Arbitrary(..),CoArbitrary(..))
 
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
@@ -65,6 +66,22 @@ type LTree = Tree
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
+
+instance (IsNat n, Arbitrary a) => Arbitrary (Tree n a) where
+  arbitrary = arb' nat
+   where
+     arb' :: Nat m -> Gen (Tree m a)
+     arb' Zero     = L <$> arbitrary
+     arb' (Succ _) = B <$> arbitrary
+  shrink = shrink' nat
+   where
+     shrink' :: Nat m -> Tree m a -> [Tree m a]
+     shrink' Zero     = \ (L a) -> L <$> shrink a
+     shrink' (Succ _) = \ (B t) -> B <$> shrink t
+
+instance (CoArbitrary a) => CoArbitrary (Tree n a) where
+  coarbitrary (L a) = coarbitrary a
+  coarbitrary (B t) = coarbitrary t
 
 type instance Rep (Tree Z a) = a
 instance HasRep (Tree Z a) where

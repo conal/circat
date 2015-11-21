@@ -14,7 +14,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -38,14 +38,14 @@ module Circat.RTree
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
 
-import Data.Monoid (Monoid(..),(<>))
+import Data.Monoid (Monoid(..))
 import Data.Functor ((<$),(<$>))
 import Control.Applicative (Applicative(..),liftA2)
 import Control.Monad (join)
 import Data.Foldable
 import Data.Traversable (Traversable(..))
-import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
+import Test.QuickCheck (Gen,Arbitrary(..),CoArbitrary(..))
 
 #ifdef Induction
 import Data.Constraint (Dict(..))
@@ -57,11 +57,11 @@ import TypeUnary.Vec (Vec(..))
 import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose)
 import Circat.Show (showsApp1)
 import Circat.Category
-import Circat.Classes
+-- import Circat.Classes
 import Circat.Pair hiding (get,update)
 import qualified Circat.Pair as P
 -- import Circat.State (pureState,StateFun,StateExp)
-import Circat.Rep
+-- import Circat.Rep
 -- import Circat.If
 import Circat.Scan
 
@@ -75,6 +75,22 @@ type RTree = Tree
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
+
+instance (IsNat n, Arbitrary a) => Arbitrary (Tree n a) where
+  arbitrary = arb' nat
+   where
+     arb' :: Nat m -> Gen (Tree m a)
+     arb' Zero     = L <$> arbitrary
+     arb' (Succ _) = B <$> arbitrary
+  shrink = shrink' nat
+   where
+     shrink' :: Nat m -> Tree m a -> [Tree m a]
+     shrink' Zero     = \ (L a ) -> L <$> shrink a
+     shrink' (Succ _) = \ (B ts) -> B <$> shrink ts
+
+instance (CoArbitrary a) => CoArbitrary (Tree n a) where
+  coarbitrary (L a ) = coarbitrary a
+  coarbitrary (B ts) = coarbitrary ts
 
 type instance Rep (Tree Z a) = a
 instance HasRep (Tree Z a) where

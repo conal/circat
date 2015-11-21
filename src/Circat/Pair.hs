@@ -38,6 +38,7 @@ import Control.Applicative (Applicative(..),liftA2)
 import Data.Ord (comparing)
 import Data.Typeable (Typeable)
 import Data.Data (Data)
+import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
 
 -- More in FunctorCombo.Pair
 
@@ -57,6 +58,13 @@ import Circat.Scan
 infixl 1 :#
 -- | Uniform pairs
 data Pair a = a :# a deriving (Functor,Eq,Show,Typeable,Data)
+
+instance Arbitrary a => Arbitrary (Pair a) where
+  arbitrary = liftA2 (:#) arbitrary arbitrary
+  shrink (x :# y) = [ x' :# y'  | (x',y') <- shrink (x,y) ]
+
+instance CoArbitrary a => CoArbitrary (Pair a) where
+  coarbitrary (x :# y) = coarbitrary x . coarbitrary y
 
 type instance Rep (Pair a) = a :* a
 instance HasRep (Pair a) where
