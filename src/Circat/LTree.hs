@@ -24,7 +24,7 @@
 ----------------------------------------------------------------------
 
 module Circat.LTree
-  ( LTree(..),unB,inB,inB2,Tree,fromList
+  ( LTree(..),unL,unB,inB,inB2,Tree,fromList
   , jux, topSplit
   , butterfly, butterfly'
   , tree0, tree1, tree2, tree3, tree4, tree5
@@ -100,6 +100,7 @@ instance Ord a => Ord (Tree n a) where
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a
   showsPrec p (B ts) = showsApp1 "B" p ts
+
 toL :: a -> Tree Z a
 toL a     = L a
 unL :: Tree Z a -> a
