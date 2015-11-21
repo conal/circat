@@ -214,11 +214,11 @@ dft xs = [ sum [ x * (ok ^ n) | x <- xs | n <- [0 :: Int ..] ]
 
 type C = Complex PrettyDouble
 
-type LC n = L.Tree n C
-type RC n = R.Tree n C
-
 fftl :: (FFT f f', Foldable f', RealFloat a) => f (Complex a) -> [Complex a]
 fftl = toList . fft
+
+type LC n = L.Tree n C
+type RC n = R.Tree n C
 
 p1 :: Pair C
 p1 = 1 :# 0
@@ -232,17 +232,17 @@ tw2 = twiddles
 l0 :: [C]
 l0 = [1]
 
-t0 :: L.Tree N0 (C)
+t0 :: LC N0
 t0 = L.fromList l0
 
 l1 :: [C]
 l1 = [1, 0]
 
-t1 :: L.Tree N1 (C)
+t1 :: LC N1
 t1 = L.fromList l1
 
 l2 :: [C]
 l2 = [1, 0, 0, 0]
 
-t2 :: L.Tree N2 (C)
+t2 :: LC N2
 t2 = L.fromList l2
