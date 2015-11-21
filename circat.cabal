@@ -7,7 +7,7 @@ Description:
   Experiments in circuit construction using a categorical vocabulary
 Author:             Conal Elliott
 Maintainer:         conal@conal.net
-Copyright:          (c) 2013-2014 by Tabula Inc
+Copyright:          (c) 2013-2015 by Tabula Inc and Conal Elliott
 Homepage:           http://github.com/conal/circat
 License:            BSD3
 License-File:       COPYING
@@ -22,7 +22,6 @@ Library
   hs-Source-Dirs:   src/
   Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
                   , transformers, constraints
-                  -- , arrows, Stream
                   , type-unary>=0.2.19
                   , TypeCompose
                   , ty >= 0.1.5
@@ -30,17 +29,13 @@ Library
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
                   , treeviz >= 2.0.2
---                  , type-encode
--- , functor-combo >= 0.3.4
 
   Exposed-Modules:     
                     Circat.Misc
                     Circat.Show
                     Circat.Category
---                     Circat.State
                     Circat.Classes
                     Circat.Rep
---                     Circat.If
                     Circat.Pair
                     Circat.RTree
                     Circat.LTree
@@ -57,5 +52,6 @@ Library
                     Circat.Examples
 
 
--- TODO: Move Pair and RTree elsewhere, e.g., TypeUnary.
--- Wait until I've removed PairCat, VecCat, and TreeCat.
+-- TODO: Get Pair from uniform-pair, and move RTree & LTree elsewhere,
+-- e.g., type-unary. Wait until I've removed PairCat, VecCat, and
+-- TreeCat.
