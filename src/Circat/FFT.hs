@@ -229,6 +229,16 @@ tw1 = twiddles
 tw2 :: L.Tree N2 (Pair C)
 tw2 = twiddles
 
+-- Adapted from Dave's testing
+test :: (FFT f f', Foldable f, Foldable f') => f C -> IO ()
+test xs =
+  do ps "\nTesting input" (toList xs)
+     ps "Expected output" (dft (toList xs))
+     ps "Actual output  " (toList (fft xs))
+ where
+   ps :: Show z => String -> z -> IO ()
+   ps label z = putStrLn (label ++ ": " ++ show z)
+
 l0 :: [C]
 l0 = [1]
 
@@ -246,3 +256,8 @@ l2 = [1, 0, 0, 0]
 
 t2 :: LC N2
 t2 = L.fromList l2
+
+tests :: IO ()
+tests = do test t0
+           test t1
+           test t2
