@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP, Rank2Types, TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE ConstraintKinds, ParallelListComp #-}
 {-# LANGUAGE FlexibleContexts, TypeSynonymInstances #-}
 {-# LANGUAGE GADTs #-}
 
@@ -29,16 +29,18 @@ module Circat.FFT where
 import Prelude hiding (sum)
 
 import Data.Functor ((<$>))
-import Data.Foldable (Foldable,sum)
+import Data.Foldable (Foldable,sum,toList)
 import Data.Traversable
 import Control.Applicative (Applicative(..),liftA2)
 import Data.Complex (Complex(..))
 
 import Control.Compose ((:.)(..),inO,unO)
-import TypeUnary.Nat (Nat(..),IsNat(..),natToZ)
+import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2)
+
+import Data.Newtypes.PrettyDouble
 
 import Circat.Misc (transpose, inTranspose,Unop)
-import Circat.Scan (LScan,lproducts,lsums)
+import Circat.Scan (LScan,lproducts,lsums,scanlT)
 import Circat.Pair
 import qualified Circat.LTree as L
 import qualified Circat.RTree as R
@@ -47,32 +49,32 @@ import qualified Circat.RTree as R
     Statically sized functors
 --------------------------------------------------------------------}
 
-class SizedF f where
-  sizeF :: f () -> Int -- ^ Argument is ignored at runtime
+class Sized f where
+  size :: f () -> Int -- ^ Argument is ignored at runtime
 
 -- TODO: Switch from f () to f Void
 
--- The argument to sizeF is unfortunate. When GHC Haskell has explicit type
+-- The argument to size is unfortunate. When GHC Haskell has explicit type
 -- application (<https://ghc.haskell.org/trac/ghc/wiki/TypeApplication>),
--- replace "sizeF (undefined :: f ())" with "sizeF @f", and likewise for g.
+-- replace "size (undefined :: f ())" with "size @f", and likewise for g.
 -- Meanwhile, a macro helps.
 
-#define tySize(f) (sizeF (undefined :: (f) ()))
+#define tySize(f) (size (undefined :: (f) ()))
 
--- | Useful default for 'sizeF'.
+-- | Useful default for 'size'.
 sizeAF :: forall f. (Applicative f, Foldable f) => f () -> Int
 sizeAF = const (sum (pure 1 :: f Int))
 
-instance SizedF Pair where sizeF = const 2
+instance Sized Pair where size = const 2
 
-instance (SizedF g, SizedF f) => SizedF (g :. f) where
-  sizeF = const (tySize(g) * tySize(f))
+instance (Sized g, Sized f) => Sized (g :. f) where
+  size = const (tySize(g) * tySize(f))
 
-instance IsNat n => SizedF (L.Tree n) where
-  sizeF = const (twoNat (nat :: Nat n))
+instance IsNat n => Sized (L.Tree n) where
+  size = const (twoNat (nat :: Nat n))
 
-instance IsNat n => SizedF (R.Tree n) where
-  sizeF = const (twoNat (nat :: Nat n))
+instance IsNat n => Sized (R.Tree n) where
+  size = const (twoNat (nat :: Nat n))
 
 -- | @2 ^ n@
 twoNat :: Nat n -> Int
@@ -80,17 +82,17 @@ twoNat n = 2 ^ (natToZ n :: Int)
 
 -- TODO: Generalize from Pair in L.Tree and R.Tree
 
--- TODO: Try using sizeAF instead of sizeF, and see what happens. I think it'd
+-- TODO: Try using sizeAF instead of size, and see what happens. I think it'd
 -- work but be much slower, either at compile- or run-time.
 
 {--------------------------------------------------------------------
     FFT
 --------------------------------------------------------------------}
 
-type FFTy f f' = forall a. RealFloat a => f (Complex a) -> f' (Complex a)
+type DFTTy f f' = forall a. RealFloat a => f (Complex a) -> f' (Complex a)
 
-class (SizedF f, SizedF f') => FFT f f' | f -> f' where
-  fft :: FFTy f f'  -- refine later
+class (Sized f, Sized f') => FFT f f' | f -> f' where
+  fft :: DFTTy f f'  -- refine later
 
 instance ( Applicative f , Traversable f , Traversable g
          , Applicative f', Applicative g', Traversable g'
@@ -124,7 +126,7 @@ O         :: g  (f a)   -> (g :. f) a
 
 #endif
 
-type AFS h = (Applicative h, Foldable h, SizedF h, LScan h)
+type AFS h = (Applicative h, Foldable h, Sized h, LScan h)
 
 twiddle :: (AFS g, AFS f, RealFloat a) => Unop (g (f (Complex a)))
 twiddle = (liftA2.liftA2) (*) twiddles
@@ -133,9 +135,12 @@ twiddle = (liftA2.liftA2) (*) twiddles
 twiddles :: forall g f a. (AFS g, AFS f, RealFloat a) => g (f (Complex a))
 twiddles = outerProduct pows muls
  where
-   omega = exp (- 2 * i * pi / fromIntegral (tySize(g :. f)))
-   pows = powers    omega :: g (Complex a)
-   muls = multiples omega :: f (Complex a)
+   om   = omega (tySize(g :. f))
+   pows = powers    om :: g (Complex a)
+   muls = multiples om :: f (Complex a)
+
+omega :: RealFloat a => Int -> Complex a
+omega n = exp (- 2 * i * pi / fromIntegral n)
 
 {--------------------------------------------------------------------
     Specialized FFT instances
@@ -150,14 +155,14 @@ instance FFT Pair Pair where
 instance IsNat n => FFT (L.Tree n) (R.Tree n) where
   fft = fft' nat
    where
-     fft' :: Nat m -> FFTy (L.Tree m) (R.Tree m)
+     fft' :: Nat m -> DFTTy (L.Tree m) (R.Tree m)
      fft' Zero     = R.L          .        L.unL
      fft' (Succ _) = R.B . unO . fft . O . L.unB
 
 instance IsNat n => FFT (R.Tree n) (L.Tree n) where
   fft = fft' nat
    where
-     fft' :: Nat m -> FFTy (R.Tree m) (L.Tree m)
+     fft' :: Nat m -> DFTTy (R.Tree m) (L.Tree m)
      fft' Zero     = L.L          .        R.unL
      fft' (Succ _) = L.B . unO . fft . O . R.unB
 
@@ -191,3 +196,53 @@ outer h ga fb = (\ a -> h a <$> fb) <$> ga
 -- | Outer product
 outerProduct :: (Functor g, Functor f, Num a) => g a -> f a -> g (f a)
 outerProduct = outer (*)
+
+{--------------------------------------------------------------------
+    Simple, quadratic DFT (for specification & testing)
+--------------------------------------------------------------------}
+
+-- Adapted from Dave's definition
+dft :: RealFloat a => Unop [Complex a]
+dft xs = [ sum [ x * (ok ^ n) | x <- xs | n <- [0 :: Int ..] ]
+         | k <- [0 .. length xs - 1], let ok = om ^ k ]
+ where
+   om = omega (length xs)
+
+{--------------------------------------------------------------------
+    Tests
+--------------------------------------------------------------------}
+
+type C = Complex PrettyDouble
+
+type LC n = L.Tree n C
+type RC n = R.Tree n C
+
+fftl :: (FFT f f', Foldable f', RealFloat a) => f (Complex a) -> [Complex a]
+fftl = toList . fft
+
+p1 :: Pair C
+p1 = 1 :# 0
+
+tw1 :: L.Tree N1 (Pair C)
+tw1 = twiddles
+
+tw2 :: L.Tree N2 (Pair C)
+tw2 = twiddles
+
+l0 :: [C]
+l0 = [1]
+
+t0 :: L.Tree N0 (C)
+t0 = L.fromList l0
+
+l1 :: [C]
+l1 = [1, 0]
+
+t1 :: L.Tree N1 (C)
+t1 = L.fromList l1
+
+l2 :: [C]
+l2 = [1, 0, 0, 0]
+
+t2 :: L.Tree N2 (C)
+t2 = L.fromList l2
