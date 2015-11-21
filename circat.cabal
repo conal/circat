@@ -21,11 +21,11 @@ source-repository head
 Library
   hs-Source-Dirs:   src/
   Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
-                  , transformers
+                  , transformers, constraints
                   -- , arrows, Stream
                   , type-unary>=0.2.19
+                  , TypeCompose
                   , ty >= 0.1.5
-                  , constraints
                   , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
@@ -48,6 +48,7 @@ Library
                     Circat.Shift
                     Circat.Mealy
                     Circat.Scan
+                    Circat.FFT
                     Circat.Circuit
                     Circat.Netlist
                     Circat.ShowUtils
