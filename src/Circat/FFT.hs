@@ -231,13 +231,14 @@ tw2 = twiddles
 
 -- Adapted from Dave's testing
 test :: (FFT f f', Foldable f, Foldable f') => f C -> IO ()
-test xs =
-  do ps "\nTesting input" (toList xs)
-     ps "Expected output" (dft (toList xs))
-     ps "Actual output  " (toList (fft xs))
+test fx =
+  do ps "\nTesting input" xs
+     ps "Expected output" (dft xs)
+     ps "Actual output  " (toList (fft fx))
  where
    ps :: Show z => String -> z -> IO ()
    ps label z = putStrLn (label ++ ": " ++ show z)
+   xs = toList fx
 
 l0 :: [C]
 l0 = [1]
