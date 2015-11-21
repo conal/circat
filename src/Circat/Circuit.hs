@@ -200,6 +200,8 @@ newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
 --------------------------------------------------------------------}
 
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
+-- 'IsoB' is for isomorphic forms. Note: b must not have one of the standard
+-- forms. If it does, we'll get a run-time error when consuming.
 data Buses :: * -> * where
   UnitB   :: Buses Unit
   BoolB   :: Source -> Buses Bool
@@ -207,9 +209,10 @@ data Buses :: * -> * where
   DoubleB :: Source -> Buses Double
   PairB   :: Buses a -> Buses b -> Buses (a :* b)
   FunB    :: (a :> b) -> Buses (a -> b)
-  -- | Isomorphic form. Note: b must not have one of the standard forms.
-  -- If it does, we'll get a run-time error when consuming.
   IsoB    :: Buses (Rep a) -> Buses a
+
+-- TODO: Move IsoB comment to the IsoB constructor when Haddock gets fixed. See
+-- <https://mail.haskell.org/pipermail/haskell-cafe/2010-September/083507.html>.
 
 instance Eq (Buses a) where
   UnitB     == UnitB        = True
