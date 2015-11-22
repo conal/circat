@@ -45,13 +45,12 @@ import Data.Complex (Complex(..))
 import Test.QuickCheck.All (quickCheckAll)
 
 import Control.Compose ((:.)(..),inO,unO)
-import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2)
-import TypeUnary.Vec hiding (transpose)
+import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2,N3,N4)
 
 import Data.Newtypes.PrettyDouble
 
 import Circat.Misc (transpose, inTranspose,Unop)
-import Circat.Scan (LScan,lproducts,lsums,scanlT)
+import Circat.Scan (LScan,lproducts,lsums,scanlT,iota)
 import Circat.Pair
 import qualified Circat.LTree as L
 import qualified Circat.RTree as R
@@ -199,7 +198,19 @@ dft xs = [ sum [ x * ok^n | x <- xs | n <- [0 :: Int ..] ]
  where
    om = omega (length xs)
 
--- TODO: Generalize to traversables
+-- Generalization of 'dft' to traversables. Warning: use only on zippy
+-- applicatives (not on []).
+dftT :: forall f a. (AFS f, Traversable f, RealFloat a) => Unop (f (Complex a))
+dftT xs = out <$> indices
+ where
+   out k = sum (liftA2 summand indices xs)
+    where
+      ok = om ^ k
+      summand n x = x * ok^n
+   indices = iota :: f Int
+   om = omega (tySize(f))
+
+-- Perhaps dftT isn't very useful. Its result and argument types match, unlike fft.
 
 {--------------------------------------------------------------------
     Tests
@@ -271,8 +282,25 @@ fftIsDft :: (FFT f f', Foldable f, Foldable f', RealFloat a, ApproxEq a) =>
             f (Complex a) -> Bool
 fftIsDft = toList . fft =~= dft . toList
 
+dftTIsDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
+            f (Complex a) -> Bool
+dftTIsDft = toList . dftT =~= dft . toList
+
+{--------------------------------------------------------------------
+    Properties to test
+--------------------------------------------------------------------}
+
 -- PrettyDouble doesn't yet have an Arbitrary instance, so use Double for now
 type C' = Complex Double
+
+prop_dftT_p :: Pair C' -> Bool
+prop_dftT_p = dftTIsDft
+
+prop_dftT_L3 :: L.Tree N3 C' -> Bool
+prop_dftT_L3 = dftTIsDft
+
+prop_dftT_R3 :: R.Tree N3 C' -> Bool
+prop_dftT_R3 = dftTIsDft
 
 prop_fft_p :: Pair C' -> Bool
 prop_fft_p = fftIsDft
