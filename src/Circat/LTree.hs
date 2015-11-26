@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs, KindSignatures, CPP #-}
 {-# LANGUAGE ScopedTypeVariables, Rank2Types, InstanceSigs, ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
@@ -42,6 +43,7 @@ import Data.Traversable (Traversable(..))
 import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
 import Test.QuickCheck (Gen,Arbitrary(..),CoArbitrary(..))
+import GHC.Generics (Generic,Generic1(..),Par1(..),(:.:)(..))
 
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
@@ -61,8 +63,37 @@ import Circat.Scan
 data Tree :: * -> * -> * where
   L :: a -> Tree Z a
   B :: Tree n (Pair a) -> Tree (S n) a
+--  deriving (Generic) -- not on GADT constructors
 
 type LTree = Tree
+
+instance Generic1 (Tree Z) where
+  type Rep1 (Tree Z) = Par1
+  from1 = Par1 . unL
+  to1   = L . unPar1
+
+#define SingleStepGeneric
+
+#ifdef SingleStepGeneric
+instance Generic1 (Tree (S n)) where
+  type Rep1 (Tree (S n)) = Tree n :.: Pair
+  from1 = Comp1 . unB
+  to1   = B . unComp1
+#else
+instance (Functor (Rep1 (Tree n)), Generic1 (Tree n))
+      => Generic1 (Tree (S n)) where
+  type Rep1 (Tree (S n)) = Rep1 (Tree n) :.: Rep1 Pair
+  type Rep1 (Tree (S n)) = Tree n :.: Pair
+  from1 = Comp1 . fmap from1 . from1 . unB
+  to1   = B . to1 . fmap to1 . unComp1
+
+-- -- Types in from1:
+-- 
+-- unB        :: Tree (S n) a                -> Tree n (Pair a)
+-- from1      :: Tree n (Pair a)             -> Rep1 (Tree n) (Pair a)
+-- fmap from1 :: Rep1 (Tree n) (Pair a)      -> Rep1 (Tree n) (Rep1 Pair a)
+-- Comp1      :: Rep1 (Tree n) (Rep1 Pair a) -> (Rep1 (Tree n) :.: Rep1 Pair) a
+#endif
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
@@ -91,8 +122,8 @@ instance HasRep (Tree Z a) where
 #if 1
 type instance Rep (Tree (S n) a) = Tree n (Pair a)
 instance HasRep (Tree (S n) a) where
-  repr (B ts) = ts
-  abst ts = B ts
+  repr (B t) = t
+  abst t = B t
 #else
 -- Two steps:
 type instance Rep (Tree (S n) a) = Tree n (a :* a)
@@ -388,7 +419,7 @@ instance Zippable (Tree Z) where
 
 instance Zippable (Tree n) => Zippable (Tree (S n)) where
   zipWith = inB2.zipWith.zipWith
-#elsif 0
+#elif 0
 instance IsNat n => Zippable (Tree n) where
   zip = zip' nat
 
@@ -409,7 +440,21 @@ zipWith' (Succ m) h = inB2 (zipWith' m (zipWith h))
 -- TODO: Rewrite zipWith more elegantly after changing to Nat without explicit
 -- predecessor argument.
 
-#if 0
+#if 1
+instance LScan (Tree Z) where lscan = genericLscan
+
+#ifdef SingleStepGeneric
+instance (IsNat n, LScan (Tree n)) => LScan (Tree (S n)) where
+  lscan = genericLscan
+
+-- TODO: Why do I need IsNat here? GHC says it's for genericLscan. Hm.
+#else
+instance (Generic1 (Tree n), LScan (Rep1 (Tree n)), Zippable (Rep1 (Tree n)))
+      => LScan (Tree (S n)) where
+  lscan = genericLscan
+#endif
+
+#elif 0
 instance LScan (Tree Z) where
   lscan (L a) = (L mempty, a)
 
@@ -422,6 +467,7 @@ lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
 lscan' Zero     = \ (L a)  -> (L mempty, a)
 lscan' (Succ m) = \ (B ts) -> first B (lscanComp' (lscan' m) lscan ts)
 {-# INLINE lscan' #-}
+
 #endif
 
 #if 0
