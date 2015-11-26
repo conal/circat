@@ -15,7 +15,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
-{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+-- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -30,8 +30,8 @@
 
 module Circat.RTree
   ( Tree(..),RTree,unL,toB,unB,inB,inB2,fromList
-  , tree0, tree1, tree2, tree3, tree4, tree5
-  , get, (!), update
+  , tree0, tree1, tree2, tree3, tree4, tree5, tree6
+  , get, (!), subtree, update
   , butterfly, butterfly'
   , tmerge, bottomSplit
   ) where
@@ -111,19 +111,6 @@ instance HasRep (Tree (S n) a) where
   abst ts = B (abst ts)
 #endif
 
--- The two-step formulation makes for simpler Core.
-
-cant :: String -> a
-cant str = error $ str ++ ": GHC doesn't know this case can't happen."
-
-cantT :: String -> a
-cantT str = cant (str ++ " on Tree")
-
--- instance Ord a => Ord (Tree n a) where
---   L a  `compare` L b  = a  `compare` b
---   B us `compare` B vs = us `compare` vs
---   _    `compare` _   = cantT "compare"
-
 instance Ord a => Ord (Tree n a) where
   compare (L a ) = \ (L b)  -> a  `compare` b 
   compare (B us) = \ (B vs) -> us `compare` vs
@@ -199,20 +186,10 @@ instance IsNat n => Applicative (Tree n) where
 -- _    `ap` _    = error "(<*>) on Tree n: impossible case"
 -- {-# INLINE ap #-}
 
-ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
-ap' Zero     = inL2 ($)
-ap' (Succ n) = inB2 (liftA2 (ap' n))
-{-# INLINE ap' #-}
-
 ap'' :: Tree m (a -> b) -> Tree m a -> Tree m b
 ap'' (L f ) = inL (\ x -> f x)
 ap'' (B fs) = inB (\ xs -> liftA2 ap'' fs xs)
 {-# INLINE ap'' #-}
-
-ap''' :: Tree m (a -> b) -> Tree m a -> Tree m b
-ap''' (L f ) = inL f
-ap''' (B fs) = inB (liftA2 ap''' fs)
-{-# INLINE ap''' #-}
 
 units :: Nat n -> Tree n ()
 units Zero     = L ()
@@ -256,10 +233,6 @@ instance IsNat n => Monad (Tree n) where
 joinT :: Tree n (Tree n a) -> Tree n a
 joinT (L t)  = t
 joinT (B ts) = B . fmap joinT . join . fmap sequenceA . (fmap . fmap) unB $ ts
-
-joinT' :: Tree n (Tree n a) -> Tree n a
-joinT' (L t)  = t
-joinT' (B (u :# v)) = B (joinT' ((fstP . unB) <$> u) :# joinT' ((sndP . unB) <$> v))
 
 #if 0
 
@@ -364,20 +337,6 @@ tmerge (B ts)       = B (tmerge <$> ts)
 -- pmerge <$> ts : Pair (Tree (S m) a)
 -- B (pmerge <$> ts) : Tree (S (S m)) a
 
-tsplit :: IsNat n => Tree (S n) a -> Tree n (Pair a)
-tsplit = tsplit' nat
-
-tsplit' :: Nat n -> Tree (S n) a -> Tree n (Pair a)
-tsplit' Zero     = L . fmap unL . unB
-                   -- transpose . unB
-                   -- \ (B (L a :# L b)) -> L (a :# b)
-tsplit' (Succ m) = (inB.fmap) (tsplit' m)
-
--- B p :: Tree (S (S m)) a
--- p :: Pair (Tree (S m) a)
--- tsplit' m <$> p :: Pair (Tree m (Pair a))
--- B (tsplit' m <$> p) :: Tree (S m) (Pair a)
-
 butterfly :: (IsNat n, Ord a) => Unop (Pair a) -> Unop (Tree n a)
 butterfly = butterfly' nat
 
@@ -434,9 +393,6 @@ ptranspose :: Pair (Pair (Tree m a)) -> Pair (Pair (Tree m a))
 fmap B :: Pair (Pair (Tree m a)) -> Pair (Tree (S m) a)
 
 #endif
-
-unriffle :: IsNat n => Unop (Tree (S n) a)
-unriffle = B . bottomSplit
 
 -- > toList (unriffle (fromList [1..16] :: Tree N4 Int))
 -- [1,3,5,7,9,11,13,15,2,4,6,8,10,12,14,16]
