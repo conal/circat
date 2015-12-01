@@ -21,7 +21,7 @@ module Circat.ApproxEq (ApproxEq(..), approxEqFoldable) where
 -- TODO: explicit exports
 
 import Data.Foldable (Foldable(),toList)
-import Data.Complex (Complex(..))
+import Circat.Complex (Complex(..))
 
 import Data.Newtypes.PrettyDouble (PrettyDouble(..))
 
