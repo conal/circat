@@ -29,7 +29,7 @@
 ----------------------------------------------------------------------
 
 module Circat.RTree
-  ( Tree(..),RTree,unL,toB,unB,inB,inB2,fromList
+  ( RTree(..),Tree,unL,toB,unB,inB,inB2,fromList
   , tree0, tree1, tree2, tree3, tree4, tree5, tree6
   , get, (!), subtree, update
   , butterfly, butterfly'
@@ -67,11 +67,11 @@ import Circat.Scan
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
-data Tree :: * -> * -> * where
+data RTree :: * -> * -> * where
   L :: a -> Tree Z a
   B :: Pair (Tree n a) -> Tree (S n) a
 
-type RTree = Tree
+type Tree = RTree
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
