@@ -68,6 +68,43 @@ instance (Monad m, Num a) => NumCat (Kleisli m) a where
   subC    = arr subC
   mulC    = arr mulC
 
+class Fractional a => FractionalCat k a where
+  recipC :: a `k` a
+  divideC :: (a :* a) `k` a
+
+instance Fractional a => FractionalCat (->) a where
+  recipC = recip
+  divideC = uncurry (/)
+
+instance (Monad m, Fractional a) => FractionalCat (Kleisli m) a where
+  recipC  = arr recipC
+  divideC = arr divideC
+
+-- HACK: generalize/replace/...
+class Floating a => FloatingCat k a where
+  expC, cosC, sinC :: a `k` a
+
+instance Floating a => FloatingCat (->) a where
+  expC = exp
+  cosC = cos
+  sinC = sin
+
+instance (Monad m, Floating a) => FloatingCat (Kleisli m) a where
+  expC = arr expC
+  cosC = arr cosC
+  sinC = arr sinC
+
+-- Stand-in for fromIntegral, avoiding the intermediate Integer in the Prelude
+-- definition.
+class (Integral a, Num b) => FromIntegralCat k a b where
+  fromIntegralC :: a `k` b
+
+instance (Integral a, Num b) => FromIntegralCat (->) a b where
+  fromIntegralC = fromIntegral
+
+instance (Monad m, Integral a, Num b) => FromIntegralCat (Kleisli m) a b where
+  fromIntegralC = arr fromIntegral
+
 class (BoolCat k, Eq a) => EqCat k a where
   equal, notEqual :: (a :* a) `k` Bool
   notEqual = notC . equal

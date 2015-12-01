@@ -22,8 +22,6 @@
 -- #define TaggedSums
 -- #define ChurchSums
 
-#define CustomComplex
-
 {-# LANGUAGE TypeFamilies, TypeOperators, ConstraintKinds #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE ViewPatterns, TupleSections #-}
@@ -76,17 +74,12 @@ module Circat.Circuit
   , MealyC(..)
   , mealyAsArrow
   , unitizeMealyC
-  , Complex(..),cis
+--   , Complex(..),cis
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
-#ifdef CustomComplex
-import Data.Data (Data,Typeable)
-#else
-import Data.Complex
-#endif
 import Data.Monoid (mempty,(<>),Sum,Product)
 import Data.Newtypes.PrettyDouble
 import Data.Functor ((<$>))
@@ -128,6 +121,7 @@ import qualified Control.Monad.State as Mtl
 import TypeUnary.Vec hiding (get)
 
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
+import Circat.Complex (Complex(..))
 import Circat.Category
 import Circat.Classes
 import Circat.Pair
@@ -289,33 +283,6 @@ instance GenBuses Double  where
   genBuses' = genBus DoubleB 64
   delay = primDelay
   ty = const DoubleT
-
-#if defined CustomComplex
--- dbanas: I don't want to be constrained to RealFloat yet,
--- so I'm making my own Complex type.
-
-infixl 1 :+
-data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
-
-instance Num a => Num (Complex a) where
-    (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
-    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
-    -- negate = fmap negate
-    (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
-    -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
-    abs _ = error "Abs not implemented."
-    signum (x :+ _) = signum x :+ 0
-    fromInteger x   = fromInteger x :+ 0
-
-cis :: RealFloat a => a -> Complex a
-cis theta = cos theta :+ sin theta
-#endif
-
-type instance Rep (Complex a) = a :* a
-instance HasRep (Complex a) where
-  repr (a :+ a') = (a,a')
-  abst (a,a') = (a :+ a')
-
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
@@ -589,6 +556,12 @@ primOpt name opt =
                   case flattenMb a of
                     Nothing   -> plain
                     Just srcs -> opt srcs >>= maybe plain return
+
+primNoOpt1 :: (GenBuses b, Show b, Read a) => String -> (a -> b) -> a :> b
+primNoOpt1 name fun = 
+  primOpt name $
+    \ case [Val x] -> newVal (fun x)
+           _       -> nothingA
 
 tryCommute :: a :> a
 tryCommute = mkCK try
@@ -968,6 +941,7 @@ readBit _   = Nothing
 #define  OneT(ty) ValT(1,ty)
 
 pattern NegateS a <- Source _ "negate" [a] 0
+pattern RecipS  a <- Source _ "recip"  [a] 0
 
 pattern BToIS a <- Source _ BoolToInt [a] 0
 
@@ -1002,6 +976,29 @@ instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
 -- instance NumCat (:>) Int where
 --  add = namedC "add"
 --  mul = namedC "mul"
+
+instance (Fractional a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+      => FractionalCat (:>) a where
+  recipC  = primOpt "recip" $ \ case
+              [Val x]        -> newVal (recip x)
+              [RecipS x]     -> sourceB x
+              [NegateS x]    -> newComp1 (negateC . recipC) x
+              _              -> nothingA
+  divideC = primOpt "/" $ \ case
+              [Val x, Val y] -> newVal (x/y)
+              [z@ZeroT(a),_] -> sourceB z
+              [x,NegateS y]  -> newComp2 (negateC . divideC) x y
+              _              -> nothingA
+
+instance (Floating a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+      => FloatingCat (:>) a where
+  expC = primNoOpt1 "exp" exp
+  cosC = primNoOpt1 "cos" cos
+  sinC = primNoOpt1 "sin" sin
+
+instance (Integral a, Num b, Read a, GenBuses b, Show b)
+      => FromIntegralCat (:>) a b where
+  fromIntegralC = primNoOpt1 "fromIntegral" fromIntegral
 
 -- Simplifications for all types:
 -- 

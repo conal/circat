@@ -28,7 +28,9 @@ module Circat.Prim
   , Prim(..),litP -- ,xor,cond,ifThenElse
   -- , primArrow
   , PrimBasics(..), EvalableP(..)
+  -- Convenient constraint aliases
   , CircuitEq, CircuitOrd, CircuitBot, CircuitNum
+  , CircuitFloating, CircuitFractional, CircuitFromIntegral
   ) where
 
 -- #define LitSources
@@ -145,142 +147,145 @@ instance HasUnitArrow (:>) Lit where
     Primitives
 --------------------------------------------------------------------}
 
-type CircuitEq  = EqCat     (:>)
-type CircuitOrd = OrdCat    (:>)
-type CircuitBot = BottomCat (:>)
-type CircuitNum = NumCat    (:>)
+type CircuitEq           = EqCat           (:>)
+type CircuitOrd          = OrdCat          (:>)
+type CircuitBot          = BottomCat       (:>)
+type CircuitNum          = NumCat          (:>)
+type CircuitFractional   = FractionalCat   (:>)
+type CircuitFloating     = FloatingCat     (:>)
+type CircuitFromIntegral = FromIntegralCat (:>)
+
+-- NOTE: When adding a constraint alias to the list above, be sure to export so
+-- reifyStdMeth can find it.
 
 -- | Primitives
 data Prim :: * -> * where
-  LitP            :: Lit a -> Prim a
-  NotP            :: Prim (Bool -> Bool)
-  AndP,OrP,XorP   :: Prim (Bool -> Bool -> Bool)
-  NegateP         :: CircuitNum a => Prim (a -> a)
-  AddP,SubP,MulP  :: CircuitNum a => Prim (a -> a -> a)
-  EqP,NeP         :: CircuitEq  a => Prim (a -> a -> Bool)
-  LtP,GtP,LeP,GeP :: CircuitOrd a => Prim (a -> a -> Bool)
-  ExlP            :: Prim (a :* b -> a)
-  ExrP            :: Prim (a :* b -> b)
-  InlP            :: Prim (a -> a :+ b)
-  InrP            :: Prim (b -> a :+ b)
-  PairP           :: Prim (a -> b -> a :* b)
-#if 0
-  CondBP          :: Prim (Bool :* (Bool :* Bool) -> Bool)  -- mux on Bool
-  CondIP          :: Prim (Bool :* (Int  :* Int ) -> Int )  -- mux on Int
-#else
-  IfP             :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
-#endif
-  AbstP           :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
-  ReprP           :: (HasRep a, Rep a ~ a') => Prim (a -> a')
-  BottomP         :: BottomCat (:>) a => Prim (Unit -> a)
---   LoopP        :: GenBuses s => Prim ((a :* s -> b :* s) -> (a -> b))
-  DelayP          :: (GenBuses s, Show s) => s -> Prim (s -> s)
+  LitP             :: Lit a -> Prim a
+  NotP             :: Prim (Bool -> Bool)
+  AndP,OrP,XorP    :: Prim (Bool -> Bool -> Bool)
+  NegateP          :: CircuitNum a => Prim (a -> a)
+  AddP,SubP,MulP   :: CircuitNum a => Prim (a -> a -> a)
+  RecipP           :: CircuitFractional a => Prim (a -> a)
+  DivideP          :: CircuitFractional a => Prim (a -> a -> a)
+  SinP, CosP, ExpP :: CircuitFloating a => Prim (a -> a)
+  FromIP           :: CircuitFromIntegral a b => Prim (a -> b)
+  EqP,NeP          :: CircuitEq  a => Prim (a -> a -> Bool)
+  LtP,GtP,LeP,GeP  :: CircuitOrd a => Prim (a -> a -> Bool)
+  ExlP             :: Prim (a :* b -> a)
+  ExrP             :: Prim (a :* b -> b)
+  InlP             :: Prim (a -> a :+ b)
+  InrP             :: Prim (b -> a :+ b)
+  PairP            :: Prim (a -> b -> a :* b)
+  IfP              :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
+  AbstP            :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
+  ReprP            :: (HasRep a, Rep a ~ a') => Prim (a -> a')
+  BottomP          :: BottomCat (:>) a => Prim (Unit -> a)
+  DelayP           :: (GenBuses s, Show s) => s -> Prim (s -> s)
 
 instance Eq' (Prim a) (Prim b) where
-  LitP a    === LitP b    = a === b
-  NotP      === NotP      = True
-  AndP      === AndP      = True
-  OrP       === OrP       = True
-  XorP      === XorP      = True
-  NegateP   === NegateP   = True
-  AddP      === AddP      = True
-  SubP      === SubP      = True
-  MulP      === MulP      = True
-  EqP       === EqP       = True
-  NeP       === NeP       = True
-  LtP       === LtP       = True
-  GtP       === GtP       = True
-  LeP       === LeP       = True
-  GeP       === GeP       = True
-  ExlP      === ExlP      = True
-  ExrP      === ExrP      = True
-  InlP      === InlP      = True
-  InrP      === InrP      = True
-  PairP     === PairP     = True
-#if 0
-  CondBP    === CondBP    = True
-  CondIP    === CondIP    = True
-#else
-  IfP       === IfP       = True
-#endif
-  AbstP     === AbstP     = True
-  ReprP     === ReprP     = True
-  BottomP   === BottomP   = True
---   LoopP     === LoopP     = True
-  -- DelayP a  === DelayP a' = a === a'  -- doesn't type-check
-  _         === _         = False
+  LitP a  === LitP b  = a === b
+  NotP    === NotP    = True
+  AndP    === AndP    = True
+  OrP     === OrP     = True
+  XorP    === XorP    = True
+  NegateP === NegateP = True
+  AddP    === AddP    = True
+  SubP    === SubP    = True
+  MulP    === MulP    = True
+  RecipP  === RecipP  = True
+  DivideP === DivideP = True
+  ExpP    === ExpP    = True
+  FromIP  === FromIP  = True
+  CosP    === CosP    = True
+  SinP    === SinP    = True
+  EqP     === EqP     = True
+  NeP     === NeP     = True
+  LtP     === LtP     = True
+  GtP     === GtP     = True
+  LeP     === LeP     = True
+  GeP     === GeP     = True
+  ExlP    === ExlP    = True
+  ExrP    === ExrP    = True
+  InlP    === InlP    = True
+  InrP    === InrP    = True
+  PairP   === PairP   = True
+  IfP     === IfP     = True
+  AbstP   === AbstP   = True
+  ReprP   === ReprP   = True
+  BottomP === BottomP = True
+  _       === _       = False
 
 instance Eq (Prim a) where (==) = (===)
 
 instance Show (Prim a) where
-  showsPrec p (LitP a)   = showsPrec p a
-  showsPrec _ NotP       = showString "not"
-  showsPrec _ AndP       = showString "(&&)"
-  showsPrec _ OrP        = showString "(||)"
-  showsPrec _ XorP       = showString "xor"
-  showsPrec _ NegateP    = showString "negate"
-  showsPrec _ AddP       = showString "add"
-  showsPrec _ SubP       = showString "sub"
-  showsPrec _ MulP       = showString "mul"
-  showsPrec _ EqP        = showString "(==)"
-  showsPrec _ NeP        = showString "(/=)"
-  showsPrec _ LtP        = showString "(<)"
-  showsPrec _ GtP        = showString "(>)"
-  showsPrec _ LeP        = showString "(<=)"
-  showsPrec _ GeP        = showString "(>=)"
-  showsPrec _ ExlP       = showString "exl"
-  showsPrec _ InlP       = showString "Left"
-  showsPrec _ InrP       = showString "Right"
-  showsPrec _ ExrP       = showString "exr"
-  showsPrec _ PairP      = showString "(,)"
-#if 0
-  showsPrec _ CondBP     = showString "muxB"
-  showsPrec _ CondIP     = showString "muxI"
-#else
-  showsPrec _ IfP        = showString "ifC"
-#endif
-  showsPrec _ AbstP      = showString "abst"
-  showsPrec _ ReprP      = showString "repr"
-  showsPrec _ BottomP    = showString "bottomC"
---   showsPrec _ LoopP      = showString "loop"
-  showsPrec p (DelayP a) = showsApp1 "delay" p a
+  showsPrec p (LitP a)      = showsPrec p a
+  showsPrec _ NotP          = showString "not"
+  showsPrec _ AndP          = showString "(&&)"
+  showsPrec _ OrP           = showString "(||)"
+  showsPrec _ XorP          = showString "xor"
+  showsPrec _ NegateP       = showString "negate"
+  showsPrec _ AddP          = showString "add"
+  showsPrec _ SubP          = showString "sub"
+  showsPrec _ RecipP        = showString "recip"
+  showsPrec _ DivideP       = showString "divide"
+  showsPrec _ MulP          = showString "mul"
+  showsPrec _ ExpP          = showString "exp"
+  showsPrec _ CosP          = showString "cos"
+  showsPrec _ SinP          = showString "sin"
+  showsPrec _ FromIP        = showString "fromIntegral"
+  showsPrec _ EqP           = showString "(==)"
+  showsPrec _ NeP           = showString "(/=)"
+  showsPrec _ LtP           = showString "(<)"
+  showsPrec _ GtP           = showString "(>)"
+  showsPrec _ LeP           = showString "(<=)"
+  showsPrec _ GeP           = showString "(>=)"
+  showsPrec _ ExlP          = showString "exl"
+  showsPrec _ InlP          = showString "Left"
+  showsPrec _ InrP          = showString "Right"
+  showsPrec _ ExrP          = showString "exr"
+  showsPrec _ PairP         = showString "(,)"
+  showsPrec _ IfP           = showString "ifC"
+  showsPrec _ AbstP         = showString "abst"
+  showsPrec _ ReprP         = showString "repr"
+  showsPrec _ BottomP       = showString "bottomC"
+  showsPrec p (DelayP a)    = showsApp1 "delay" p a
 
 instance Show' Prim where showsPrec' = showsPrec
 
 #if 0
 
 primArrow :: Prim (a :=> b) -> (a :> b)
-primArrow NotP      = notC
-primArrow AndP      = curry andC
-primArrow OrP       = curry orC
-primArrow XorP      = curry xorC
-primArrow NegateP   = negateC
-primArrow AddP      = curry add
-primArrow SubP      = curry sub
-primArrow MulP      = curry mul
-primArrow EqP       = curry equal
-primArrow NeP       = curry notEqual
-primArrow LtP       = curry lessThan
-primArrow GtP       = curry greaterThan
-primArrow LeP       = curry lessThanOrEqual
-primArrow GeP       = curry greaterThanOrEqual
-primArrow ExlP      = exl
-primArrow ExrP      = exr
-primArrow InlP      = inl
-primArrow InrP      = inr
-primArrow PairP     = curry id
-#if 0
-primArrow CondBP    = muxB
-primArrow CondIP    = muxI
-#else
-primArrow IfP       = ifC
-#endif
-primArrow AbstP     = abstC
-primArrow ReprP     = reprC
-primArrow BottomP   = -- bottomC
-                      error "primArrow: BottomP"
-primArrow MealyP    = Mealy
-primArrow (LitP _)  = error ("primArrow: LitP with function type?!")
+primArrow NotP     = notC
+primArrow AndP     = curry andC
+primArrow OrP      = curry orC
+primArrow XorP     = curry xorC
+primArrow NegateP  = negateC
+primArrow AddP     = curry add
+primArrow SubP     = curry sub
+primArrow MulP     = curry mul
+primArrow RecipP   = recipC
+primArrow DivideP  = curry divide
+primArrow ExpP     = curry exp
+primArrow CosP     = curry cos
+primArrow SinP     = curry sin
+primArrow FromIP   = fromIntegral
+primArrow EqP      = curry equal
+primArrow NeP      = curry notEqual
+primArrow LtP      = curry lessThan
+primArrow GtP      = curry greaterThan
+primArrow LeP      = curry lessThanOrEqual
+primArrow GeP      = curry greaterThanOrEqual
+primArrow ExlP     = exl
+primArrow ExrP     = exr
+primArrow InlP     = inl
+primArrow InrP     = inr
+primArrow PairP    = curry id
+primArrow IfP      = ifC
+primArrow AbstP    = abstC
+primArrow ReprP    = reprC
+primArrow BottomP  = error "primArrow: BottomP" -- bottomC?
+primArrow MealyP   = Mealy
+primArrow (LitP _) = error ("primArrow: LitP with function type?!")
 
 #endif
 
@@ -295,6 +300,12 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow AddP       = unitFun (curry addC)
   unitArrow SubP       = unitFun (curry subC)
   unitArrow MulP       = unitFun (curry mulC)
+  unitArrow RecipP     = unitFun recipC
+  unitArrow DivideP    = unitFun (curry divideC)
+  unitArrow ExpP       = unitFun expC
+  unitArrow CosP       = unitFun cosC
+  unitArrow SinP       = unitFun sinC
+  unitArrow FromIP     = unitFun fromIntegralC
   unitArrow EqP        = unitFun (curry equal)
   unitArrow NeP        = unitFun (curry notEqual)
   unitArrow LtP        = unitFun (curry lessThan)
@@ -310,7 +321,6 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow AbstP      = unitFun abstC
   unitArrow ReprP      = unitFun reprC
   unitArrow BottomP    = unitFun bottomC
---   unitArrow LoopP      = unitFun loopC
   unitArrow (DelayP a) = unitFun (delayC a)
   unitArrow (LitP l)   = unitArrow l
 
@@ -329,6 +339,12 @@ instance Evalable (Prim a) where
   eval AddP          = (+)
   eval SubP          = (-)
   eval MulP          = (*)
+  eval RecipP        = recip
+  eval DivideP       = (/)
+  eval ExpP          = exp
+  eval CosP          = cos
+  eval SinP          = sin
+  eval FromIP        = fromIntegral
   eval EqP           = (==)
   eval NeP           = (/=)
   eval LtP           = (<)
@@ -340,16 +356,10 @@ instance Evalable (Prim a) where
   eval InlP          = Left
   eval InrP          = Right
   eval PairP         = (,)
-#if 0
-  eval CondBP        = muxB
-  eval CondIP        = muxI
-#else
   eval IfP           = ifC
-#endif
   eval AbstP         = abstC
   eval ReprP         = reprC
   eval BottomP       = error "eval on BottomP"
---   eval LoopP         = loop
   eval (DelayP a)    = delay a
 
 -- TODO: replace fst with exl, etc.
