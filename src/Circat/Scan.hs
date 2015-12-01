@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE GADTs, FlexibleInstances, FlexibleContexts, Rank2Types #-}
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
+{-# LANGUAGE ConstraintKinds, LambdaCase, EmptyCase #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -19,20 +20,22 @@
 
 module Circat.Scan
   ( Zippable(..)
-  , LScanTy, LScan(..), lscanInc
+  , LScanTy, LScan(..), LFScan, lscanInc
   , lsums, lproducts, lAlls, lAnys, lParities, lsums', lproducts', iota
   , lscanProd, lscanProd', lscanComp, lscanComp'
   , scanlT, scanlTEx
+  , genericLscan
   ) where
 
 import Prelude hiding (zip,unzip,zipWith)
 
 import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..),All(..),Any(..))
 import Data.Functor ((<$>))
-import Control.Arrow ((***)) -- ,first
+import Control.Arrow ((***),first)
 import Data.Traversable (Traversable(..)) -- ,mapAccumR
 import Control.Applicative (Applicative(..),liftA2)
 import Data.Tuple (swap)
+import GHC.Generics
 
 import TypeUnary.Vec (Vec(..),IsNat)
 
@@ -49,11 +52,13 @@ scanlTEx op e = fst . scanlT op e
 
 type LScanTy f = forall a. Monoid a => f a -> f a :* a
 
-class Functor f => LScan f where
+class {- Functor f => -} LScan f where
   lscan :: LScanTy f
   -- Temporary hack to avoid newtype-like representation.
   lscanDummy :: f a
   lscanDummy = undefined
+
+type LFScan f = (Functor f, LScan f)
 
 #if 0
 
@@ -97,7 +102,7 @@ adjustl :: (Monoid a, Functor t) => a -> t a -> t a
 adjustl p = fmap (p <>)
 
 -- | Scan a composition of functors
-lscanComp :: (LScan g, LScan f, Zippable g, Monoid a) =>
+lscanComp :: (LScan g, LFScan f, Zippable g, Monoid a) =>
              g (f a) -> g (f a) :* a
 lscanComp = lscanComp' lscan lscan
 
@@ -110,19 +115,19 @@ lscanComp = lscanComp' lscan lscan
 lscanInc :: (LScan f, Traversable f, Monoid b) => Unop (f b)
 lscanInc = snd . shiftR . lscan
 
-lsums :: (LScan f, Num b) => f b -> (f b, b)
+lsums :: (LFScan f, Num b) => f b -> (f b, b)
 lsums = (fmap getSum *** getSum) . lscan . fmap Sum
 
-lproducts :: (LScan f, Num b) => f b -> f b :* b
+lproducts :: (LFScan f, Num b) => f b -> f b :* b
 lproducts = (fmap getProduct *** getProduct) . lscan . fmap Product
 
-lAlls :: LScan f => f Bool -> (f Bool, Bool)
+lAlls :: LFScan f => f Bool -> (f Bool, Bool)
 lAlls = (fmap getAll *** getAll) . lscan . fmap All
 
-lAnys :: LScan f => f Bool -> (f Bool, Bool)
+lAnys :: LFScan f => f Bool -> (f Bool, Bool)
 lAnys = (fmap getAny *** getAny) . lscan . fmap Any
 
-lParities :: LScan f => f Bool -> (f Bool, Bool)
+lParities :: LFScan f => f Bool -> (f Bool, Bool)
 lParities = (fmap getParity *** getParity) . lscan . fmap Parity
 
 -- Variants 
@@ -154,3 +159,36 @@ instance IsNat n => Zippable (Vec n) where zipWith = liftA2
 
 unzip :: Functor f => f (a :* b) -> f a :* f b
 unzip ps = (fst <$> ps, snd <$> ps)
+
+{--------------------------------------------------------------------
+    Generic support
+--------------------------------------------------------------------}
+
+instance LScan V1 where
+  lscan = \ case
+
+instance LScan U1 where
+  lscan U1 = (U1, mempty)
+
+instance LScan (K1 i c) where
+  lscan w@(K1 _) = (w, mempty)
+
+instance LScan Par1 where
+  lscan (Par1 a) = (Par1 mempty, a)
+
+instance (LScan f, LScan g) => LScan (f :+: g) where
+  lscan (L1 fa) = first L1 (lscan fa)
+  lscan (R1 ga) = first R1 (lscan ga)
+
+instance (LScan f, LFScan g) => LScan (f :*: g) where
+  lscan (fa :*: ga) = first (uncurry (:*:)) (lscanProd (fa,ga))
+
+instance (LScan g, LFScan f, Zippable g) => LScan (g :.: f) where
+  lscan (Comp1 gfa) = first Comp1 (lscanComp gfa)
+
+instance LScan f => LScan (M1 i c f) where
+  lscan (M1 as) = first M1 (lscan as)
+
+-- | Generic left scan
+genericLscan :: (Generic1 f, LScan (Rep1 f)) => LScanTy f
+genericLscan = first to1 . lscan . from1
