@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable, CPP #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
 -- {-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
@@ -38,6 +39,7 @@ import Control.Applicative (Applicative(..),liftA2)
 import Data.Ord (comparing)
 import Data.Typeable (Typeable)
 import Data.Data (Data)
+import GHC.Generics (Generic,Generic1) 
 import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
 
 -- More in FunctorCombo.Pair
@@ -57,7 +59,7 @@ import Circat.Scan
 
 infixl 1 :#
 -- | Uniform pairs
-data Pair a = a :# a deriving (Functor,Eq,Show,Typeable,Data)
+data Pair a = a :# a deriving (Functor,Eq,Show,Typeable,Data,Generic,Generic1)
 
 instance Arbitrary a => Arbitrary (Pair a) where
   arbitrary = liftA2 (:#) arbitrary arbitrary
