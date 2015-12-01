@@ -29,7 +29,9 @@
 ----------------------------------------------------------------------
 
 module Circat.FFT
-  ( Sized(..), sizeAF, FFT(..)
+  ( Sized(..), sizeAF, FFT(..), DFTTy
+  -- Temporary while debugging
+  , twiddle, twiddles, omega, cis
   ) where
 
 -- TODO: explicit exports
@@ -40,7 +42,6 @@ import Data.Functor ((<$>))
 import Data.Foldable (Foldable,sum,toList)
 import Data.Traversable
 import Control.Applicative (Applicative(..),liftA2)
-import Data.Complex (Complex(..))
 
 import Test.QuickCheck.All (quickCheckAll)
 
@@ -49,12 +50,14 @@ import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2,N3,N4)
 
 import Data.Newtypes.PrettyDouble
 
+import Circat.Complex
 import Circat.Misc (transpose, inTranspose,Unop)
 import Circat.Scan (LScan,lproducts,lsums,scanlT,iota)
+import Circat.ApproxEq (ApproxEq(..))
 import Circat.Pair
 import qualified Circat.LTree as L
 import qualified Circat.RTree as R
-import Circat.ApproxEq (ApproxEq(..))
+
 
 {--------------------------------------------------------------------
     Statically sized functors
@@ -62,6 +65,9 @@ import Circat.ApproxEq (ApproxEq(..))
 
 class Sized f where
   size :: f () -> Int -- ^ Argument is ignored at runtime
+  -- Temporary hack to avoid newtype-like representation.
+  sizeDummy :: f a
+  sizeDummy = undefined
 
 -- TODO: Switch from f () to f Void
 
@@ -76,20 +82,25 @@ class Sized f where
 sizeAF :: forall f. (Applicative f, Foldable f) => f () -> Int
 sizeAF = const (sum (pure 1 :: f Int))
 
-instance Sized Pair where size = const 2
-
 instance (Sized g, Sized f) => Sized (g :. f) where
   size = const (tySize(g) * tySize(f))
+  {-# INLINE size #-}
 
-instance IsNat n => Sized (L.Tree n) where
-  size = const (twoNat (nat :: Nat n))
-
-instance IsNat n => Sized (R.Tree n) where
-  size = const (twoNat (nat :: Nat n))
+instance Sized Pair where
+  size = const 2
+  {-# INLINE size #-}
 
 -- | @2 ^ n@
 twoNat :: Integral m => Nat n -> m
 twoNat n = 2 ^ (natToZ n :: Int)
+
+instance IsNat n => Sized (L.Tree n) where
+  size = const (twoNat (nat :: Nat n))
+  {-# INLINE size #-}
+
+instance IsNat n => Sized (R.Tree n) where
+  size = const (twoNat (nat :: Nat n))
+  {-# INLINE size #-}
 
 -- TODO: Generalize from Pair in L.Tree and R.Tree
 
@@ -104,12 +115,16 @@ type DFTTy f f' = forall a. RealFloat a => f (Complex a) -> f' (Complex a)
 
 class FFT f f' | f -> f' where
   fft :: DFTTy f f'
+  -- Temporary hack to avoid newtype-like representation.
+  fftDummy :: f a
+  fftDummy = undefined
 
 instance ( Applicative f , Traversable f , Traversable g
          , Applicative f', Applicative g', Traversable g'
          , FFT f f', FFT g g', LScan f, LScan g', Sized f, Sized g' )
       => FFT (g :. f) (f' :. g') where
   fft = inO (transpose . fmap fft . twiddle . inTranspose (fmap fft))
+  {-# INLINE fft #-}
 
 -- Without UndecidableInstances, I get the following:
 -- 
@@ -141,13 +156,21 @@ type AFS h = (Applicative h, Foldable h, Sized h, LScan h)
 
 twiddle :: (AFS g, AFS f, RealFloat a) => Unop (g (f (Complex a)))
 twiddle = (liftA2.liftA2) (*) twiddles
+{-# INLINE twiddle #-}
 
 -- Twiddle factors.
 twiddles :: forall g f a. (AFS g, AFS f, RealFloat a) => g (f (Complex a))
 twiddles = powers <$> powers (omega (tySize(g :. f)))
+{-# INLINE twiddles #-}
 
 omega :: (Integral n, RealFloat a) => n -> Complex a
-omega n = exp (- 2 * (0:+1) * pi / fromIntegral n)
+omega n = cis (- 2 * pi / fromIntegral n)
+-- omega n = exp (0 :+ (- 2 * pi / fromIntegral n))
+-- omega n = exp (- 2 * (0:+1) * pi / fromIntegral n)
+{-# INLINE omega #-}
+
+cis :: RealFloat a => a -> Complex a
+cis a = cos a :+ sin a
 
 -- Powers of x, starting x^0. Uses 'LScan' for log parallel time
 powers :: (LScan f, Applicative f, Num a) => a -> f a
@@ -157,28 +180,36 @@ powers = fst . lproducts . pure
 -- "In" and "Ex" suffixes to distinguish inclusive and exclusive cases.
 
 {--------------------------------------------------------------------
-    Specialized FFT instances
+    Specialized FFT instances.
 --------------------------------------------------------------------}
+
+-- I put the specific instances here in order to avoid an import loop between
+-- LTree and RTree.
 
 -- Radix 2 butterfly
 instance FFT Pair Pair where
   fft (a :# b) = (a + b) :# (a - b)
+  {-# INLINE fft #-}
 
 -- Handle trees by conversion to functor compositions.
 
 instance IsNat n => FFT (L.Tree n) (R.Tree n) where
-  fft = fft' nat
-   where
-     fft' :: Nat m -> DFTTy (L.Tree m) (R.Tree m)
-     fft' Zero     = R.L          .        L.unL
-     fft' (Succ _) = R.B . unO . fft . O . L.unB
+  fft = fftL nat
+  {-# INLINE fft #-}
+
+fftL :: Nat m -> DFTTy (L.Tree m) (R.Tree m)
+fftL Zero     = R.L          .        L.unL
+fftL (Succ _) = R.B . unO . fft . O . L.unB
+{-# INLINE fftL #-}
 
 instance IsNat n => FFT (R.Tree n) (L.Tree n) where
-  fft = fft' nat
-   where
-     fft' :: Nat m -> DFTTy (R.Tree m) (L.Tree m)
-     fft' Zero     = L.L          .        R.unL
-     fft' (Succ _) = L.B . unO . fft . O . R.unB
+  fft = fftR nat
+  {-# INLINE fft #-}
+
+fftR :: Nat m -> DFTTy (R.Tree m) (L.Tree m)
+fftR Zero     = L.L          .        R.unL
+fftR (Succ _) = L.B . unO . fft . O . R.unB
+{-# INLINE fftR #-}
 
 -- TODO: Do these instances amount to DIT and DIF respectively?
 -- TODO: Remove the boilerplate via DeriveGeneric.
@@ -203,12 +234,12 @@ dft xs = [ sum [ x * ok^n | x <- xs | n <- [0 :: Int ..] ]
 dftT :: forall f a. (AFS f, Traversable f, RealFloat a) => Unop (f (Complex a))
 dftT xs = out <$> indices
  where
-   out k = sum (liftA2 summand indices xs)
-    where
-      ok = om ^ k
-      summand n x = x * ok^n
+   out k = sum (liftA2 (\ n x -> x * ok^n) indices xs)
+    where ok = om ^ k
    indices = iota :: f Int
    om = omega (tySize(f))
+
+-- TODO: Replace Applicative with Zippable
 
 -- Perhaps dftT isn't very useful. Its result and argument types match, unlike fft.
 
