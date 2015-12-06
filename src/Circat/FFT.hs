@@ -36,10 +36,10 @@ module Circat.FFT
 
 -- TODO: explicit exports
 
-import Prelude hiding (sum)
+import Prelude hiding (sum,product)
 
 import Data.Functor ((<$>))
-import Data.Foldable (Foldable,sum,toList)
+import Data.Foldable (Foldable,toList,sum,product)
 import Data.Traversable
 import Control.Applicative (Applicative(..),liftA2)
 
@@ -51,7 +51,7 @@ import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2,N3,N4)
 import Data.Newtypes.PrettyDouble
 
 import Circat.Complex
-import Circat.Misc (transpose, inTranspose,Unop)
+import Circat.Misc (transpose, inTranspose,Unop,Binop)
 import Circat.Scan (LScan,lproducts,lsums,scanlT,iota)
 import Circat.ApproxEq (ApproxEq(..))
 import Circat.Pair
@@ -123,7 +123,7 @@ instance ( Applicative f , Traversable f , Traversable g
          , Applicative f', Applicative g', Traversable g'
          , FFT f f', FFT g g', LScan f, LScan g', Sized f, Sized g' )
       => FFT (g :. f) (f' :. g') where
-  fft = inO (transpose . fmap fft . twiddle . inTranspose (fmap fft))
+  fft = inO (transpose . fmap fft . twiddle . transpose . fmap fft . transpose)
   {-# INLINE fft #-}
 
 -- Without UndecidableInstances, I get the following:
@@ -169,12 +169,14 @@ omega n = cis (- 2 * pi / fromIntegral n)
 -- omega n = exp (- 2 * (0:+1) * pi / fromIntegral n)
 {-# INLINE omega #-}
 
+-- | @'exp' (i * a)@
 cis :: RealFloat a => a -> Complex a
 cis a = cos a :+ sin a
 
 -- Powers of x, starting x^0. Uses 'LScan' for log parallel time
 powers :: (LScan f, Applicative f, Num a) => a -> f a
 powers = fst . lproducts . pure
+{-# INLINE powers #-}
 
 -- TODO: Consolidate with powers in TreeTest and rename sensibly. Maybe use
 -- "In" and "Ex" suffixes to distinguish inclusive and exclusive cases.
@@ -242,6 +244,25 @@ dftT xs = out <$> indices
 -- TODO: Replace Applicative with Zippable
 
 -- Perhaps dftT isn't very useful. Its result and argument types match, unlike fft.
+
+-- -- | General dot product
+-- dot :: (Foldable g, Traversable g, Foldable f, Applicative f, Num a) => g (f a) -> a
+-- dot = sum . fmap product . transpose
+
+-- -- | Binary dot product
+-- (<.>) :: (Applicative f, Foldable f, Num a) => f a -> f a -> a
+-- as <.> bs = dot (as :# bs)
+
+-- -- as <.> bs = (sum . fmap product . transpose) (as :# bs)
+
+dftQ :: forall f a. (AFS f, RealFloat a) => Unop (f (Complex a))
+dftQ as = (<.> as) <$> (powers <$> powers (omega (tySize(f))))
+{-# INLINE dftQ #-}
+
+-- Infix binary dot product
+infixl 7 <.>
+(<.>) :: (Foldable f, Applicative f, Num a) => f a -> f a -> a
+u <.> v = sum (liftA2 (*) u v)
 
 {--------------------------------------------------------------------
     Tests
@@ -317,12 +338,22 @@ dftTIsDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
             f (Complex a) -> Bool
 dftTIsDft = toList . dftT =~= dft . toList
 
+dftQIsDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
+            f (Complex a) -> Bool
+dftQIsDft = toList . dftQ =~= dft . toList
+
 {--------------------------------------------------------------------
     Properties to test
 --------------------------------------------------------------------}
 
 -- PrettyDouble doesn't yet have an Arbitrary instance, so use Double for now
 type C' = Complex Double
+
+prop_dftQ_R3 :: R.Tree N3 C' -> Bool
+prop_dftQ_R3 = dftQIsDft
+
+prop_dftQ_L3 :: L.Tree N3 C' -> Bool
+prop_dftQ_L3 = dftQIsDft
 
 prop_dftT_p :: Pair C' -> Bool
 prop_dftT_p = dftTIsDft
