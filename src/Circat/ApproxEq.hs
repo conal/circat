@@ -1,4 +1,4 @@
--- {-# LANGUAGE #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -22,6 +22,10 @@ module Circat.ApproxEq (ApproxEq(..), approxEqFoldable) where
 
 import Data.Foldable (Foldable(),toList)
 import Circat.Complex (Complex(..))
+
+import qualified Circat.Pair  as P
+import qualified Circat.LTree as L
+import qualified Circat.RTree as R
 
 import Data.Newtypes.PrettyDouble (PrettyDouble(..))
 
@@ -47,5 +51,6 @@ instance ApproxEq a => ApproxEq [a] where
 approxEqFoldable :: (ApproxEq a, Foldable f) => f a -> f a -> Bool
 approxEqFoldable as bs = toList as =~ toList bs
 
--- instance ApproxEq a => ApproxEq (L.Tree n a) where (=~) = approxEqFoldable
--- instance ApproxEq a => ApproxEq (R.Tree n a) where (=~) = approxEqFoldable
+instance ApproxEq a => ApproxEq (P.Pair   a) where (=~) = approxEqFoldable
+instance ApproxEq a => ApproxEq (L.Tree n a) where (=~) = approxEqFoldable
+instance ApproxEq a => ApproxEq (R.Tree n a) where (=~) = approxEqFoldable
