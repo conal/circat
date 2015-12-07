@@ -154,13 +154,13 @@ O         :: g  (f a)   -> (g :. f) a
 
 type AFS h = (Applicative h, Foldable h, Sized h, LScan h)
 
-twiddle :: (AFS g, AFS f, RealFloat a) => Unop (g (f (Complex a)))
-twiddle = (liftA2.liftA2) (*) twiddles
+twiddle :: forall g f a. (AFS g, AFS f, RealFloat a) => Unop (g (f (Complex a)))
+twiddle = (liftA2.liftA2) (*) (twiddles (tySize(g :. f)))
 {-# INLINE twiddle #-}
 
 -- Twiddle factors.
-twiddles :: forall g f a. (AFS g, AFS f, RealFloat a) => g (f (Complex a))
-twiddles = powers <$> powers (omega (tySize(g :. f)))
+twiddles :: (AFS g, AFS f, RealFloat a) => Int -> g (f (Complex a))
+twiddles n = powers <$> powers (omega n)
 {-# INLINE twiddles #-}
 
 omega :: (Integral n, RealFloat a) => n -> Complex a
@@ -169,7 +169,7 @@ omega n = cis (- 2 * pi / fromIntegral n)
 -- omega n = exp (- 2 * (0:+1) * pi / fromIntegral n)
 {-# INLINE omega #-}
 
--- | @'exp' (i * a)@
+-- | @'exp' (i * a)
 cis :: RealFloat a => a -> Complex a
 cis a = cos a :+ sin a
 
@@ -245,21 +245,11 @@ dftT xs = out <$> indices
 
 -- Perhaps dftT isn't very useful. Its result and argument types match, unlike fft.
 
--- -- | General dot product
--- dot :: (Foldable g, Traversable g, Foldable f, Applicative f, Num a) => g (f a) -> a
--- dot = sum . fmap product . transpose
-
--- -- | Binary dot product
--- (<.>) :: (Applicative f, Foldable f, Num a) => f a -> f a -> a
--- as <.> bs = dot (as :# bs)
-
--- -- as <.> bs = (sum . fmap product . transpose) (as :# bs)
-
 dftQ :: forall f a. (AFS f, RealFloat a) => Unop (f (Complex a))
-dftQ as = (<.> as) <$> (powers <$> powers (omega (tySize(f))))
+dftQ as = (<.> as) <$> twiddles (tySize(f))
 {-# INLINE dftQ #-}
 
--- Infix binary dot product
+-- Binary dot product
 infixl 7 <.>
 (<.>) :: (Foldable f, Applicative f, Num a) => f a -> f a -> a
 u <.> v = sum (liftA2 (*) u v)
@@ -285,10 +275,10 @@ p1 :: Pair C
 p1 = 1 :# 0
 
 tw1 :: L.Tree N1 (Pair C)
-tw1 = twiddles
+tw1 = twiddles (tySize (L.Tree N1 :. Pair))
 
 tw2 :: L.Tree N2 (Pair C)
-tw2 = twiddles
+tw2 = twiddles (tySize (L.Tree N2 :. Pair))
 
 -- Adapted from Dave's testing
 
@@ -348,6 +338,17 @@ dftQIsDft = toList . dftQ =~= dft . toList
 
 -- PrettyDouble doesn't yet have an Arbitrary instance, so use Double for now
 type C' = Complex Double
+
+transposeTwiddleCommutes :: (AFS g, Traversable g, AFS f, (ApproxEq (f (g C'))))
+                         => g (f C') -> Bool
+transposeTwiddleCommutes =
+ twiddle . transpose =~= twiddle . transpose
+
+prop_transposeTwiddle_L3P :: L.Tree N3 (Pair C') -> Bool
+prop_transposeTwiddle_L3P = transposeTwiddleCommutes
+
+prop_transposeTwiddle_R3P :: R.Tree N3 (Pair C') -> Bool
+prop_transposeTwiddle_R3P = transposeTwiddleCommutes
 
 prop_dftQ_R3 :: R.Tree N3 C' -> Bool
 prop_dftQ_R3 = dftQIsDft
