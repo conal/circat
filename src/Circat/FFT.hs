@@ -160,8 +160,10 @@ twiddle = (liftA2.liftA2) (*) (twiddles (tySize(g :. f)))
 
 -- Twiddle factors.
 twiddles :: (AFS g, AFS f, RealFloat a) => Int -> g (f (Complex a))
-twiddles n = powers <$> powers (omega n)
+twiddles = fmap powers . powers . omega
 {-# INLINE twiddles #-}
+
+-- twiddles n = powers <$> powers (omega n)
 
 omega :: (Integral n, RealFloat a) => n -> Complex a
 omega n = cis (- 2 * pi / fromIntegral n)
@@ -342,7 +344,7 @@ type C' = Complex Double
 transposeTwiddleCommutes :: (AFS g, Traversable g, AFS f, (ApproxEq (f (g C'))))
                          => g (f C') -> Bool
 transposeTwiddleCommutes =
- twiddle . transpose =~= twiddle . transpose
+ twiddle . transpose =~= transpose . twiddle
 
 prop_transposeTwiddle_L3P :: L.Tree N3 (Pair C') -> Bool
 prop_transposeTwiddle_L3P = transposeTwiddleCommutes
