@@ -45,6 +45,7 @@ Library
                     Circat.Shift
                     Circat.Mealy
                     Circat.Scan
+                    Circat.Complex
                     Circat.FFT
                     Circat.Circuit
                     Circat.Netlist
