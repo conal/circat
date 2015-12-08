@@ -141,14 +141,14 @@ instance ( Applicative f , Traversable f , Traversable g
 
 -- Types in fft for (g :. f):
 
-unO       :: (g :. f) a -> g  (f  a)
-transpose :: g  (f  a)  -> f  (g  a)
-fmap onG  :: f  (g  a)  -> f  (g' a)
-transpose :: f  (g' a)  -> g' (f  a)
-twiddle   :: g' (f  a)  -> g' (f  a)
-fmap onF  :: g' (f  a)  -> g' (f' a)
-transpose :: g' (f' a)  -> f' (g' a)
-O         :: g  (f a)   -> (g :. f) a
+  unO       :: (g :. f) a -> g  (f  a)
+  transpose :: g  (f  a)  -> f  (g  a)
+  fmap fft  :: f  (g  a)  -> f  (g' a)
+  transpose :: f  (g' a)  -> g' (f  a)
+  twiddle   :: g' (f  a)  -> g' (f  a)
+  fmap fft  :: g' (f  a)  -> g' (f' a)
+  transpose :: g' (f' a)  -> f' (g' a)
+  O         :: g  (f a)   -> (g :. f) a
 
 #endif
 
