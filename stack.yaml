@@ -1,0 +1,16 @@
+flags: {}
+packages:
+- '.'
+- /Users/conal/git-repos/netlist/netlist/
+- /Users/conal/git-repos/netlist/netlist-to-verilog/
+- /Users/conal/git-repos/netlist/netlist-to-vhdl/
+- /Users/conal/git-repos/netlist/verilog/
+extra-deps:
+- TypeCompose-0.9.10
+- applicative-numbers-0.1.3
+- netlist-0.3.1
+- treeviz-2.0.3
+- ty-0.1.6
+- type-unary-0.2.21
+
+resolver: lts-2.22
