@@ -1,10 +1,11 @@
 flags: {}
 packages:
 - '.'
-- /Users/conal/git-repos/netlist/netlist/
-- /Users/conal/git-repos/netlist/netlist-to-verilog/
-- /Users/conal/git-repos/netlist/netlist-to-vhdl/
-- /Users/conal/git-repos/netlist/verilog/
+# netlist is a symlink to the KU netlist libraries
+- netlist/netlist/
+- netlist/netlist-to-verilog/
+- netlist/netlist-to-vhdl/
+- netlist/verilog/
 extra-deps:
 - TypeCompose-0.9.10
 - applicative-numbers-0.1.3
