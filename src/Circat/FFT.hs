@@ -277,10 +277,10 @@ p1 :: Pair C
 p1 = 1 :# 0
 
 tw1 :: L.Tree N1 (Pair C)
-tw1 = twiddles (tySize (L.Tree N1 :. Pair))
+tw1 = twiddles (tySize(L.Tree N1 :. Pair))
 
 tw2 :: L.Tree N2 (Pair C)
-tw2 = twiddles (tySize (L.Tree N2 :. Pair))
+tw2 = twiddles (tySize(L.Tree N2 :. Pair))
 
 -- Adapted from Dave's testing
 
