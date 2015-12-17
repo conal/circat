@@ -31,11 +31,11 @@ module Circat.Pair
 
 import Prelude hiding (id,(.),curry,uncurry,reverse)
 
-import Data.Monoid (Monoid(..),(<>))
-import Data.Functor ((<$>))
-import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..))
-import Control.Applicative (Applicative(..),liftA2)
+import Data.Monoid ({-Monoid(..),-}(<>))
+-- import Data.Functor ((<$>))
+-- import Data.Foldable (Foldable(..))
+-- import Data.Traversable (Traversable(..))
+import Control.Applicative ({-Applicative(..),-}liftA2)
 import Data.Ord (comparing)
 import Data.Typeable (Typeable)
 import Data.Data (Data)
@@ -44,7 +44,7 @@ import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
 
 -- More in FunctorCombo.Pair
 
-import Circat.Misc (Unop,(:*),Reversible(..))
+import Circat.Misc (Unop,(:*),Reversible(..),Sized(..))
 import Circat.Category  -- (ProductCat(..))
 -- import Circat.State (pureState,StateFun,StateExp)
 -- import Circat.If
@@ -115,6 +115,10 @@ instance Traversable Pair where
   traverse h (fa :# fb) = liftA2 (:#) (h fa) (h fb)
   -- sequenceA (fa :# fb) = liftA2 (:#) fa fb
   {-# INLINE traverse #-}
+
+instance Sized Pair where
+  size = const 2
+  {-# INLINE size #-}
 
 instance LScan Pair where
   lscan (a :# b) = (mempty :# a, a <> b)

@@ -25,8 +25,8 @@ module Circat.Shift
 
 import Prelude hiding (zip,unzip,zipWith)
 
-import Data.Traversable (Traversable(..)) -- ,mapAccumR
-import Control.Applicative (Applicative(..))
+-- import Data.Traversable (Traversable(..)) -- ,mapAccumR
+-- import Control.Applicative (Applicative(..))
 import Data.Tuple (swap)
 
 import Circat.Misc ((:*),Unop)

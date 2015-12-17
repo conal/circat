@@ -10,6 +10,7 @@
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
 {-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 
 #ifdef Testing
 {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -35,11 +36,11 @@ module Circat.RaggedTree
 
 import Prelude hiding (zipWith)
 
-import Data.Monoid (Monoid(..),(<>))
-import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..),liftA2)
-import Data.Foldable (Foldable(..))
-import Data.Traversable (Traversable(..))
+import Data.Monoid ({-Monoid(..),-}(<>))
+-- import Data.Functor ((<$>))
+import Control.Applicative ({-Applicative(..),-}liftA2)
+-- import Data.Foldable (Foldable(..))
+-- import Data.Traversable (Traversable(..))
 import Data.Typeable (Typeable)
 
 import Circat.Misc ((:*))

@@ -1,20 +1,22 @@
 {-# LANGUAGE CPP #-}
--- #define Induction
+#define Induction
 {-# LANGUAGE GADTs, KindSignatures #-}
 {-# LANGUAGE ScopedTypeVariables, Rank2Types, InstanceSigs, ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
 {-# LANGUAGE UndecidableInstances #-}  -- See below
+
 #ifdef Induction
 {-# LANGUAGE ConstraintKinds, PatternGuards #-}
 #endif
 
 {-# OPTIONS_GHC -Wall #-}
 
--- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
@@ -38,14 +40,15 @@ module Circat.RTree
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
 
-import Data.Monoid (Monoid(..))
-import Data.Functor ((<$),(<$>))
-import Control.Applicative (Applicative(..),liftA2)
+-- import Data.Monoid (Monoid(..))
+-- import Data.Functor ((<$),(<$>))
+import Control.Applicative ({-Applicative(..),-}liftA2)
 import Control.Monad (join)
-import Data.Foldable
-import Data.Traversable (Traversable(..))
+-- import Data.Foldable
+-- import Data.Traversable (Traversable(..))
 import Data.Typeable (Typeable)
 import Test.QuickCheck (Gen,Arbitrary(..),CoArbitrary(..))
+import GHC.Generics (Generic1(..),Par1(..),(:.:)(..))
 
 #ifdef Induction
 import Data.Constraint (Dict(..))
@@ -54,7 +57,7 @@ import Data.Constraint (Dict(..))
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
 
-import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose)
+import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose,Sized(..),genericSize,twoNat)
 import Circat.Show (showsApp1)
 import Circat.Category
 -- import Circat.Classes
@@ -72,6 +75,16 @@ data RTree :: * -> * -> * where
   B :: Pair (Tree n a) -> Tree (S n) a
 
 type Tree = RTree
+
+instance Generic1 (Tree Z) where
+  type Rep1 (Tree Z) = Par1
+  from1 = Par1 . unL
+  to1   = L . unPar1
+
+instance Generic1 (Tree (S n)) where
+  type Rep1 (Tree (S n)) = Pair :.: Tree n
+  from1 = Comp1 . unB
+  to1   = B . unComp1
 
 deriving instance Eq a => Eq (Tree n a)
 deriving instance Typeable Tree
@@ -459,7 +472,35 @@ B (zipWith (zipWith f) u v) :: Tree (S n) c
 
 #endif
 
+type D n = Dict (Generic1 (Tree n), Sized (Rep1 (Tree n)), LScan (Rep1 (Tree n)))
+
+asG :: IsNat n => D n
+asG = asG' nat
+
+asG' :: Nat n -> D n
+asG' Zero                  = Dict
+asG' (Succ (asG' -> Dict)) = Dict
+
+instance IsNat n => Sized (Tree n) where
 #if 1
+  size = const (twoNat (nat :: Nat n))
+#else
+  size | Dict <- asG :: D n = genericSize
+#endif
+  {-# INLINE size #-}
+
+#if 1
+instance IsNat n => LScan (Tree n) where
+  lscan | Dict <- asG :: D n = genericLscan
+#elif 0
+instance (Generic1 (Tree n), LScan (Rep1 (Tree n)))
+      => LScan (Tree n) where lscan = genericLscan
+#elif 0
+instance LScan (Tree Z) where lscan = genericLscan
+
+instance (IsNat n, LScan (Tree n)) => LScan (Tree (S n)) where
+  lscan = genericLscan
+#elif 1
 instance IsNat n => LScan (Tree n) where lscan = lscan' nat
 
 lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)

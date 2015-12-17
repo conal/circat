@@ -29,11 +29,11 @@ module Circat.Scan
 
 import Prelude hiding (zip,unzip,zipWith)
 
-import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..),All(..),Any(..))
-import Data.Functor ((<$>))
+import Data.Monoid ({- Monoid(..), -}(<>),Sum(..),Product(..),All(..),Any(..))
+-- import Data.Functor ((<$>))
 import Control.Arrow ((***),first)
-import Data.Traversable (Traversable(..)) -- ,mapAccumR
-import Control.Applicative (Applicative(..),liftA2)
+-- import Data.Traversable (Traversable(..)) -- ,mapAccumR
+import Control.Applicative ({-Applicative(..),-}liftA2)
 import Data.Tuple (swap)
 import GHC.Generics
 

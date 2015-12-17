@@ -42,6 +42,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- for OkayArr
+{-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -80,13 +81,13 @@ module Circat.Circuit
 import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
-import Data.Monoid (mempty,(<>),Sum,Product)
+import Data.Monoid ({-mempty,-}(<>),Sum,Product)
 import Data.Newtypes.PrettyDouble
-import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..),liftA2)
+-- import Data.Functor ((<$>))
+import Control.Applicative ({-Applicative(..),-}liftA2)
 import Control.Monad (unless)
 import Control.Arrow (arr,Kleisli(..))
-import Data.Foldable (foldMap,toList)
+import Data.Foldable ({-foldMap,-}toList)
 -- import Data.Typeable                    -- TODO: imports
 -- import Data.Tuple (swap)
 import Data.Function (on)

@@ -5,6 +5,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ConstraintKinds, ViewPatterns #-}
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
@@ -43,12 +44,13 @@ import Data.Traversable (Traversable(..))
 import Control.Arrow (arr,Kleisli)
 import Data.Typeable (Typeable)
 import Test.QuickCheck (Gen,Arbitrary(..),CoArbitrary(..))
-import GHC.Generics (Generic,Generic1(..),Par1(..),(:.:)(..))
+import GHC.Generics (Generic1(..),Par1(..),(:.:)(..))
+import Data.Constraint (Dict(..))
 
 import TypeUnary.Nat hiding ((:*:))
 import TypeUnary.Vec (Vec(..))
 
-import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose) -- (:*)
+import Circat.Misc (Unop,(<~),Reversible(..),transpose,inTranspose,Sized(..),genericSize,twoNat) -- (:*)
 import Circat.Show (showsApp1)
 import Circat.Category
 import Circat.Classes
@@ -440,7 +442,29 @@ zipWith' (Succ m) h = inB2 (zipWith' m (zipWith h))
 -- TODO: Rewrite zipWith more elegantly after changing to Nat without explicit
 -- predecessor argument.
 
+instance IsNat n => Sized (Tree n) where
 #if 1
+  size = const (twoNat (nat :: Nat n))
+#else
+  size | Dict <- asG :: D n = genericSize
+#endif
+  {-# INLINE size #-}
+
+type D n = Dict (Generic1 (Tree n), LScan (Rep1 (Tree n)))
+
+gDict :: IsNat n => D n
+gDict = gDict' nat
+
+gDict' :: Nat n -> D n
+gDict' Zero                  = Dict
+gDict' (Succ (gDict' -> Dict)) = Dict
+
+#if 1
+instance IsNat n => LScan (Tree n) where
+  lscan | Dict <- gDict :: D n = genericLscan
+#elif 0
+instance (Generic1 (Tree n), LScan (Rep1 (Tree n)))
+      => LScan (Tree n) where lscan = genericLscan
 instance LScan (Tree Z) where lscan = genericLscan
 
 #ifdef SingleStepGeneric

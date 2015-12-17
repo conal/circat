@@ -1,5 +1,8 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TypeOperators, TypeFamilies, MultiParamTypeClasses #-}
-{-# LANGUAGE ExplicitForAll #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -23,15 +26,21 @@ module Circat.Misc where
 
 import Prelude hiding (id,(.))
 
-import Data.Monoid (Monoid(..))
-import Data.Traversable (Traversable(sequenceA))
+-- import Data.Monoid (Monoid(..))
+-- import Data.Traversable (Traversable(sequenceA))
 import Control.Category (Category(..))
-import Control.Applicative (Applicative)
+-- import Control.Applicative (Applicative)
 
 import Unsafe.Coerce (unsafeCoerce)     -- see below
 
+import GHC.Generics hiding (C)
+
 import Control.Newtype
 import Data.Proof.EQ ((:=:)(..))
+
+import Control.Compose ((:.)(..))
+
+import TypeUnary.Nat (Nat(..),natToZ)
 
 -- | Unary transformation
 type Unop a = a -> a
@@ -151,3 +160,47 @@ a ==? b | a === b   = unsafeCoerce (Just Refl)
 class Evalable e where
   type ValT e
   eval :: e -> ValT e
+
+{--------------------------------------------------------------------
+    Statically sized functors
+--------------------------------------------------------------------}
+
+class Sized f where
+  size :: f () -> Int -- ^ Argument is ignored at runtime
+  -- Temporary hack to avoid newtype-like representation.
+  sizeDummy :: f a
+  sizeDummy = undefined
+
+-- TODO: Switch from f () to f Void
+
+-- | Generic 'size'
+genericSize :: (Generic1 f, Sized (Rep1 f)) => f () -> Int
+genericSize = size . from1
+
+-- The argument to size is unfortunate. When GHC Haskell has explicit type
+-- application (<https://ghc.haskell.org/trac/ghc/wiki/TypeApplication>),
+-- replace "size (undefined :: f ())" with "size @f".
+-- Meanwhile, a macro helps.
+
+#define tySize(f) (size (undefined :: (f) ()))
+
+-- | Useful default for 'size'.
+sizeAF :: forall f. (Applicative f, Foldable f) => f () -> Int
+sizeAF = const (sum (pure 1 :: f Int))
+
+instance Sized Par1 where
+  size = const 1
+  {-# INLINE size #-}
+
+instance (Sized g, Sized f) => Sized (g :.: f) where
+  size = const (tySize(g) * tySize(f))
+  {-# INLINE size #-}
+
+-- Phasing out, in favor of Generics version ((:.:))
+instance (Sized g, Sized f) => Sized (g :. f) where
+  size = const (tySize(g) * tySize(f))
+  {-# INLINE size #-}
+
+-- | @2 ^ n@
+twoNat :: Integral m => Nat n -> m
+twoNat n = 2 ^ (natToZ n :: Int)
