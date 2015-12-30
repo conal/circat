@@ -52,8 +52,8 @@ class HasRep a where
 --   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
 --   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
 -- 
--- Note: Using Rep a ~ a' rather than the reverse to make the calls a little to
--- construct (using normaliseType and no mkSymCo).
+-- Note: Using Rep a ~ a' rather than the reverse to make the calls a little
+-- easier to construct (using normaliseType and no mkSymCo).
 
 type instance Rep (a,b,c) = ((a,b),c)
 instance HasRep (a,b,c) where
