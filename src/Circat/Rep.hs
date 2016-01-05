@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),bottom) where
+module Circat.Rep (Rep,HasRep(..),abstRepr,bottom) where
 
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
@@ -46,6 +46,10 @@ type family Rep a
 class HasRep a where
   repr :: Rep a ~ a' => a -> a'
   abst :: Rep a ~ a' => a' -> a
+
+-- Identity as @'abst' . 'repr'@.
+abstRepr :: HasRep a => a -> a
+abstRepr = abst . repr
 
 -- Note types:
 -- 

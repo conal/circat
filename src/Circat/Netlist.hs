@@ -25,7 +25,7 @@ module Circat.Netlist
   , saveAsVerilog
   ) where
 
-import Data.Monoid (mempty,(<>),mconcat)
+import Data.Monoid ((<>))
 import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)

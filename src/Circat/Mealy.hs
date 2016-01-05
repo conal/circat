@@ -43,9 +43,8 @@ module Circat.Mealy
 import Prelude hiding (id,(.),sum,product,scanl)
 import Control.Category
 import Control.Arrow
-import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..), liftA2)
-import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
+import Control.Applicative (liftA2)
+import Data.Monoid ((<>),Sum(..),Product(..))
 import Data.Foldable (Foldable(..),sum,product)
 import Data.Tuple (swap)
 import Data.List (unfoldr)

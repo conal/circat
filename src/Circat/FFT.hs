@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP, Rank2Types, TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables, PatternGuards #-}
 {-# LANGUAGE ConstraintKinds, ViewPatterns, ParallelListComp #-}
 {-# LANGUAGE FlexibleContexts, TypeSynonymInstances #-}
 {-# LANGUAGE GADTs #-}
