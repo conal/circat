@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),abstRepr,bottom) where
+module Circat.Rep (Rep,HasRep(..),abst',repr',bottom) where
 
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
@@ -47,17 +47,29 @@ class HasRep a where
   repr :: Rep a ~ a' => a -> a'
   abst :: Rep a ~ a' => a' -> a
 
--- Identity as @'abst' . 'repr'@.
-abstRepr :: HasRep a => a -> a
-abstRepr = abst . repr
+-- Non-inlinable 'abst'
+-- abst' :: forall a a'. (HasRep a, Rep a ~ a') => a' -> a
+abst' :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
+abst' = abst
+{-# NOINLINE abst' #-}
+
+-- Non-inlinable 'repr'
+-- repr' :: forall a a'. (HasRep a, Rep a ~ a') => a -> a'
+repr' :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
+repr' = repr
+{-# NOINLINE repr' #-}
 
 -- Note types:
 -- 
---   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
---   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
+--   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
+--   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
 -- 
 -- Note: Using Rep a ~ a' rather than the reverse to make the calls a little
 -- easier to construct (using normaliseType and no mkSymCo).
+
+-- -- Identity as @'abst' . 'repr'@.
+-- abstRepr :: HasRep a => a -> a
+-- abstRepr = abst . repr
 
 type instance Rep (a,b,c) = ((a,b),c)
 instance HasRep (a,b,c) where
