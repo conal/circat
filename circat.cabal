@@ -7,7 +7,7 @@ Description:
   Experiments in circuit construction using a categorical vocabulary
 Author:             Conal Elliott
 Maintainer:         conal@conal.net
-Copyright:          (c) 2013-2015 by Tabula Inc and Conal Elliott
+Copyright:          (c) 2013-2016 by Tabula Inc and Conal Elliott
 Homepage:           http://github.com/conal/circat
 License:            BSD3
 License-File:       COPYING
@@ -37,6 +37,7 @@ Library
                     Circat.Category
                     Circat.Classes
                     Circat.Rep
+--                     Circat.ZRep
                     Circat.Pair
                     Circat.RTree
                     Circat.LTree
