@@ -174,40 +174,33 @@ instance Functor (Tree n) where
 -- TODO: Categorical generalization (easy)
 
 instance IsNat n => Applicative (Tree n) where
-  pure a = a <$ units nat
-  -- (<*>)  = ap' nat
-  (<*>)  = ap''
-  -- (<*>)  = ap'''
+  -- pure a = a <$ units nat
+  pure = pureT nat
+  (<*>)  = apT
   {-# INLINE pure #-}
   {-# INLINE (<*>) #-}
 
---   (<*>)  = ap' nat
---    where
---      ap' :: Nat m -> Tree m (a -> b) -> Tree m a -> Tree m b
---      ap' Zero     = inL2 ($)
---      ap' (Succ n) = inB2 (liftA2 (ap' n))
---      {-# INLINE ap' #-}
+apT :: Tree m (a -> b) -> Tree m a -> Tree m b
+apT (L f ) = inL (\ x -> f x)
+apT (B fs) = inB (\ xs -> liftA2 apT fs xs)
+{-# INLINE apT #-}
 
---   L f  <*> L x  = L (f x)
---   B fs <*> B xs = B (liftA2 (<*>) fs xs)
+-- units :: Nat n -> Tree n ()
+-- units Zero     = L ()
+-- units (Succ n) = B (pure (units n))
+-- {-# INLINE units #-}
 
---   (<*>)  = ap
+-- pureT :: Nat n -> a -> Tree n a
+-- pureT Zero     = L
+-- pureT (Succ m) = B . pure . pureT m
+-- {- INLINE pureT -}
 
--- ap :: Tree n (a -> b) -> Tree n a -> Tree n b
--- L f  `ap` L x  = L (f x)
--- B fs `ap` B xs = B (liftA2 ap fs xs)
--- _    `ap` _    = error "(<*>) on Tree n: impossible case"
--- {-# INLINE ap #-}
+-- The definition above doesn't yield an unfolding, but the following does.
 
-ap'' :: Tree m (a -> b) -> Tree m a -> Tree m b
-ap'' (L f ) = inL (\ x -> f x)
-ap'' (B fs) = inB (\ xs -> liftA2 ap'' fs xs)
-{-# INLINE ap'' #-}
-
-units :: Nat n -> Tree n ()
-units Zero     = L ()
-units (Succ n) = B (pure (units n))
-{-# INLINE units #-}
+pureT :: Nat n -> a -> Tree n a
+pureT Zero     a = L a
+pureT (Succ m) a = B (pure (pureT m a))
+{-# INLINE pureT #-}
 
 #if 1
 
@@ -216,26 +209,10 @@ instance Foldable (Tree n) where
   foldMap f (B ts) = (foldMap.foldMap) f ts
   {-# INLINE foldMap #-}
 
--- instance Foldable (Tree Z) where
---   foldMap f (L a ) = f a
---   {-# INLINE foldMap #-}
-
--- instance Foldable (Tree n) => Foldable (Tree (S n)) where
---   foldMap f (B ts) = (foldMap.foldMap) f ts
---   {-# INLINE foldMap #-}
-
 instance Traversable (Tree n) where
   traverse f (L a ) = L <$> f a
   traverse f (B ts) = B <$> (traverse.traverse) f ts
   {-# INLINE traverse #-}
-
--- instance Traversable (Tree Z) where
---   traverse f (L a ) = L <$> f a
---   {-# INLINE traverse #-}
-
--- instance Traversable (Tree n) => Traversable (Tree (S n)) where
---   traverse f (B ts) = B <$> (traverse.traverse) f ts
---   {-# INLINE traverse #-}
 
 instance IsNat n => Monad (Tree n) where
   return = pure
@@ -263,16 +240,6 @@ B (joinT' <$> joinT' (sequenceA <$> ((fmap.fmap) unB ts))) :: Tree (S n) a
 #else
 
 instance IsNat n => Foldable (Tree n) where
-{-
-  foldMap :: forall a o. Monoid o => (a -> o) -> Tree n a -> o
-  foldMap f = foldMap' nat
-   where
-     foldMap' :: Nat m -> Tree m a -> o
---      foldMap' Zero     = \ (L a ) -> f a
---      foldMap' (Succ m) = \ (B ts) -> foldMap (foldMap' m) ts
-     foldMap' Zero     = f . unL
-     foldMap' (Succ m) = foldMap (foldMap' m) . unB
--}
   foldMap = foldMap' nat
 
 foldMap' :: Monoid o => Nat m -> (a -> o) -> Tree m a -> o
@@ -287,7 +254,7 @@ instance IsNat n => Traversable (Tree n) where
      traverse' :: Nat m -> Tree m a -> f (Tree m b)
 --      traverse' Zero = \ (L a ) -> L <$> f a
 --      traverse' (Succ m) = \ (B ts) -> B <$> traverse (traverse' m) ts
-     traverse' Zero = fmap L . f . unL
+     traverse' Zero     = fmap L . f . unL
      traverse' (Succ m) = fmap B . traverse (traverse' m) . unB
   {-# INLINE traverse #-}
 
