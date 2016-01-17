@@ -47,18 +47,6 @@ class HasRep a where
   repr :: Rep a ~ a' => a -> a'
   abst :: Rep a ~ a' => a' -> a
 
--- Non-inlinable 'repr'
--- repr' :: forall a a'. (HasRep a, Rep a ~ a') => a -> a'
-repr' :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
-repr' = repr
-{-# NOINLINE repr' #-}
-
--- Non-inlinable 'abst'
--- abst' :: forall a a'. (HasRep a, Rep a ~ a') => a' -> a
-abst' :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
-abst' = abst
-{-# NOINLINE abst' #-}
-
 -- Note types:
 -- 
 --   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
@@ -70,6 +58,19 @@ abst' = abst
 -- -- Identity as @'abst' . 'repr'@.
 -- abstRepr :: HasRep a => a -> a
 -- abstRepr = abst . repr
+
+-- Non-inlinable 'repr'
+repr' :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
+repr' = repr
+{-# NOINLINE repr' #-}
+
+-- Non-inlinable 'abst'
+abst' :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
+abst' = abst
+{-# NOINLINE abst' #-}
+
+-- TODO: Move repr' and abst' to the compiler, since they're about controlling
+-- inlining etc.
 
 type instance Rep (a,b,c) = ((a,b),c)
 instance HasRep (a,b,c) where
