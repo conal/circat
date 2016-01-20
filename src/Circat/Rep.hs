@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),abst',repr',bottom) where
+module Circat.Rep (Rep,HasRep(..),bottom) where
 
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
@@ -58,19 +58,6 @@ class HasRep a where
 -- -- Identity as @'abst' . 'repr'@.
 -- abstRepr :: HasRep a => a -> a
 -- abstRepr = abst . repr
-
--- Non-inlinable 'repr'
-repr' :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
-repr' = repr
-{-# NOINLINE repr' #-}
-
--- Non-inlinable 'abst'
-abst' :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
-abst' = abst
-{-# NOINLINE abst' #-}
-
--- TODO: Move repr' and abst' to the compiler, since they're about controlling
--- inlining etc.
 
 type instance Rep (a,b,c) = ((a,b),c)
 instance HasRep (a,b,c) where
