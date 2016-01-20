@@ -36,6 +36,8 @@ module Circat.RTree
   , get, (!), subtree, update
   , butterfly, butterfly'
   , tmerge, bottomSplit
+  -- Temporary:
+  , asG'
   ) where
 
 import Prelude hiding (id,(.),uncurry,zipWith,reverse)
@@ -447,6 +449,7 @@ asG = asG' nat
 asG' :: Nat n -> D n
 asG' Zero                  = Dict
 asG' (Succ (asG' -> Dict)) = Dict
+{-# INLINE asG' #-}
 
 instance IsNat n => Sized (Tree n) where
 #if 1
@@ -456,19 +459,24 @@ instance IsNat n => Sized (Tree n) where
 #endif
   {-# INLINE size #-}
 
-#if 1
+#if 0
 instance IsNat n => LScan (Tree n) where
   lscan | Dict <- asG :: D n = genericLscan
+  {-# INLINE lscan #-}
 #elif 0
 instance (Generic1 (Tree n), LScan (Rep1 (Tree n)))
       => LScan (Tree n) where lscan = genericLscan
+                              {-# INLINE lscan #-}
 #elif 0
 instance LScan (Tree Z) where lscan = genericLscan
 
 instance (IsNat n, LScan (Tree n)) => LScan (Tree (S n)) where
   lscan = genericLscan
+  {-# INLINE lscan #-}
 #elif 1
-instance IsNat n => LScan (Tree n) where lscan = lscan' nat
+instance IsNat n => LScan (Tree n) where
+  lscan = lscan' nat
+  {-# INLINE lscan #-}
 
 lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
 lscan' Zero     = \ (L a)  -> (L mempty, a)
@@ -480,6 +488,7 @@ instance LScan (Tree Z) where
 
 instance LScan (Tree n) => LScan (Tree (S n)) where
   lscan (B ts)  = first B (lscanComp ts)
+  {-# INLINE lscan #-}
 #endif
 
 #if 0

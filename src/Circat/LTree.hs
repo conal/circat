@@ -460,7 +460,7 @@ gDict' :: Nat n -> D n
 gDict' Zero                  = Dict
 gDict' (Succ (gDict' -> Dict)) = Dict
 
-#if 1
+#if 0
 instance IsNat n => LScan (Tree n) where
   lscan | Dict <- gDict :: D n = genericLscan
 #elif 0
