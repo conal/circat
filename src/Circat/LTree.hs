@@ -13,7 +13,7 @@
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
--- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
+{-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
 
 ----------------------------------------------------------------------
 -- |
@@ -486,7 +486,9 @@ instance LScan (Tree Z) where
 instance (Zippable (Tree n), LScan (Tree n)) => LScan (Tree (S n)) where
   lscan (B ts)  = first B (lscanComp ts)
 #else
-instance IsNat n => LScan (Tree n) where lscan = lscan' nat
+instance IsNat n => LScan (Tree n) where
+  lscan = lscan' nat
+  {-# INLINE lscan #-}
 
 lscan' :: Monoid a => Nat n -> Tree n a -> (Tree n a, a)
 lscan' Zero     = \ (L a)  -> (L mempty, a)
