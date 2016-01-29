@@ -2193,8 +2193,8 @@ instance BottomCat (:>) a => BottomCat (:>) (Pair a) where
      {-# NOINLINE bc #-}
 
 -- Specialization of prodPair
-prodIfPair :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
-prodIfPair = half exl &&& half exr
+pairIf :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
+pairIf = half exl &&& half exr
   where
     half :: (u `k` a) -> ((Bool :* (u :* u)) `k` a)
     half f = ifC . second (twiceP f)
@@ -2202,7 +2202,7 @@ prodIfPair = half exl &&& half exr
 
 instance IfCat (:>) a => IfCat (:>) (Pair a)
  where
-   ifC = abstC . prodIfPair . second (twiceP reprC)
+   ifC = abstC . pairIf . second (twiceP reprC)
 
 #endif
 
