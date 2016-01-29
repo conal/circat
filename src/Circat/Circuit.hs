@@ -93,6 +93,7 @@ import Data.Foldable ({-foldMap,-}toList)
 import Data.Function (on)
 import Data.Maybe (fromMaybe,isJust)
 import Data.List (intercalate,group,sort,stripPrefix)
+import Data.Char (isAscii)
 #ifndef MealyToArrow
 import Data.List (partition)
 #endif
@@ -1441,12 +1442,12 @@ recordDots depths = nodes ++ edges
             portSticker :: (Int,Bus) -> String
             portSticker (p,b) =
                  bracket (portLab dir p) ++ showDepth b
-         -- Escape angle brackets and "|"
+         -- Escape angle brackets, "|", and other non-ascii
          escape :: Unop String
          escape [] = []
          escape (c:cs) = mbEsc (c : escape cs)
           where
-             mbEsc | c `elem` "<>|" = ('\\' :)
+             mbEsc | (c `elem` "<>|") || not (isAscii c)  = ('\\' :)
                    | otherwise     = id
    showDepth :: Bus -> String
 #ifdef ShowDepths
@@ -2130,17 +2131,6 @@ tyRep = const (ty (undefined :: Rep a))
 delayCRep :: (HasRep a, GenBuses (Rep a)) => a -> (a :> a)
 delayCRep a0 = abstC . delay (repr a0) . reprC
 
-
-#if 0
-
--- class GenBuses a where
---   genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
-
-#define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where genBuses' = genBusesRep'
-
-#else
-
 #define AbsTy(abs) \
 instance GenBuses (Rep (abs)) => GenBuses (abs) where \
   { genBuses' = genBusesRep' ; delay = delayCRep ; ty = tyRep }; \
@@ -2149,13 +2139,11 @@ instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
 instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };\
 instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) where uncurries = id
 
-#endif
-
 AbsTy((a,b,c))
 AbsTy((a,b,c,d))
 AbsTy(Maybe a)
 AbsTy(Either a b)
-AbsTy(Pair a)
+-- AbsTy(Pair a)  -- See below
 AbsTy(Vec Z a)
 AbsTy(Vec (S n) a)
 AbsTy(RTree.Tree Z a)
@@ -2169,3 +2157,54 @@ AbsTy(Complex a)
 AbsTy(Sum a)
 AbsTy(PrettyDouble)
 AbsTy(Product a)
+
+#if 0
+AbsTy(Pair a)
+#else
+
+instance GenBuses q_q => Uncurriable (:>) q_q (Pair a) where
+  uncurries = id
+
+instance GenBuses a => GenBuses (Pair a) where
+  genBuses' prim ins o = do (a,oa) <- gb o
+                            (b,ob) <- gb oa
+                            return (abstB (PairB a b), ob)
+   where
+     gb :: Int -> CircuitM (Buses a,Int)
+     gb = genBuses' prim ins
+     {-# NOINLINE gb #-}
+  delay (a :# b) = abstC . (del a *** del b) . reprC
+   where
+     del :: a -> (a :> a)
+     del = delay
+     {-# NOINLINE del #-}
+  ty = const (PairT t t)
+   where
+     t = ty (undefined :: a)
+     {-# NOINLINE t #-}
+
+-- Toasts GHC without these NOINLINE pragmas.
+
+instance BottomCat (:>) a => BottomCat (:>) (Pair a) where
+  bottomC = abstC . (bc &&& bc)
+   where
+     bc :: Unit :> a
+     bc = bottomC
+     {-# NOINLINE bc #-}
+
+-- Specialization of prodPair
+prodIfPair :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
+prodIfPair = half exl &&& half exr
+  where
+    half :: (u `k` a) -> ((Bool :* (u :* u)) `k` a)
+    half f = ifC . second (twiceP f)
+    {-# NOINLINE half #-}
+
+instance IfCat (:>) a => IfCat (:>) (Pair a)
+ where
+   ifC = abstC . prodIfPair . second (twiceP reprC)
+
+#endif
+
+-- TODO: Rework Vec n as well, since it has the same redundancy issue as Pair,
+-- in a subtler form. Probably also Ragged.
