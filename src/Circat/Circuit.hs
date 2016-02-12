@@ -1405,6 +1405,12 @@ data Dir = In | Out deriving Show
 type PortNum = Int
 type CompNum = Int
 
+-- -- For more succinct labels, so as not to stress Graphviz so much.
+-- -- TODO: also compact the port numbers to base 64.
+-- instance Show Dir where
+--   show In  = "I"
+--   show Out = "O"
+
 taggedFrom :: Int -> [a] -> [(Int,a)]
 taggedFrom n = zip [n ..]
 
@@ -1437,7 +1443,9 @@ recordDots depths = nodes ++ edges
          ports _ "" _ = ""
          ports l s r = printf "%s{%s}%s" l s r
          labs :: Dir -> [Bus] -> String
-         labs dir bs = intercalate "|" (portSticker <$> tagged bs)
+         -- Labels. Use Dot string concat operator to avoid lexer buffer size limit.
+         -- See https://github.com/ellson/graphviz/issues/71 .
+         labs dir bs = intercalate "|\"+\"" (portSticker <$> tagged bs)
           where
             portSticker :: (Int,Bus) -> String
             portSticker (p,b) =
@@ -2206,5 +2214,9 @@ instance IfCat (:>) a => IfCat (:>) (Pair a)
 
 #endif
 
--- TODO: Rework Vec n as well, since it has the same redundancy issue as Pair,
--- in a subtler form. Probably also Ragged.
+-- TODO: Rework instances for Vec n as well, since it has the same redundancy
+-- issue as Pair, in a subtler form. Probably also Ragged.
+
+-- Better yet, rework the Pair instances in a more generic form, e.g., using
+-- Traversable for genBuses', so that they become easy to generalize and apply
+-- easily and efficiently to Vec n and others.
