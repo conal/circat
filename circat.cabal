@@ -19,11 +19,12 @@ source-repository head
   location:         git://github.com/conal/circat
 
 Library
-  hs-Source-Dirs:   src/
-  Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
+  hs-source-dirs:   src
+  include-dirs:     src
+  build-depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
                   , transformers, constraints
                   , QuickCheck >= 2.7.3
-                  , type-unary>=0.2.19
+                  , type-unary >= 0.2.19
                   , TypeCompose
                   , ty >= 0.1.5
                   , applicative-numbers
@@ -31,7 +32,7 @@ Library
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
                   , treeviz >= 2.0.2
 
-  Exposed-Modules:     
+  exposed-modules:     
                     Circat.Misc
                     Circat.Show
                     Circat.Category
@@ -52,8 +53,9 @@ Library
                     Circat.Netlist
                     Circat.ShowUtils
                     Circat.Prim
-  Other-Modules:
+  other-modules:
                     Circat.Examples
+  install-includes: Circat/AbsTy.inc
 
 
 -- TODO: Get Pair from uniform-pair, and move RTree & LTree elsewhere,
