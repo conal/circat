@@ -1,10 +1,8 @@
 {-# LANGUAGE CPP #-}
 
 -- #define NoOptimizeCircuit
-
 -- #define NoIfBotOpt
 -- #define NoIdempotence
-
 -- #define NoHashCons
 
 #define MealyToArrow
@@ -76,6 +74,8 @@ module Circat.Circuit
   , mealyAsArrow
   , unitizeMealyC
 --   , Complex(..),cis
+  -- For AbsTy
+  , abstB,abstC,reprC,Buses(..),pairIf,Ty(..)
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
@@ -132,6 +132,7 @@ import qualified Circat.LTree as LTree
 import Circat.RaggedTree (TU(..))
 import qualified Circat.RaggedTree as Rag
 
+
 {--------------------------------------------------------------------
     Buses
 --------------------------------------------------------------------}
@@ -186,10 +187,12 @@ newPinId :: CircuitM PinId
 newPinId = do { (p:ps',comps) <- Mtl.get ; Mtl.put (ps',comps) ; return p }
 
 newBus :: Width -> CircuitM Bus
-newBus w = flip Bus w <$> newPinId
+newBus w = -- trace "newBus" $
+           flip Bus w <$> newPinId
 
 newSource ::  Width -> String -> Sources -> Int -> CircuitM Source
-newSource w prim ins o = (\ b -> Source b prim ins o) <$> newBus w
+newSource w prim ins o = -- trace "newSource" $
+                         (\ b -> Source b prim ins o) <$> newBus w
 
 {--------------------------------------------------------------------
     Buses representing a given type
@@ -236,7 +239,7 @@ instance Show (Buses a) where
 
 -- TODO: Improve to Show instance with showsPrec
 
-data Ty = UnitT | BoolT | IntT | DoubleT | PairT Ty Ty deriving (Eq,Ord)
+data Ty = UnitT | BoolT | IntT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
 genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
@@ -250,11 +253,13 @@ type GS a = (GenBuses a, Show a)
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> Sources -> Int -> CircuitM (Buses a,Int)
-genBus wrap w prim ins o = do src <- newSource w prim ins o
+genBus wrap w prim ins o = -- trace (printf "genBus %d %s %d" w prim o) $
+                           do src <- newSource w prim ins o
                               return (wrap src,o+1)
 
 instance GenBuses Unit where
-  genBuses' _ _ o = return (UnitB,o)
+  genBuses' _ _ o = -- trace ("genBuses' @ Unit: " ++ show o) $
+                    return (UnitB,o)
   delay () = id
   ty = const UnitT
 
@@ -272,7 +277,8 @@ unDelayName = stripPrefix delayPrefix
 -- isDelayPrim = isJust . unDelayName . primName
 
 instance GenBuses Bool where
-  genBuses' = genBus BoolB 1
+  genBuses' = -- trace "genBuses' @ Bool" $
+              genBus BoolB 1
   delay = primDelay
   ty = const BoolT
 
@@ -288,6 +294,7 @@ instance GenBuses Double  where
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
   genBuses' prim ins o =
+    -- trace ("genBuses' @ " ++ show (ty (undefined :: a :* b))) $
     do (a,oa) <- genBuses' prim ins o
        (b,ob) <- genBuses' prim ins oa
        return (PairB a b, ob)
@@ -421,8 +428,12 @@ genComp prim a =
 -- constants such as bottom (and one day, zero).
 
 #else
-genComp prim a = do b <- genBuses prim (flattenBHack "genComp" prim a)
+genComp prim a = -- trace (printf "genComp %s %s --> %s"
+                 --         (show prim) (show a) (show (ty (undefined :: b)))) $
+                 do b <- genBuses prim (flattenBHack "genComp" prim a)
+                    -- trace (printf "gen'd buses %s" (show b)) (return ())
                     Mtl.modify (second (Comp prim a b :))
+                    -- trace (printf "added comp %s" (show (Comp prim a b))) (return ())
                     return b
 #endif
 
@@ -559,12 +570,6 @@ primOpt name opt =
                     Nothing   -> plain
                     Just srcs -> opt srcs >>= maybe plain return
 
-primNoOpt1 :: (GenBuses b, Show b, Read a) => String -> (a -> b) -> a :> b
-primNoOpt1 name fun = 
-  primOpt name $
-    \ case [Val x] -> newVal (fun x)
-           _       -> nothingA
-
 tryCommute :: a :> a
 tryCommute = mkCK try
  where
@@ -579,6 +584,12 @@ primOptSort name opt = primOpt name opt . tryCommute
 primOpt name _ = namedC name
 primOptSort = primOpt
 #endif
+
+primNoOpt1 :: (GenBuses b, Show b, Read a) => String -> (a -> b) -> a :> b
+primNoOpt1 name fun = 
+  primOpt name $
+    \ case [Val x] -> newVal (fun x)
+           _       -> nothingA
 
 -- | Constant circuit from source generator (experimental)
 constSM :: CircuitM (Buses b) -> (a :> b)
@@ -1283,7 +1294,9 @@ uuGraph = trimDGraph
         . mendG
         . map simpleComp
         . tagged
+        -- . (\ z -> trace ("runU result: " ++ show z) z)
         . runU
+        -- . trace "uuGraph" id
 
 circuitGraph :: GenBuses a => (a :> b) -> DGraph
 circuitGraph = uuGraph . unitize
@@ -1445,7 +1458,8 @@ recordDots depths = nodes ++ edges
          labs :: Dir -> [Bus] -> String
          -- Labels. Use Dot string concat operator to avoid lexer buffer size limit.
          -- See https://github.com/ellson/graphviz/issues/71 .
-         labs dir bs = intercalate "|\"+\"" (portSticker <$> tagged bs)
+         labs dir bs = segmentedDotString $
+                       intercalate "|" (portSticker <$> tagged bs)
           where
             portSticker :: (Int,Bus) -> String
             portSticker (p,b) =
@@ -1496,6 +1510,13 @@ recordDots depths = nodes ++ edges
    port dir (cnum,np) =
      printf "%s:%s" (compLab cnum) (portLab dir np)
    compLab nc = 'c' : show nc
+
+segmentedDotString :: Unop String
+segmentedDotString = intercalate "\"+\"" . divvy
+ where
+   divvy [] = []
+   divvy (splitAt yy_buf_size -> (pre,suf)) = pre : divvy suf
+   yy_buf_size = 16370 -- 16384 - some overhead
 
 -- showBool :: Bool -> String
 -- showBool False = "F"
@@ -2139,13 +2160,7 @@ tyRep = const (ty (undefined :: Rep a))
 delayCRep :: (HasRep a, GenBuses (Rep a)) => a -> (a :> a)
 delayCRep a0 = abstC . delay (repr a0) . reprC
 
-#define AbsTy(abs) \
-instance GenBuses (Rep (abs)) => GenBuses (abs) where \
-  { genBuses' = genBusesRep' ; delay = delayCRep ; ty = tyRep }; \
-instance BottomCat (:>) (Rep (abs)) => BottomCat (:>) (abs) where \
-  { bottomC = bottomRep };\
-instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };\
-instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) where uncurries = id
+#include "AbsTy.inc"
 
 AbsTy((a,b,c))
 AbsTy((a,b,c,d))
@@ -2200,6 +2215,10 @@ instance BottomCat (:>) a => BottomCat (:>) (Pair a) where
      bc = bottomC
      {-# NOINLINE bc #-}
 
+instance IfCat (:>) a => IfCat (:>) (Pair a)
+ where
+   ifC = abstC . pairIf . second (twiceP reprC)
+
 -- Specialization of prodPair
 pairIf :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
 pairIf = half exl &&& half exr
@@ -2207,10 +2226,6 @@ pairIf = half exl &&& half exr
     half :: (u `k` a) -> ((Bool :* (u :* u)) `k` a)
     half f = ifC . second (twiceP f)
     {-# NOINLINE half #-}
-
-instance IfCat (:>) a => IfCat (:>) (Pair a)
- where
-   ifC = abstC . pairIf . second (twiceP reprC)
 
 #endif
 
