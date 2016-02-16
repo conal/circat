@@ -75,7 +75,7 @@ module Circat.Circuit
   , unitizeMealyC
 --   , Complex(..),cis
   -- For AbsTy
-  , abstB,abstC,reprC,Buses(..),pairIf,Ty(..)
+  , BusesM, abstB,abstC,reprC,Buses(..),pairIf,Ty(..)
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
@@ -117,7 +117,7 @@ import System.Directory (createDirectoryIfMissing)
 import System.Exit (ExitCode(ExitSuccess))
 
 -- mtl
-import Control.Monad.State (State,execState)
+import Control.Monad.State (State,execState,StateT)
 import qualified Control.Monad.State as Mtl
 
 import TypeUnary.Vec hiding (get)
@@ -242,24 +242,26 @@ instance Show (Buses a) where
 data Ty = UnitT | BoolT | IntT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
-genBuses prim ins = fst <$> genBuses' (primName prim) ins 0
+genBuses prim ins = Mtl.evalStateT (genBuses' (primName prim) ins) 0
+
+type BusesM = StateT Int CircuitM
 
 class GenBuses a where
-  genBuses' :: String -> Sources -> Int -> CircuitM (Buses a,Int)
+  genBuses' :: String -> Sources -> BusesM (Buses a)
   delay :: a -> (a :> a)
   ty :: a -> Ty                         -- dummy argument
 
 type GS a = (GenBuses a, Show a)
 
 genBus :: (Source -> Buses a) -> Width
-       -> String -> Sources -> Int -> CircuitM (Buses a,Int)
-genBus wrap w prim ins o = -- trace (printf "genBus %d %s %d" w prim o) $
-                           do src <- newSource w prim ins o
-                              return (wrap src,o+1)
+       -> String -> Sources -> BusesM (Buses a)
+genBus wrap w prim ins = do o <- Mtl.get
+                            src <- Mtl.lift (newSource w prim ins o)
+                            Mtl.put (o+1)
+                            return (wrap src)
 
 instance GenBuses Unit where
-  genBuses' _ _ o = -- trace ("genBuses' @ Unit: " ++ show o) $
-                    return (UnitB,o)
+  genBuses' _ _ = return UnitB
   delay () = id
   ty = const UnitT
 
@@ -293,11 +295,9 @@ instance GenBuses Double  where
   ty = const DoubleT
 
 instance (GenBuses a, GenBuses b) => GenBuses (a :* b) where
-  genBuses' prim ins o =
+  genBuses' prim ins =
     -- trace ("genBuses' @ " ++ show (ty (undefined :: a :* b))) $
-    do (a,oa) <- genBuses' prim ins o
-       (b,ob) <- genBuses' prim ins oa
-       return (PairB a b, ob)
+    PairB <$> genBuses' prim ins <*> genBuses' prim ins
   delay (a,b) = delay a *** delay b
   ty ~(a,b) = PairT (ty a) (ty b)
 
@@ -2148,8 +2148,8 @@ isOuterPrim = flip S.member (S.fromList outerPrims)
 -- not removed during compilation).
 
 genBusesRep' :: GenBuses (Rep a) =>
-                String -> Sources -> Int -> CircuitM (Buses a,Int)
-genBusesRep' prim ins o = first abstB <$> genBuses' prim ins o
+                String -> Sources -> BusesM (Buses a)
+genBusesRep' prim ins = abstB <$> genBuses' prim ins
 
 bottomRep :: (HasRep a, BottomCat (:>) (Rep a)) => Unit :> a
 bottomRep = abstC . bottomC
@@ -2189,11 +2189,9 @@ instance GenBuses q_q => Uncurriable (:>) q_q (Pair a) where
   uncurries = id
 
 instance GenBuses a => GenBuses (Pair a) where
-  genBuses' prim ins o = do (a,oa) <- gb o
-                            (b,ob) <- gb oa
-                            return (abstB (PairB a b), ob)
+  genBuses' prim ins = abstB <$> (PairB <$> gb <*> gb)
    where
-     gb :: Int -> CircuitM (Buses a,Int)
+     gb :: BusesM (Buses a)
      gb = genBuses' prim ins
      {-# NOINLINE gb #-}
   delay (a :# b) = abstC . (del a *** del b) . reprC
