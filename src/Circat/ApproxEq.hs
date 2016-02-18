@@ -20,8 +20,8 @@ module Circat.ApproxEq (ApproxEq(..), approxEqFoldable) where
 
 -- TODO: explicit exports
 
-import Data.Foldable ({-Foldable(),-}toList)
-import Circat.Complex (Complex(..))
+import Data.Foldable (toList)
+import Circat.Complex
 
 import qualified Circat.Pair  as P
 import qualified Circat.LTree as L
