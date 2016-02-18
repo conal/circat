@@ -53,8 +53,8 @@ Library
                     Circat.Netlist
                     Circat.ShowUtils
                     Circat.Prim
-  other-modules:
-                    Circat.Examples
+--   other-modules:
+--                     Circat.Examples
   install-includes: Circat/AbsTy.inc
 
 
