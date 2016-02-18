@@ -23,6 +23,7 @@ module Circat.Rep (Rep,HasRep(..),bottom) where
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
 import Control.Applicative (WrappedMonad(..))
+import qualified GHC.Generics as G
 
 import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
@@ -147,3 +148,39 @@ type instance Rep (Complex a) = a :* a
 instance HasRep (Complex a) where
   repr (a :+ a') = (a,a')
   abst (a,a') = (a :+ a')
+
+type instance Rep (G.U1 p) = ()
+instance HasRep (G.U1 p) where
+  repr G.U1 = ()
+  abst () = G.U1
+
+type instance Rep (G.Par1 p) = p
+instance HasRep (G.Par1 p) where
+  repr = G.unPar1
+  abst = G.Par1
+
+type instance Rep (G.K1 i c p) = c
+instance HasRep (G.K1 i c p) where
+  repr = G.unK1
+  abst = G.K1
+
+type instance Rep (G.M1 i c f p) = f p
+instance HasRep (G.M1 i c f p) where
+  repr = G.unM1
+  abst = G.M1
+
+type instance Rep ((G.:+:) f g p) = f p :+ g p
+instance HasRep ((G.:+:) f g p) where
+  repr (G.L1 x) = Left  x
+  repr (G.R1 x) = Right x
+  abst = either G.L1 G.R1
+
+type instance Rep ((G.:*:) f g p) = f p :* g p
+instance HasRep ((G.:*:) f g p) where
+  repr (x G.:*: y) = (x,y)
+  abst (x,y) = (x G.:*: y)
+
+type instance Rep ((G.:.:) f g p) = f (g p)
+instance HasRep ((G.:.:) f g p) where
+  repr = G.unComp1
+  abst = G.Comp1
