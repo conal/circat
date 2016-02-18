@@ -66,28 +66,31 @@ import Circat.Show (showsApp1)
 
 -- | Literals
 data Lit :: * -> * where
-  UnitL  :: Unit -> Lit Unit
-  BoolL  :: Bool -> Lit Bool
-  IntL   :: Int  -> Lit Int
-  DoubleL :: Double  -> Lit Double
+  UnitL   :: Unit   -> Lit Unit
+  BoolL   :: Bool   -> Lit Bool
+  IntL    :: Int    -> Lit Int
+  FloatL  :: Float  -> Lit Float
+  DoubleL :: Double -> Lit Double
 
 -- The Unit argument is just for uniformity
 
 instance Eq' (Lit a) (Lit b) where
-  UnitL x === UnitL y = x == y
-  BoolL x === BoolL y = x == y
-  IntL  x === IntL  y = x == y
+  UnitL   x === UnitL   y = x == y
+  BoolL   x === BoolL   y = x == y
+  IntL    x === IntL    y = x == y
+  FloatL  x === FloatL  y = x == y
   DoubleL x === DoubleL y = x == y
-  _       === _       = False
+  _         === _         = False
 
 instance Eq (Lit a) where (==) = (===)
 
 -- | Convenient 'Lit' construction
 class HasLit a where toLit :: a -> Lit a
 
-instance HasLit Unit where toLit = UnitL
-instance HasLit Bool where toLit = BoolL
-instance HasLit Int  where toLit = IntL
+instance HasLit Unit   where toLit = UnitL
+instance HasLit Bool   where toLit = BoolL
+instance HasLit Int    where toLit = IntL
+instance HasLit Float  where toLit = FloatL
 instance HasLit Double where toLit = DoubleL
 
 -- TODO: Do I still need this stuff?
@@ -95,9 +98,10 @@ instance HasLit Double where toLit = DoubleL
 -- Proofs
 
 litHasShow :: Lit a -> Dict (Show a)
-litHasShow (UnitL _) = Dict
-litHasShow (BoolL _) = Dict
-litHasShow (IntL  _) = Dict
+litHasShow (UnitL   _) = Dict
+litHasShow (BoolL   _) = Dict
+litHasShow (IntL    _) = Dict
+litHasShow (FloatL  _) = Dict
 litHasShow (DoubleL _) = Dict
 
 #define LSh (litHasShow -> Dict)
@@ -111,9 +115,10 @@ instance Show (Lit a) where
   showsPrec p l@LSh = showsPrec p (eval l)
 
 litGenBuses :: Lit a -> Dict (GenBuses a)
-litGenBuses (UnitL _) = Dict
-litGenBuses (BoolL _) = Dict
-litGenBuses (IntL  _) = Dict
+litGenBuses (UnitL   _) = Dict
+litGenBuses (BoolL   _) = Dict
+litGenBuses (IntL    _) = Dict
+litGenBuses (FloatL  _) = Dict
 litGenBuses (DoubleL _) = Dict
 
 #define LSo (litGenBuses -> Dict)
@@ -125,9 +130,10 @@ litSS l | (Dict,Dict) <- (litHasShow l,litGenBuses l) = Dict
 
 instance Evalable (Lit a) where
   type ValT (Lit a) = a
-  eval (UnitL x) = x
-  eval (BoolL x) = x
-  eval (IntL  x) = x
+  eval (UnitL   x) = x
+  eval (BoolL   x) = x
+  eval (IntL    x) = x
+  eval (FloatL  x) = x
   eval (DoubleL x) = x
 
 instance HasUnitArrow (->) Lit where
@@ -135,10 +141,11 @@ instance HasUnitArrow (->) Lit where
 
 instance HasUnitArrow (:>) Lit where
 #ifdef LitSources
-  unitArrow (UnitL x) = litUnit x
-  unitArrow (BoolL x) = litBool x
-  unitArrow (IntL  x) = litInt  x
-  unitArrow (DoubleL x) = litDouble  x
+  unitArrow (UnitL   x) = litUnit   x
+  unitArrow (BoolL   x) = litBool   x
+  unitArrow (IntL    x) = litInt    x
+  unitArrow (FloatL  x) = litFloat  x
+  unitArrow (DoubleL x) = litDouble x
 #else
   unitArrow l@LS = constC (eval l)
 #endif
