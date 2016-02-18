@@ -62,11 +62,12 @@ module Circat.Circuit
   , PinId, Width, Bus(..), Source(..)
   , GenBuses(..), GS, genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
   , namedC, constS, constC
+  , SourceToBuses(..)
 --   , litUnit, litBool, litInt
   -- , (|||*), fromBool, toBool
   , CompS(..), compNum, compName, compIns, compOuts
-  , CompNum, DGraph, circuitGraph, outGWith, outG, Attr
-  , UU, outDotG, mkGraph,Name,Report,GraphInfo
+  , CompNum, DGraph, circuitGraph, Attr
+  , UU, writeDot, displayDot, mkGraph,Name,Report,GraphInfo
   , simpleComp, tagged
   , systemSuccess
   , unitize, unitize'
@@ -122,8 +123,9 @@ import qualified Control.Monad.State as Mtl
 
 import TypeUnary.Vec hiding (get)
 
+-- TODO: Eliminate most of the following, as I move data types out of circat
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
-import Circat.Complex (Complex(..))
+import Circat.Complex
 import Circat.Category
 import Circat.Classes
 import Circat.Pair
@@ -131,7 +133,6 @@ import qualified Circat.RTree as RTree
 import qualified Circat.LTree as LTree
 import Circat.RaggedTree (TU(..))
 import qualified Circat.RaggedTree as Rag
-
 
 {--------------------------------------------------------------------
     Buses
@@ -205,6 +206,7 @@ data Buses :: * -> * where
   UnitB   :: Buses Unit
   BoolB   :: Source -> Buses Bool
   IntB    :: Source -> Buses Int
+  FloatB  :: Source -> Buses Float
   DoubleB :: Source -> Buses Double
   PairB   :: Buses a -> Buses b -> Buses (a :* b)
   FunB    :: (a :> b) -> Buses (a -> b)
@@ -217,6 +219,7 @@ instance Eq (Buses a) where
   UnitB     == UnitB        = True
   BoolB s   == BoolB s'     = s == s'
   IntB s    == IntB s'      = s == s'
+  FloatB  s == FloatB  s'   = s == s'
   DoubleB s == DoubleB s'   = s == s'
   PairB a b == PairB a' b'  = a == a' && b == b'
   IsoB r    == IsoB r'      = r == r'
@@ -232,6 +235,7 @@ instance Show (Buses a) where
   show UnitB       = "()"
   show (BoolB b)   = show b
   show (IntB b)    = show b
+  show (FloatB  b) = show b
   show (DoubleB b) = show b
   show (PairB a b) = "("++show a++","++show b++")"
   show (FunB _)    = "<function>"
@@ -239,7 +243,7 @@ instance Show (Buses a) where
 
 -- TODO: Improve to Show instance with showsPrec
 
-data Ty = UnitT | BoolT | IntT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
+data Ty = UnitT | BoolT | IntT | FloatT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
 genBuses prim ins = Mtl.evalStateT (genBuses' (primName prim) ins) 0
@@ -289,6 +293,11 @@ instance GenBuses Int  where
   delay = primDelay
   ty = const IntT
 
+instance GenBuses Float  where
+  genBuses' = genBus FloatB 64
+  delay = primDelay
+  ty = const FloatT
+
 instance GenBuses Double  where
   genBuses' = genBus DoubleB 64
   delay = primDelay
@@ -313,6 +322,7 @@ flattenMb = fmap toList . flat
    flat UnitB       = Just mempty
    flat (BoolB b)   = Just (singleton b)
    flat (IntB b)    = Just (singleton b)
+   flat (FloatB  b) = Just (singleton b)
    flat (DoubleB b) = Just (singleton b)
    flat (PairB a b) = liftA2 (<>) (flat a) (flat b)
    flat (IsoB b)    = flat b
@@ -790,6 +800,7 @@ pattern XorS a b <- Source _ "⊕" [a,b] 0
 class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses Bool   where toBuses = BoolB
 instance SourceToBuses Int    where toBuses = IntB
+instance SourceToBuses Float  where toBuses = FloatB
 instance SourceToBuses Double where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
@@ -1158,9 +1169,6 @@ systemSuccess cmd =
 
 type Attr = (String,String)
 
-outG :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
-outG = outGWith ("pdf","")
-
 -- Some options:
 -- 
 -- ("pdf","")
@@ -1196,13 +1204,6 @@ renameC = id
 type Name = String
 type Report = String
 
--- TODO: Phase out
-outGWith :: GenBuses a => (String,String) -> Name -> [Attr] -> (a :> b) -> IO ()
-outGWith ss s ats circ = outGWithU ss s ats (unitize circ)
-
-outGWithU :: (String,String) -> Name -> [Attr] -> UU -> IO ()
-outGWithU ss name ats uu = outDotG ss ats (mkGraph name uu)
-
 type GraphInfo = (Name,CompDepths,Report)
 
 mkGraph :: Name -> UU -> GraphInfo
@@ -1213,8 +1214,8 @@ mkGraph (renameC -> name') uu = (name',depths,report)
    depth  = longestPath depths
    report | depth == 0 = "No components.\n"  -- except In & Out
           | otherwise  =
-              printf "Components: %s.%s Max depth: %d.\n"
-                (summary graph)
+              printf "%s components: %s.%s Max depth: %d.\n"
+                name' (summary graph)
 #if False && !defined NoHashCons
                 -- Are the reuse counts legit or an artifact of optimization?
                 (let reused :: Map PrimName Reuses
@@ -1228,20 +1229,29 @@ mkGraph (renameC -> name') uu = (name',depths,report)
                 ""
 #endif         
                 depth
-outDotG :: (String,String) -> [Attr] -> GraphInfo -> IO ()
-outDotG (outType,res) attrs (name,depths,report) = 
+
+outDir :: String
+outDir = "out"
+
+outFile :: String -> String -> String
+outFile name suff = outDir++"/"++name++"."++suff
+
+writeDot :: [Attr] -> GraphInfo -> IO ()
+writeDot attrs (name,depths,report) = 
   do createDirectoryIfMissing False outDir
-     writeFile (outFile "dot")
+     writeFile (outFile name "dot")
        (graphDot name attrs depths ++ "\n// "++ report)
      putStr report
-     systemSuccess $
-       printf "dot %s -T%s %s -o %s" res outType (outFile "dot") (outFile outType)
-     printf "Wrote %s\n" (outFile outType)
-     systemSuccess $
-       printf "%s %s" open (outFile outType)
+
+displayDot :: (String,String) -> String -> IO ()
+displayDot (outType,res) name = 
+  do systemSuccess $
+       printf "dot %s -T%s %s -o %s" res outType dotFile picFile
+     printf "Wrote %s\n" picFile
+     systemSuccess $ printf "%s %s" open picFile
  where
-   outDir = "out"
-   outFile suff = outDir++"/"++name++"."++suff
+   dotFile = outFile name "dot"
+   picFile = outFile name outType
    open = case SI.os of
             "darwin" -> "open"
             "linux"  -> "display" -- was "xdg-open"
