@@ -34,12 +34,18 @@ import Circat.Netlist (outV)
     Examples
 --------------------------------------------------------------------}
 
-outGV :: GenBuses a => String -> [Attr] -> (a :> b) -> IO ()
-outGV name attrs cir =
-  do outG name attrs cir
-     outV name       cir
-
--- outG = outGWith ("pdf","")  -- change as desired.
+-- Diagram and Verilog
+outGV :: String -> [Attr] -> UU -> IO ()
+outGV name circ =
+  do -- putStrLn $ "outGV: Graph \n" ++ show g
+     writeDot attrs g
+     -- displayDot ("pdf","")
+     -- displayDot ("svg","") 
+     -- displayDot ("png","-Gdpi=200")
+     -- saveAsVerilog g
+ where
+   g = mkGraph name circ
+{-# NOINLINE outGV #-}
 
 -- Handy for showing the graph representation in ghci.
 bc :: Unop (a :> b)
