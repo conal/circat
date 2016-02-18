@@ -103,11 +103,17 @@ inNew2 :: (Newtype n o, Newtype n' o', Newtype n'' o'') =>
 inNew2 = inNew <~ unpack
 
 infixl 1 <~
+infixr 1 ~>
 
 -- | Add post- and pre-processing
 (<~) :: Category cat =>
         (b `cat` b') -> (a' `cat` a) -> ((a `cat` b) -> (a' `cat` b'))
 (h <~ f) g = h . g . f
+
+-- | Add pre- and post-processing
+(~>) :: Category cat =>
+        (a' `cat` a) -> (b `cat` b') -> ((a `cat` b) -> (a' `cat` b'))
+f ~> h = h <~ f
 
 -- | Compose list of unary transformations
 compose :: [Unop a] -> Unop a
@@ -204,3 +210,11 @@ instance (Sized g, Sized f) => Sized (g :. f) where
 -- | @2 ^ n@
 twoNat :: Integral m => Nat n -> m
 twoNat n = 2 ^ (natToZ n :: Int)
+
+-- | @'showsUnary' n d x@ produces the string representation of a unary data
+-- constructor with name @n@ and argument @x@, in precedence context @d@.
+showsUnary :: (Show a) => String -> Int -> a -> ShowS
+showsUnary name d x = showParen (d > 10) $
+    showString name . showChar ' ' . showsPrec 11 x
+
+-- I swiped showsUnary from Data.Functor.Classes in transformers >= 0.4.0.0
