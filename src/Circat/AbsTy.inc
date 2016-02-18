@@ -11,7 +11,7 @@ instance IfCat (:>) (Rep (abs)) => IfCat (:>) (abs) where { ifC = repIf };\
 instance OkayArr k q_q (abs) => Uncurriable k q_q (abs) where uncurries = id
 
 #define AbsTyPragmas \
-{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances #-}
+{-# LANGUAGE MultiParamTypeClasses, UndecidableInstances, FlexibleInstances #-}
 
 #define AbsTyImports \
 import Circat.Category (Uncurriable(..),OkayArr) ;\
