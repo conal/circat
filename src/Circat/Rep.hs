@@ -28,8 +28,11 @@ import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
 -- TODO: more
 
+import Circat.Complex
+
 -- import Data.Constraint
 
+-- TODO: Eliminate most of the following when I drop these types.
 import Circat.Misc ((:*),(:+),Parity(..))
 import TypeUnary.TyNat (Z,S)
 import TypeUnary.Nat (Nat(..),IsNat(..))
@@ -139,3 +142,8 @@ instance HasRep (a :+ b) where
 -- 
 -- type instance Rep (Maybe a) = Unit :+ a
 -- ...
+
+type instance Rep (Complex a) = a :* a
+instance HasRep (Complex a) where
+  repr (a :+ a') = (a,a')
+  abst (a,a') = (a :+ a')
