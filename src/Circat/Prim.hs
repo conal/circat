@@ -59,6 +59,7 @@ import Circat.Circuit (GenBuses,(:>)
 import Circat.Misc
 import Circat.ShowUtils (Show'(..))
 import Circat.Show (showsApp1)
+import Circat.Doubli
 
 {--------------------------------------------------------------------
     Literals
@@ -70,7 +71,7 @@ data Lit :: * -> * where
   BoolL   :: Bool   -> Lit Bool
   IntL    :: Int    -> Lit Int
   FloatL  :: Float  -> Lit Float
-  DoubleL :: Double -> Lit Double
+  DoubleL :: Doubli -> Lit Doubli
 
 -- The Unit argument is just for uniformity
 
@@ -91,7 +92,7 @@ instance HasLit Unit   where toLit = UnitL
 instance HasLit Bool   where toLit = BoolL
 instance HasLit Int    where toLit = IntL
 instance HasLit Float  where toLit = FloatL
-instance HasLit Double where toLit = DoubleL
+instance HasLit Doubli where toLit = DoubleL
 
 -- TODO: Do I still need this stuff?
 

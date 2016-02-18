@@ -125,6 +125,7 @@ import TypeUnary.Vec hiding (get)
 
 -- TODO: Eliminate most of the following, as I move data types out of circat
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
+import Circat.Doubli
 import Circat.Complex
 import Circat.Category
 import Circat.Classes
@@ -207,7 +208,7 @@ data Buses :: * -> * where
   BoolB   :: Source -> Buses Bool
   IntB    :: Source -> Buses Int
   FloatB  :: Source -> Buses Float
-  DoubleB :: Source -> Buses Double
+  DoubleB :: Source -> Buses Doubli
   PairB   :: Buses a -> Buses b -> Buses (a :* b)
   FunB    :: (a :> b) -> Buses (a -> b)
   IsoB    :: Buses (Rep a) -> Buses a
@@ -298,7 +299,7 @@ instance GenBuses Float  where
   delay = primDelay
   ty = const FloatT
 
-instance GenBuses Double  where
+instance GenBuses Doubli  where
   genBuses' = genBus DoubleB 64
   delay = primDelay
   ty = const DoubleT
@@ -334,9 +335,15 @@ isoErr nm = error (nm ++ ": IsoB")
 pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
 
+-- Workaround for "spurious non-exhaustive warning with GADT and newtypes"
+-- <https://ghc.haskell.org/trac/ghc/ticket/6124>.
+#define BogusMatch(name) name _ = error "BogusMatch"
+#define BogusAlt _ -> error "BogusMatch"
+
 unUnitB :: Buses Unit -> Unit
 unUnitB UnitB    = ()
 unUnitB (IsoB _) = isoErr "unUnitB"
+BogusMatch(unUnitB)
 
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 #if 0
@@ -346,14 +353,14 @@ unPairB (IsoB _)    = isoErr "unPairB"
 -- Lazier
 unPairB w = (a,b)
  where
-
    a = case w of
          PairB p _ -> p
          IsoB _    -> isoErr "unPairB"
+         BogusAlt
    b = case w of
          PairB _ q -> q
          IsoB _    -> isoErr "unPairB"
-
+         BogusAlt
 --    (a,b) = case w of
 --              PairB p q -> (p,q)
 --              IsoB _    -> isoErr "unPairB"
@@ -363,6 +370,7 @@ unPairB w = (a,b)
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
 unFunB (IsoB _)    = isoErr "unFunB"
+BogusMatch(unFunB)
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -801,7 +809,7 @@ class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses Bool   where toBuses = BoolB
 instance SourceToBuses Int    where toBuses = IntB
 instance SourceToBuses Float  where toBuses = FloatB
-instance SourceToBuses Double where toBuses = DoubleB
+instance SourceToBuses Doubli where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
 sourceB = justA . toBuses
