@@ -171,13 +171,16 @@ class Evalable e where
     Statically sized functors
 --------------------------------------------------------------------}
 
+-- TODO: Remove this code when I phase out the data types in circat (replaced by
+-- shaped-types).
+
 class Sized f where
   size :: f () -> Int -- ^ Argument is ignored at runtime
   -- Temporary hack to avoid newtype-like representation.
   sizeDummy :: f a
   sizeDummy = undefined
 
--- TODO: Switch from f () to f Void
+-- TODO: Switch from f () to f Void or Proxy
 
 -- | Generic 'size'
 genericSize :: (Generic1 f, Sized (Rep1 f)) => f () -> Int
