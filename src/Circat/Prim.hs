@@ -187,7 +187,7 @@ data Prim :: * -> * where
   IfP              :: IfCat (:>) a => Prim (Bool :* (a :* a) -> a)
   AbstP            :: (HasRep a, Rep a ~ a') => Prim (a' -> a)
   ReprP            :: (HasRep a, Rep a ~ a') => Prim (a -> a')
-  BottomP          :: BottomCat (:>) a => Prim (Unit -> a)
+  BottomP          :: BottomCat (:>) a => Prim a
   DelayP           :: (GenBuses s, Show s) => s -> Prim (s -> s)
 
 instance Eq' (Prim a) (Prim b) where
@@ -255,7 +255,7 @@ instance Show (Prim a) where
   showsPrec _ IfP           = showString "ifC"
   showsPrec _ AbstP         = showString "abst"
   showsPrec _ ReprP         = showString "repr"
-  showsPrec _ BottomP       = showString "bottomC"
+  showsPrec _ BottomP       = showString "undefined"
   showsPrec p (DelayP a)    = showsApp1 "delay" p a
 
 instance Show' Prim where showsPrec' = showsPrec
@@ -328,7 +328,7 @@ instance -- (ClosedCat k, CoproductCat k, BoolCat k, NumCat k Int, RepCat k)
   unitArrow IfP        = unitFun ifC
   unitArrow AbstP      = unitFun abstC
   unitArrow ReprP      = unitFun reprC
-  unitArrow BottomP    = unitFun bottomC
+  unitArrow BottomP    = bottomC
   unitArrow (DelayP a) = unitFun (delayC a)
   unitArrow (LitP l)   = unitArrow l
 
