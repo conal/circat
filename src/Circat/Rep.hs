@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),bottom) where
+module Circat.Rep (Rep,HasRep(..)) where
 
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
@@ -119,23 +119,19 @@ instance IsNat n => HasRep (Nat (S n)) where
 type instance Rep (Maybe a) = Bool :* a
 instance HasRep (Maybe a) where
   repr (Just a) = (True,a)
-  repr Nothing  = (False,bottom)
+  repr Nothing  = (False,undefined)
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
 
-bottom :: a
-bottom = error "bottom: Bottom!"
-{-# NOINLINE bottom #-}
-
--- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs, add
--- a string argument and tweak the reification.
+-- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs,
+-- replace with ErrorP (taking a string argument) and tweak the reification.
 
 -- Generalize Maybe to sums:
 
 type instance Rep (a :+ b) = Bool :* (a :* b)
 instance HasRep (a :+ b) where
-  repr (Left  a) = (False,(a,bottom)) -- error "repr on Maybe: undefined value"
-  repr (Right b) = (True,(bottom,b))
+  repr (Left  a) = (False,(a,undefined)) -- error "repr on Maybe: undefined value"
+  repr (Right b) = (True,(undefined,b))
   abst (False,(a,_)) = Left  a
   abst (True ,(_,b)) = Right b
 
