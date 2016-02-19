@@ -184,3 +184,5 @@ type instance Rep ((G.:.:) f g p) = f (g p)
 instance HasRep ((G.:.:) f g p) where
   repr = G.unComp1
   abst = G.Comp1
+
+-- TODO: Can I *replace* HasRep with Generic?
