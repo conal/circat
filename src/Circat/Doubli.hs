@@ -19,6 +19,15 @@
 
 module Circat.Doubli where
 
-newtype Doubli = Doubli Double
- deriving (Enum,Eq,Floating,Fractional,Num,Ord,Read,Real,RealFloat,RealFrac,Show)
+import Control.Arrow (first)
 
+newtype Doubli = Doubli Double
+ deriving (Enum,Eq,Floating,Fractional,Num,Ord,Real,RealFloat,RealFrac)
+
+instance Show Doubli where
+  showsPrec p (Doubli d) = showsPrec p d
+
+instance Read Doubli where
+  readsPrec p str = first Doubli <$> readsPrec p str
+  -- readsPrec p str = fmap (first Doubli) (readsPrec p str)
+  -- readsPrec p = map (first Doubli) . readsPrec p
