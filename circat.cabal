@@ -32,6 +32,8 @@ Library
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
                   , treeviz >= 2.0.2
 
+-- TODO: after I remove modules duplicated in shaped-types, trim build-depends
+
   exposed-modules:     
                     Circat.Misc
                     Circat.Show
@@ -53,7 +55,6 @@ Library
                     Circat.Circuit
                     Circat.Netlist
                     Circat.ShowUtils
-                    Circat.Prim
 --   other-modules:
 --                     Circat.Examples
   install-includes: Circat/AbsTy.inc
