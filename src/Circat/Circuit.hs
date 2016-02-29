@@ -760,8 +760,12 @@ constM' :: GS b => b -> CircuitM (Buses b)
 bottomScalar :: GenBuses b => Unit :> b
 bottomScalar = mkCK (constComp UNDEFINED)
 
-instance BottomCat (:>) Bool where bottomC = bottomScalar
-instance BottomCat (:>) Int  where bottomC = bottomScalar
+#define BottomPrim(ty) \
+ instance BottomCat (:>) (ty) where { bottomC = bottomScalar }
+
+BottomPrim(Bool)
+BottomPrim(Int)
+BottomPrim(Doubli)
 
 instance BottomCat (:>) Unit where
 --   bottomC = mkCK (const (return UnitB))
@@ -793,16 +797,27 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
+-- pattern Read :: Read a => a -> String
 pattern Read x <- (reads -> [(x,"")])
 
+pattern ConstS :: PrimName -> Source
 pattern ConstS name <- Source _ name [] 0
-pattern Val x       <- ConstS (Read x)
+
+-- pattern Val :: Read a => a -> Source
+pattern Val x <- ConstS (Read x)
 
 -- pattern Val x       <- ConstS (reads -> [(x,"")])
 
-pattern TrueS    <- ConstS "True"
-pattern FalseS   <- ConstS "False"
-pattern NotS a   <- Source _ "¬" [a] 0
+pattern TrueS :: Source
+pattern TrueS  <- ConstS "True"
+
+pattern FalseS :: Source
+pattern FalseS <- ConstS "False"
+
+pattern NotS :: Source -> Source
+pattern NotS a <- Source _ "¬" [a] 0
+
+pattern XorS :: Source -> Source -> Source
 pattern XorS a b <- Source _ "⊕" [a,b] 0
 
 class SourceToBuses a where toBuses :: Source -> Buses a
@@ -900,13 +915,15 @@ eqOpt, neOpt :: Opt Bool
 eqOpt = noOpt
 neOpt = noOpt
 
-instance EqCat (:>) Bool where
-  equal    = primOpt "≡" eqOpt
-  notEqual = primOpt "≠" neOpt  -- "/="
+#define EqPrim(ty) \
+ instance EqCat (:>) (ty) where { \
+    equal    = primOpt "≡" eqOpt ;\
+    notEqual = primOpt "≠" neOpt  \
+  }
 
-instance EqCat (:>) Int where
-  equal    = primOpt "≡" eqOpt
-  notEqual = primOpt "≠" neOpt  -- "/="
+EqPrim(Bool)
+EqPrim(Int)
+EqPrim(Doubli)
 
 instance EqCat (:>) () where
   equal = constC True
@@ -930,17 +947,17 @@ geOpt = noOpt
 --     No instance for (Read a0) arising from a pattern
 --     The type variable ‘a0’ is ambiguous
 
-instance OrdCat (:>) Bool where
-  lessThan           = primOpt "<" ltOpt
-  greaterThan        = primOpt ">" gtOpt
-  lessThanOrEqual    = primOpt "≤" leOpt
-  greaterThanOrEqual = primOpt "≥" geOpt
+#define OrdPrim(ty) \
+ instance OrdCat (:>) (ty) where { \
+   lessThan           = primOpt "<" ltOpt ; \
+   greaterThan        = primOpt ">" gtOpt ; \
+   lessThanOrEqual    = primOpt "≤" leOpt ; \
+   greaterThanOrEqual = primOpt "≥" geOpt ; \
+ }
 
-instance OrdCat (:>) Int where
-  lessThan           = primOpt "<" ltOpt
-  greaterThan        = primOpt ">" gtOpt
-  lessThanOrEqual    = primOpt "≤" leOpt
-  greaterThanOrEqual = primOpt "≥" geOpt
+OrdPrim(Bool)
+OrdPrim(Int)
+OrdPrim(Doubli)
 
 instance OrdCat (:>) () where
   lessThan = constC False
@@ -955,6 +972,7 @@ instance OrdCat (:>) () where
 -- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "×" }
 
 -- Zero or one, yielding the False or True, respectively.
+pattern BitS :: Bool -> Source
 pattern BitS b <- Source _ (readBit -> Just b) [] 0
 
 readBit :: String -> Maybe Bool
@@ -972,9 +990,13 @@ readBit _   = Nothing
 #define ZeroT(ty) ValT(0,ty)
 #define  OneT(ty) ValT(1,ty)
 
+pattern NegateS :: Source -> Source
 pattern NegateS a <- Source _ "negate" [a] 0
+
+pattern RecipS  :: Source -> Source
 pattern RecipS  a <- Source _ "recip"  [a] 0
 
+pattern BToIS :: Source -> Source
 pattern BToIS a <- Source _ BoolToInt [a] 0
 
 instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
@@ -1069,6 +1091,7 @@ ifOptB = \ case
   _                      -> nothingA
 
 #if !defined NoIfBotOpt
+pattern BottomS :: Source
 pattern BottomS <- ConstS UNDEFINED
 #endif
 
@@ -2084,7 +2107,10 @@ unRipName :: String -> String -> Maybe Int
 unRipName pre (stripPrefix (ripPrefix pre) -> Just (Read n)) = Just n
 unRipName _ _ = Nothing
 
+pattern InRip :: Int -> String
 pattern InRip  n <- (unRipName "In"  -> Just n)
+
+pattern OutRip :: Int -> String
 pattern OutRip n <- (unRipName "Out" -> Just n)
 
 type Unripped = (DGraph, (Map Int [Output], Map Int [Input]))

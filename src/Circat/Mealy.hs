@@ -48,7 +48,7 @@ import Data.Monoid ((<>),Sum(..),Product(..))
 import Data.Foldable (Foldable(..),sum,product)
 import Data.Tuple (swap)
 import Data.List (unfoldr)
-import GHC.Prim (Constraint)
+import GHC.Exts (Constraint)
 
 import Circat.Misc (dup) -- ,Unit,(:*)
 import qualified Circat.Misc as M

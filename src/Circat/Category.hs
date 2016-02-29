@@ -2,6 +2,9 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables, CPP #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
+#if __GLASGOW_HASKELL__ >= 800
+{-# LANGUAGE UndecidableSuperClasses #-} -- see below
+#endif
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -59,7 +62,7 @@ import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM2) -- liftM,
 -- import Data.Traversable (Traversable,sequence)
-import GHC.Prim (Constraint)
+import GHC.Exts (Constraint)
 import Data.Typeable (Typeable,cast)
 import Data.Coerce
 
@@ -476,7 +479,6 @@ if_then_else p f g = (f ||| g) . guard p
 
 #endif
 
-
 type family OkayArr (k :: * -> * -> *) a b :: Constraint
 
 class OkayArr k (OkayDom k a b) (OkayRan k a b) => Uncurriable k a b where
@@ -486,7 +488,9 @@ class OkayArr k (OkayDom k a b) (OkayRan k a b) => Uncurriable k a b where
   type OkayRan k a b = b
   uncurries :: (a `k` b) -> (OkayDom k a b `k` OkayRan k a b)
 
-instance (ClosedCat k, Uncurriable k (a :* b) c)
+instance ( ClosedCat k, Uncurriable k (a :* b) c
+         , OkayArr k (OkayDom k (a :* b) c) (OkayRan k (a :* b) c) -- added for GHC 8.0
+         )
        => Uncurriable k a (b -> c) where
   type OkayDom k a (b -> c) = OkayDom k (a :* b) c
   type OkayRan k a (b -> c) = OkayRan k (a :* b) c
