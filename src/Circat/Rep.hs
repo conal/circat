@@ -29,6 +29,8 @@ import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
 -- TODO: more
 
+import GHC.Types (type (~~))
+
 import Circat.Complex
 
 -- import Data.Constraint
@@ -48,15 +50,15 @@ type family Rep a
 -- method should reveal a constructor so that we can perform the
 -- case-of-known-constructor transformation.
 class HasRep a where
-  repr :: Rep a ~ a' => a -> a'
-  abst :: Rep a ~ a' => a' -> a
+  repr :: Rep a ~~ a' => a -> a'
+  abst :: Rep a ~~ a' => a' -> a
 
 -- Note types:
 -- 
---   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
---   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
+--   repr :: forall a. HasRep a => forall a'. Rep a ~~ a' => a -> a'
+--   abst :: forall a. HasRep a => forall a'. Rep a ~~ a' => a' -> a
 -- 
--- Note: Using Rep a ~ a' rather than the reverse to make the calls a little
+-- Note: Using Rep a ~~ a' rather than the reverse to make the calls a little
 -- easier to construct (using normaliseType and no mkSymCo).
 
 -- -- Identity as @'abst' . 'repr'@.
