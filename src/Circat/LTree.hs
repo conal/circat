@@ -117,14 +117,14 @@ instance (CoArbitrary a) => CoArbitrary (Tree n a) where
   coarbitrary (L a) = coarbitrary a
   coarbitrary (B t) = coarbitrary t
 
-type instance Rep (Tree Z a) = a
 instance HasRep (Tree Z a) where
+  type Rep (Tree Z a) = a
   repr (L a) = a
   abst a = L a
 
 #if 1
-type instance Rep (Tree (S n) a) = Tree n (Pair a)
 instance HasRep (Tree (S n) a) where
+  type Rep (Tree (S n) a) = Tree n (Pair a)
   repr (B t) = t
   abst t = B t
 #else
@@ -146,7 +146,7 @@ cantT str = cant (str ++ " on Tree")
 instance Ord a => Ord (Tree n a) where
   L a  `compare` L b  = a  `compare` b
   B us `compare` B vs = us `compare` vs
-  _    `compare` _   = cantT "compare"
+--   _    `compare` _   = cantT "compare"
 
 instance Show a => Show (Tree n a) where
   showsPrec p (L a)  = showsApp1 "L" p a

@@ -41,7 +41,7 @@ module Circat.Category
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
   , NatCat(..), natA
-  , Rep, HasRep(..), RepCat(..)
+  , HasRep(..), RepCat(..)
 --   , CoerceCat(..)
   , LoopCat(..), DelayCat(..)
   , BiCCC
@@ -284,7 +284,7 @@ instance ClosedCat (->) where
   curry       = P.curry
   uncurry     = P.uncurry
 
-applyK   :: Monad m => Kleisli m (Kleisli m a b :* a) b
+applyK   ::            Kleisli m (Kleisli m a b :* a) b
 curryK   :: Monad m => Kleisli m (a :* b) c -> Kleisli m a (Kleisli m b c)
 uncurryK :: Monad m => Kleisli m a (Kleisli m b c) -> Kleisli m (a :* b) c
 

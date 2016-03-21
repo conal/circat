@@ -164,12 +164,12 @@ mapAccumR f s t = runStateR (traverse (StateR . flip f) t) s
 
 -- Add HasRep instances
 
-type instance Rep (StateL s a) = s -> s :* a
 instance HasRep (StateL s a) where
+  type Rep (StateL s a) = s -> s :* a
   abst = StateL
   repr = runStateL
 
-type instance Rep (StateR s a) = s -> s :* a
 instance HasRep (StateR s a) where
+  type Rep (StateR s a) = s -> s :* a
   abst = StateR
   repr = runStateR

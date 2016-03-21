@@ -85,23 +85,23 @@ deriving instance Ord a => Ord (Tree n a)
 
 -- TODO: Redo in 'case singT' style
 
-type instance Rep (ST LU) = ()
 instance HasRep (ST LU) where
+  type Rep (ST LU) = ()
   repr SL = ()
   abst () = SL
 
-type instance Rep (ST (BU p q)) = ST p :* ST q
 instance (HasSingT p, HasSingT q) => HasRep (ST (BU p q)) where
+  type Rep (ST (BU p q)) = ST p :* ST q
   repr SB = (singT :: ST p , singT :: ST q)
   abst _  = SB
 
-type instance Rep (Tree LU a) = a
 instance HasRep (Tree LU a) where
+  type Rep (Tree LU a) = a
   repr (L a) = a
   abst a = L a
 
-type instance Rep (Tree (BU p q) a) = Tree p a :* Tree q a
 instance HasRep (Tree (BU p q) a) where
+  type Rep (Tree (BU p q) a) = Tree p a :* Tree q a
   repr (B u v) = (u,v)
   abst (u,v) = B u v
 

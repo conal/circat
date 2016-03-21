@@ -107,14 +107,14 @@ instance (CoArbitrary a) => CoArbitrary (Tree n a) where
   coarbitrary (L a ) = coarbitrary a
   coarbitrary (B ts) = coarbitrary ts
 
-type instance Rep (Tree Z a) = a
 instance HasRep (Tree Z a) where
+  type Rep (Tree Z a) = a
   repr (L a) = a
   abst a = L a
 
 #if 1
-type instance Rep (Tree (S n) a) = Pair (Tree n a)
 instance HasRep (Tree (S n) a) where
+  type Rep (Tree (S n) a) = Pair (Tree n a)
   repr (B ts) = ts
   abst ts = B ts
 #else

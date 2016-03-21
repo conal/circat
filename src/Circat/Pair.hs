@@ -68,10 +68,12 @@ instance Arbitrary a => Arbitrary (Pair a) where
 instance CoArbitrary a => CoArbitrary (Pair a) where
   coarbitrary (x :# y) = coarbitrary x . coarbitrary y
 
-type instance Rep (Pair a) = a :* a
 instance HasRep (Pair a) where
+  type Rep (Pair a) = a :* a
   repr (a :# a') = (a,a')
   abst (a,a') = (a :# a')
+  {-# INLINE repr #-}
+  {-# INLINE abst #-}
 
 instance Ord a => Ord (Pair a) where
   compare = comparing fromP

@@ -18,7 +18,7 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..)) where
+module Circat.Rep (HasRep(..)) where
 
 import Data.Monoid
 import Data.Newtypes.PrettyDouble
@@ -28,8 +28,6 @@ import qualified GHC.Generics as G
 import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
 -- TODO: more
-
-import GHC.Types (type (~~))
 
 import Circat.Complex
 
@@ -41,53 +39,44 @@ import TypeUnary.TyNat (Z,S)
 import TypeUnary.Nat (Nat(..),IsNat(..))
 import TypeUnary.Vec (Vec(..))
 
-type family Rep a
-
 -- | Convert to and from standard representations. Used for transforming case
 -- expression scrutinees and constructor applications. The 'repr' method should
 -- convert to a standard representation (unit, products, sums), or closer to
 -- such a representation, via another type with a 'HasRep' instance. The 'abst'
 -- method should reveal a constructor so that we can perform the
 -- case-of-known-constructor transformation.
-class HasRep a where
-  repr :: Rep a ~~ a' => a -> a'
-  abst :: Rep a ~~ a' => a' -> a
 
--- Note types:
--- 
---   repr :: forall a. HasRep a => forall a'. Rep a ~~ a' => a -> a'
---   abst :: forall a. HasRep a => forall a'. Rep a ~~ a' => a' -> a
--- 
--- Note: Using Rep a ~~ a' rather than the reverse to make the calls a little
--- easier to construct (using normaliseType and no mkSymCo).
+class HasRep a where
+  type Rep a
+  repr :: a -> Rep a
+  abst :: Rep a -> a
 
 -- -- Identity as @'abst' . 'repr'@.
 -- abstRepr :: HasRep a => a -> a
 -- abstRepr = abst . repr
 
-type instance Rep (a,b,c) = ((a,b),c)
 instance HasRep (a,b,c) where
+  type Rep (a,b,c) = ((a,b),c)
   repr (a,b,c) = ((a,b),c)
   abst ((a,b),c) = (a,b,c)
 
-type instance Rep (a,b,c,d) = ((a,b),(c,d))
 instance HasRep (a,b,c,d) where
+  type Rep (a,b,c,d) = ((a,b),(c,d))
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
 
-type instance Rep (Vec Z a) = ()
 instance HasRep (Vec Z a) where
+  type Rep (Vec Z a) = ()
   repr ZVec = ()
   abst () = ZVec
 
-type instance Rep (Vec (S n) a) = (a,Vec n a)
 instance HasRep (Vec (S n) a) where
+  type Rep (Vec (S n) a) = (a,Vec n a)
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
 
 #define WrapRep(abstT,reprT,con) \
-type instance Rep (abstT) = reprT; \
-instance HasRep (abstT) where { repr (con a) = a ; abst a = con a }
+instance HasRep (abstT) where { type Rep (abstT) = reprT; repr (con a) = a ; abst a = con a }
 
 WrapRep(Sum a,a,Sum)
 WrapRep(PrettyDouble,Double,PrettyDouble)
@@ -105,21 +94,21 @@ WrapRep(Parity,Bool,Parity)
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
 
-type instance Rep (Nat Z) = ()
 instance HasRep (Nat Z) where
+  type Rep (Nat Z) = ()
   repr Zero = ()
   abst () = Zero
 
-type instance Rep (Nat (S n)) = () :* Nat n
 instance IsNat n => HasRep (Nat (S n)) where
+  type Rep (Nat (S n)) = () :* Nat n
   repr (Succ n) = ((),n)
   abst ((),n) = Succ n
 -- The IsNat constraint comes from Succ.
 -- TODO: See about eliminating that constructor constraint.
 
 -- Experimental treatment of Maybe
-type instance Rep (Maybe a) = Bool :* a
 instance HasRep (Maybe a) where
+  type Rep (Maybe a) = Bool :* a
   repr (Just a) = (True,a)
   repr Nothing  = (False,undefined)
   abst (True,a ) = Just a
@@ -130,8 +119,8 @@ instance HasRep (Maybe a) where
 
 -- Generalize Maybe to sums:
 
-type instance Rep (a :+ b) = Bool :* (a :* b)
 instance HasRep (a :+ b) where
+  type Rep (a :+ b) = Bool :* (a :* b)
   repr (Left  a) = (False,(a,undefined)) -- error "repr on Maybe: undefined value"
   repr (Right b) = (True,(undefined,b))
   abst (False,(a,_)) = Left  a
@@ -142,44 +131,44 @@ instance HasRep (a :+ b) where
 -- type instance Rep (Maybe a) = Unit :+ a
 -- ...
 
-type instance Rep (Complex a) = a :* a
 instance HasRep (Complex a) where
+  type Rep (Complex a) = a :* a
   repr (a :+ a') = (a,a')
   abst (a,a') = (a :+ a')
 
-type instance Rep (G.U1 p) = ()
 instance HasRep (G.U1 p) where
+  type Rep (G.U1 p) = ()
   repr G.U1 = ()
   abst () = G.U1
 
-type instance Rep (G.Par1 p) = p
 instance HasRep (G.Par1 p) where
+  type Rep (G.Par1 p) = p
   repr = G.unPar1
   abst = G.Par1
 
-type instance Rep (G.K1 i c p) = c
 instance HasRep (G.K1 i c p) where
+  type Rep (G.K1 i c p) = c
   repr = G.unK1
   abst = G.K1
 
-type instance Rep (G.M1 i c f p) = f p
 instance HasRep (G.M1 i c f p) where
+  type Rep (G.M1 i c f p) = f p
   repr = G.unM1
   abst = G.M1
 
-type instance Rep ((G.:+:) f g p) = f p :+ g p
 instance HasRep ((G.:+:) f g p) where
+  type Rep ((G.:+:) f g p) = f p :+ g p
   repr (G.L1 x) = Left  x
   repr (G.R1 x) = Right x
   abst = either G.L1 G.R1
 
-type instance Rep ((G.:*:) f g p) = f p :* g p
 instance HasRep ((G.:*:) f g p) where
+  type Rep ((G.:*:) f g p) = f p :* g p
   repr (x G.:*: y) = (x,y)
   abst (x,y) = (x G.:*: y)
 
-type instance Rep ((G.:.:) f g p) = f (g p)
 instance HasRep ((G.:.:) f g p) where
+  type Rep ((G.:.:) f g p) = f (g p)
   repr = G.unComp1
   abst = G.Comp1
 
