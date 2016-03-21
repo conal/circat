@@ -181,7 +181,7 @@ asFun (Mealy h s0) = mealy h s0
 -- asFun (Mealy h s0) = M.loop (h . second (M.delay s0))
 {-# INLINE asFun #-}
 
-mealy :: C s => ((a,s) -> (b,s)) -> s -> (a -> b)
+mealy :: ((a,s) -> (b,s)) -> s -> (a -> b)
 mealy h s0 = M.loop (h . second (M.delay s0))
 {-# INLINE mealy #-}
 
@@ -442,7 +442,7 @@ fib3 = proc () -> do rec a <- delay 0 -< b
                          b <- delay 1 -< a+b
                      returnA -< a
 
-testFib :: (C a, Num a) => Mealy () a -> [a]
+testFib :: Mealy () a -> [a]
 testFib fib = runMealy fib (replicate 10 ())
 
 
