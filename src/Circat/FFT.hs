@@ -356,16 +356,16 @@ fftIsDft :: (FFT f f', Foldable f, Foldable f', RealFloat a, ApproxEq a) =>
 fftIsDft = toList . fft =~= dft . toList
 
 dftTIsDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
-            f (Complex a) -> Bool
+             f (Complex a) -> Bool
 dftTIsDft = toList . dftT =~= dft . toList
 
-dftQIsDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
-            f (Complex a) -> Bool
+dftQIsDft :: (AFS f, RealFloat a, ApproxEq a) =>
+             f (Complex a) -> Bool
 dftQIsDft = toList . dftQ =~= dft . toList
 
 -- TEMP:
-dftQDft :: (AFS f, Traversable f, RealFloat a, ApproxEq a) =>
-        f (Complex a) -> ([Complex a], [Complex a])
+dftQDft :: (AFS f, RealFloat a) =>
+           f (Complex a) -> ([Complex a], [Complex a])
 dftQDft xs = (toList . dftQ $ xs, dft . toList $ xs)
 
 {--------------------------------------------------------------------
