@@ -335,15 +335,15 @@ isoErr nm = error (nm ++ ": IsoB")
 pairB :: Buses a :* Buses b -> Buses (a :* b)
 pairB (a,b) = PairB a b
 
--- Workaround for "spurious non-exhaustive warning with GADT and newtypes"
--- <https://ghc.haskell.org/trac/ghc/ticket/6124>.
-#define BogusMatch(name) name _ = error "BogusMatch"
-#define BogusAlt _ -> error "BogusMatch"
+-- -- Workaround for "spurious non-exhaustive warning with GADT and newtypes"
+-- -- <https://ghc.haskell.org/trac/ghc/ticket/6124>.
+-- #define BogusMatch(name) name _ = error "BogusMatch"
+-- #define BogusAlt _ -> error "BogusMatch"
 
 unUnitB :: Buses Unit -> Unit
 unUnitB UnitB    = ()
 unUnitB (IsoB _) = isoErr "unUnitB"
-BogusMatch(unUnitB)
+-- BogusMatch(unUnitB)
 
 unPairB :: Buses (a :* b) -> Buses a :* Buses b
 #if 0
@@ -356,11 +356,12 @@ unPairB w = (a,b)
    a = case w of
          PairB p _ -> p
          IsoB _    -> isoErr "unPairB"
-         BogusAlt
+--          BogusAlt
    b = case w of
          PairB _ q -> q
          IsoB _    -> isoErr "unPairB"
-         BogusAlt
+--          BogusAlt
+
 --    (a,b) = case w of
 --              PairB p q -> (p,q)
 --              IsoB _    -> isoErr "unPairB"
@@ -370,7 +371,7 @@ unPairB w = (a,b)
 unFunB :: Buses (a -> b) -> (a :> b)
 unFunB (FunB circ) = circ
 unFunB (IsoB _)    = isoErr "unFunB"
-BogusMatch(unFunB)
+-- BogusMatch(unFunB)
 
 exlB :: Buses (a :* b) -> Buses a
 exlB = fst . unPairB
@@ -797,13 +798,13 @@ instance BottomCat (:>) where
   bottomC = mkCK (const mkBot)
 #endif
 
--- pattern Read :: Read a => a -> String
+pattern Read :: Read a => a -> String
 pattern Read x <- (reads -> [(x,"")])
 
 pattern ConstS :: PrimName -> Source
 pattern ConstS name <- Source _ name [] 0
 
--- pattern Val :: Read a => a -> Source
+pattern Val :: Read a => a -> Source
 pattern Val x <- ConstS (Read x)
 
 -- pattern Val x       <- ConstS (reads -> [(x,"")])
@@ -1044,7 +1045,7 @@ instance (Fractional a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
               [x,NegateS y]  -> newComp2 (negateC . divideC) x y
               _              -> nothingA
 
-instance (Floating a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+instance (Floating a, Read a, Show a, GenBuses a)
       => FloatingCat (:>) a where
   expC = primNoOpt1 "exp" exp
   cosC = primNoOpt1 "cos" cos
@@ -2150,7 +2151,7 @@ mapZip as bs = M.mapWithKey (\ k a -> (a,bs M.! k)) as
 
 #endif
 
-mealyAsArrow :: GenBuses a => MealyC a b -> (a :> b)
+mealyAsArrow :: MealyC a b -> (a :> b)
 mealyAsArrow (MealyC f s0) = loopC (f . second (delay s0))
 
 unitizeMealyC :: GenBuses a => MealyC a b -> UU
