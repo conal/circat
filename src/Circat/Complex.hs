@@ -125,11 +125,11 @@ instance  (RealFloat a) => Floating (Complex a) where
     acosh z        =  log (z + (z+1) * sqrt ((z-1)/(z+1)))
     atanh z        =  0.5 * log ((1.0+z) / (1.0-z))
 
-instance (RealFloat a, Arbitrary a) => Arbitrary (Complex a) where
+instance Arbitrary a => Arbitrary (Complex a) where
   arbitrary = liftA2 (:+) arbitrary arbitrary
   shrink (x :+ y) = map (uncurry (:+)) (shrink (x,y))
 
-instance (RealFloat a, CoArbitrary a) => CoArbitrary (Complex a) where
+instance CoArbitrary a => CoArbitrary (Complex a) where
   coarbitrary (x :+ y) = coarbitrary x . coarbitrary y
 
 #endif
