@@ -1,8 +1,14 @@
-{-# LANGUAGE DeriveFunctor, DeriveDataTypeable, CPP #-}
-{-# LANGUAGE TypeOperators, TypeFamilies, ConstraintKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE DeriveGeneric #-}
--- {-# LANGUAGE UndecidableInstances #-}  -- See below
+{-# LANGUAGE CPP                   #-}
+{-# LANGUAGE ConstraintKinds       #-}
+{-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE TypeOperators         #-}
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -27,6 +33,7 @@ module Circat.Pair
   , fstP, sndP, firstP, secondP
   , sortP
   , get, update
+  , pairIf
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,reverse)
@@ -46,9 +53,11 @@ import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
 
 import Circat.Misc (Unop,(:*),Reversible(..),Sized(..))
 import Circat.Category  -- (ProductCat(..))
--- import Circat.State (pureState,StateFun,StateExp)
--- import Circat.If
+import Circat.Category (Uncurriable(..),twiceP,(***),(&&&),second)
+import Circat.Classes (BottomCat(..),IfCat(..),IfT)
 import Circat.Scan
+import Circat.Circuit
+#include "AbsTy.inc"
 
 {--------------------------------------------------------------------
     Pair representation and basic instances
@@ -187,6 +196,52 @@ update True  f (a :# b) = (a :# f b)
 
 {-# INLINE get #-}
 {-# INLINE update #-}
+
+{--------------------------------------------------------------------
+    Circuit support
+--------------------------------------------------------------------}
+
+instance GenBuses q_q => Uncurriable (:>) q_q (Pair a) where
+  uncurries = id
+
+instance GenBuses a => GenBuses (Pair a) where
+  genBuses' prim ins = abstB <$> (PairB <$> gb <*> gb)
+   where
+     gb :: BusesM (Buses a)
+     gb = genBuses' prim ins
+     {-# NOINLINE gb #-}
+  delay (a :# b) = abstC . (del a *** del b) . reprC
+   where
+     del :: a -> (a :> a)
+     del = delay
+     {-# NOINLINE del #-}
+  ty = const (PairT t t)
+   where
+     t = ty (undefined :: a)
+     {-# NOINLINE t #-}
+
+-- Without these NOINLINE pragmas, GHC's typechecker does exponential work for
+-- binary trees. I'll want to do something similar for Vec as well so that n-ary
+-- trees don't blow up.
+
+instance BottomCat (:>) a => BottomCat (:>) (Pair a) where
+  bottomC = abstC . (bc &&& bc)
+   where
+     bc :: () :> a
+     bc = bottomC
+     {-# NOINLINE bc #-}
+
+instance IfCat (:>) a => IfCat (:>) (Pair a)
+ where
+   ifC = abstC . pairIf . second (twiceP reprC)
+
+-- Specialization of prodPair
+pairIf :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
+pairIf = half exl &&& half exr
+  where
+    half :: (u `k` a) -> ((Bool :* (u :* u)) `k` a)
+    half f = ifC . second (twiceP f)
+    {-# NOINLINE half #-}
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package

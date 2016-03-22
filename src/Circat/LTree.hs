@@ -10,6 +10,9 @@
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
+#include "AbsTy.inc"
+AbsTyPragmas
+
 {-# OPTIONS_GHC -Wall #-}
 
 {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -60,6 +63,8 @@ import qualified Circat.Pair as P
 import Circat.Rep
 -- import Circat.If
 import Circat.Scan
+
+AbsTyImports
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -580,6 +585,13 @@ update (b :< bs) = inB . update bs . P.update b
 
 {-# INLINE get #-}
 {-# INLINE update #-}
+
+{--------------------------------------------------------------------
+    Circuit support
+--------------------------------------------------------------------}
+
+AbsTy(Tree Z a)
+AbsTy(Tree (S n) a)
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package

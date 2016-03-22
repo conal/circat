@@ -76,7 +76,7 @@ module Circat.Circuit
   , unitizeMealyC
 --   , Complex(..),cis
   -- For AbsTy
-  , BusesM, abstB,abstC,reprC,Buses(..),pairIf,Ty(..)
+  , BusesM, abstB,abstC,reprC,Buses(..),Ty(..)
   ) where
 
 import Prelude hiding (id,(.),curry,uncurry,sequence)
@@ -129,11 +129,12 @@ import Circat.Doubli
 import Circat.Complex
 import Circat.Category
 import Circat.Classes
-import Circat.Pair
-import qualified Circat.RTree as RTree
-import qualified Circat.LTree as LTree
-import Circat.RaggedTree (TU(..))
-import qualified Circat.RaggedTree as Rag
+
+-- import Circat.Pair
+-- import qualified Circat.RTree as RTree
+-- import qualified Circat.LTree as LTree
+-- import Circat.RaggedTree (TU(..))
+-- import qualified Circat.RaggedTree as Rag
 
 {--------------------------------------------------------------------
     Buses
@@ -2212,65 +2213,20 @@ AbsTy((a,b,c,d))
 AbsTy(Maybe a)
 AbsTy(Either a b)
 -- AbsTy(Pair a)  -- See below
+-- AbsTy(RTree.Tree Z a)
+-- AbsTy(RTree.Tree (S n) a)
+-- AbsTy(LTree.Tree Z a)
+-- AbsTy(LTree.Tree (S n) a)
+-- AbsTy(Rag.Tree LU a)
+-- AbsTy(Rag.Tree (BU p q) a)
 AbsTy(Vec Z a)
 AbsTy(Vec (S n) a)
-AbsTy(RTree.Tree Z a)
-AbsTy(RTree.Tree (S n) a)
-AbsTy(LTree.Tree Z a)
-AbsTy(LTree.Tree (S n) a)
-AbsTy(Rag.Tree LU a)
-AbsTy(Rag.Tree (BU p q) a)
+-- TODO: Remove Vec instances & import. Switching to ShapedTypes.Vec
 AbsTy(Complex a)
 -- Newtypes. Alternatively, don't use them in external interfaces.
 AbsTy(Sum a)
 AbsTy(PrettyDouble)
 AbsTy(Product a)
-
-#if 0
-AbsTy(Pair a)
-#else
-
-instance GenBuses q_q => Uncurriable (:>) q_q (Pair a) where
-  uncurries = id
-
-instance GenBuses a => GenBuses (Pair a) where
-  genBuses' prim ins = abstB <$> (PairB <$> gb <*> gb)
-   where
-     gb :: BusesM (Buses a)
-     gb = genBuses' prim ins
-     {-# NOINLINE gb #-}
-  delay (a :# b) = abstC . (del a *** del b) . reprC
-   where
-     del :: a -> (a :> a)
-     del = delay
-     {-# NOINLINE del #-}
-  ty = const (PairT t t)
-   where
-     t = ty (undefined :: a)
-     {-# NOINLINE t #-}
-
--- Toasts GHC without these NOINLINE pragmas.
-
-instance BottomCat (:>) a => BottomCat (:>) (Pair a) where
-  bottomC = abstC . (bc &&& bc)
-   where
-     bc :: Unit :> a
-     bc = bottomC
-     {-# NOINLINE bc #-}
-
-instance IfCat (:>) a => IfCat (:>) (Pair a)
- where
-   ifC = abstC . pairIf . second (twiceP reprC)
-
--- Specialization of prodPair
-pairIf :: forall k a. (ProductCat k, IfCat k a) => IfT k (a :* a)
-pairIf = half exl &&& half exr
-  where
-    half :: (u `k` a) -> ((Bool :* (u :* u)) `k` a)
-    half f = ifC . second (twiceP f)
-    {-# NOINLINE half #-}
-
-#endif
 
 -- TODO: Rework instances for Vec n as well, since it has the same redundancy
 -- issue as Pair, in a subtler form. Probably also Ragged.

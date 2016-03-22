@@ -10,6 +10,9 @@
 {-# LANGUAGE DeriveDataTypeable #-} -- experiment
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
+#include "AbsTy.inc"
+AbsTyPragmas
+
 #ifdef Induction
 {-# LANGUAGE ConstraintKinds, PatternGuards #-}
 #endif
@@ -69,6 +72,8 @@ import qualified Circat.Pair as P
 -- import Circat.Rep
 -- import Circat.If
 import Circat.Scan
+
+AbsTyImports
 
 -- TODO: Use the generalization from numbers-vectors-trees, factoring out Pair
 
@@ -632,6 +637,13 @@ update (b :< bs) = inB . P.update b . update bs
 _t1,_t1' :: Tree N1 Int
 _t1 = tree1 3 5
 _t1' = update (False :< ZVec) succ _t1
+
+{--------------------------------------------------------------------
+    Circuit support
+--------------------------------------------------------------------}
+
+AbsTy(Tree Z a)
+AbsTy(Tree (S n) a)
 
 {--------------------------------------------------------------------
     Numeric instances via the applicative-numbers package

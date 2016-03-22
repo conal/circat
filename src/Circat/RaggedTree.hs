@@ -9,6 +9,9 @@
 -- {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE UndecidableInstances #-}  -- See below
 
+#include "AbsTy.inc"
+AbsTyPragmas
+
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
 
@@ -48,6 +51,8 @@ import Circat.Show (showsApp1,showsApp2)
 import Circat.Rep
 -- import Circat.If
 import Circat.Scan
+
+AbsTyImports
 
 -- data Tree a = L a | B (Tree a) (Tree a)
 
@@ -272,6 +277,25 @@ tree13 :: a -> a -> a -> a -> a -> a -> a -> a
 tree13 a b c d e f g h i j k l m =
   B (tree8 a b c d e f g h) (tree5 i j k l m)
 
+{--------------------------------------------------------------------
+    Circuit support
+--------------------------------------------------------------------}
+
+AbsTy(Tree LU a)
+AbsTy(Tree (BU p q) a)
+
+{--------------------------------------------------------------------
+    Numeric instances via the applicative-numbers package
+--------------------------------------------------------------------}
+
+-- Generate bogus (error-producing) Enum
+#define INSTANCE_Enum
+
+#define CONSTRAINTS HasSingT r, 
+
+#define APPLICATIVE Tree r
+#include "ApplicativeNumeric-inc.hs"
+
 #ifdef Testing
 
 {--------------------------------------------------------------------
@@ -291,15 +315,3 @@ t4 :: Tree R3 Bool
 t4 = not <$> t3
 
 #endif
-
-{--------------------------------------------------------------------
-    Numeric instances via the applicative-numbers package
---------------------------------------------------------------------}
-
--- Generate bogus (error-producing) Enum
-#define INSTANCE_Enum
-
-#define CONSTRAINTS HasSingT r, 
-
-#define APPLICATIVE Tree r
-#include "ApplicativeNumeric-inc.hs"
