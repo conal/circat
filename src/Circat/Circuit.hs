@@ -245,6 +245,7 @@ instance Show (Buses a) where
 
 -- TODO: Improve to Show instance with showsPrec
 
+-- Component (primitive) type
 data Ty = UnitT | BoolT | IntT | FloatT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
@@ -427,9 +428,6 @@ genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
 genComp prim a =
   do 
      mb <- Mtl.gets (M.lookup key . snd)
---      mb <- if isDelayPrim prim then
---              return Nothing
---             else Mtl.gets (M.lookup key . snd)
      case mb of
        Just (Comp _ _ b', _) ->
          do Mtl.modify (second (M.adjust (second succ) key))
@@ -444,8 +442,9 @@ genComp prim a =
    name = primName prim
    key  = (name,ins,ty (undefined :: b))
 
--- TODO: Key on result type as well. Particularly important for polymorphic
--- constants such as bottom (and one day, zero).
+-- TODO: Possibly key on argument type as well? What currently happens with Eq
+-- and Ord operations on Int vs Double? Maybe it's not an issue, since
+-- differently typed arguments can't be the same.
 
 #else
 genComp prim a = -- trace (printf "genComp %s %s --> %s"
