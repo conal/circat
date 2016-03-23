@@ -21,7 +21,7 @@
 module Circat.Rep (HasRep(..)) where
 
 import Data.Monoid
-import Data.Newtypes.PrettyDouble
+-- import Data.Newtypes.PrettyDouble
 import Control.Applicative (WrappedMonad(..))
 import qualified GHC.Generics as G
 
@@ -79,7 +79,7 @@ instance HasRep (Vec (S n) a) where
 instance HasRep (abstT) where { type Rep (abstT) = reprT; repr (con a) = a ; abst a = con a }
 
 WrapRep(Sum a,a,Sum)
-WrapRep(PrettyDouble,Double,PrettyDouble)
+-- WrapRep(PrettyDouble,Double,PrettyDouble)
 WrapRep(Product a,a,Product)
 WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)

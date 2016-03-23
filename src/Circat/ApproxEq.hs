@@ -27,7 +27,7 @@ import qualified Circat.Pair  as P
 import qualified Circat.LTree as L
 import qualified Circat.RTree as R
 
-import Data.Newtypes.PrettyDouble (PrettyDouble(..))
+-- import Data.Newtypes.PrettyDouble (PrettyDouble(..))
 
 infix 4 =~
 class ApproxEq a where
@@ -42,8 +42,8 @@ instance ApproxEq Double where (=~) = closeNum
 instance ApproxEq a => ApproxEq (Complex a) where
   (a :+ b) =~ (a' :+ b') = a =~ a' && b =~ b'
 
--- PrettyDouble Eq already works this way
-instance ApproxEq PrettyDouble where (=~) = (==)
+-- -- PrettyDouble Eq already works this way
+-- instance ApproxEq PrettyDouble where (=~) = (==)
 
 instance ApproxEq a => ApproxEq [a] where
   as =~ bs = length as == length bs && and (zipWith (=~) as bs)

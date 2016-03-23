@@ -51,7 +51,7 @@ import Test.QuickCheck.All (quickCheckAll)
 import Control.Compose ((:.)(..),inO,unO)
 import TypeUnary.Nat (Nat(..),IsNat(..),natToZ,N0,N1,N2,N3,N4)
 
-import Data.Newtypes.PrettyDouble
+-- import Data.Newtypes.PrettyDouble
 
 import Circat.Complex
 import Circat.Misc (transpose, inTranspose,Unop,Binop,Sized(..))
@@ -291,7 +291,6 @@ u <.> v = sum (liftA2 (*) u v)
 -- > powers 2 :: L.Tree N3 Int
 -- B (B (B (L (((1 :# 2) :# (4 :# 8)) :# ((16 :# 32) :# (64 :# 128))))))
 
--- PrettyDouble doesn't yet have an Arbitrary instance, so use Double for now
 type C = Complex Double
 
 fftl :: (FFT f f', Foldable f', RealFloat a) => f (Complex a) -> [Complex a]

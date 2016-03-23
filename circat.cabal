@@ -31,7 +31,7 @@ Library
                   , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
-                  , treeviz >= 2.0.2
+--                   , treeviz >= 2.0.2
 
 -- TODO: after I remove modules duplicated in shaped-types, trim build-depends
 

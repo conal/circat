@@ -83,7 +83,7 @@ import Prelude hiding (id,(.),curry,uncurry,sequence)
 -- import qualified Prelude as P
 
 import Data.Monoid ({-mempty,-}(<>),Sum,Product)
-import Data.Newtypes.PrettyDouble
+-- import Data.Newtypes.PrettyDouble
 -- import Data.Functor ((<$>))
 import Control.Applicative ({-Applicative(..),-}liftA2)
 import Control.Monad (unless)
@@ -2223,7 +2223,7 @@ AbsTy(Vec (S n) a)
 AbsTy(Complex a)
 -- Newtypes. Alternatively, don't use them in external interfaces.
 AbsTy(Sum a)
-AbsTy(PrettyDouble)
+-- AbsTy(PrettyDouble)
 AbsTy(Product a)
 
 -- TODO: Rework instances for Vec n as well, since it has the same redundancy
