@@ -50,7 +50,7 @@ Library
                     Circat.Shift
                     Circat.Mealy
                     Circat.Scan
-                    Circat.Doubli
+--                     Circat.Doubli
                     Circat.Complex
                     Circat.FFT
                     Circat.Circuit

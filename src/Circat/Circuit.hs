@@ -125,7 +125,7 @@ import TypeUnary.Vec hiding (get)
 
 -- TODO: Eliminate most of the following, as I move data types out of circat
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
-import Circat.Doubli
+-- import Circat.Doubli
 import Circat.Complex
 import Circat.Category
 import Circat.Classes
@@ -200,6 +200,9 @@ newSource w prim ins o = -- trace "newSource" $
 {--------------------------------------------------------------------
     Buses representing a given type
 --------------------------------------------------------------------}
+
+-- Temporary alias
+type Doubli = Double
 
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
 -- 'IsoB' is for isomorphic forms. Note: b must not have one of the standard
