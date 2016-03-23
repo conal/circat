@@ -41,7 +41,6 @@ Library
                     Circat.Category
                     Circat.Classes
                     Circat.Rep
---                     Circat.ZRep
                     Circat.Pair
                     Circat.RTree
                     Circat.LTree
@@ -50,7 +49,6 @@ Library
                     Circat.Shift
                     Circat.Mealy
                     Circat.Scan
---                     Circat.Doubli
                     Circat.Complex
                     Circat.FFT
                     Circat.Circuit

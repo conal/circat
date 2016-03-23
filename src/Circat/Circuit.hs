@@ -125,7 +125,6 @@ import TypeUnary.Vec hiding (get)
 
 -- TODO: Eliminate most of the following, as I move data types out of circat
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
--- import Circat.Doubli
 import Circat.Complex
 import Circat.Category
 import Circat.Classes
@@ -201,9 +200,6 @@ newSource w prim ins o = -- trace "newSource" $
     Buses representing a given type
 --------------------------------------------------------------------}
 
--- Temporary alias
-type Doubli = Double
-
 -- | Typed aggregate of buses. @'Buses' a@ carries a value of type @a@.
 -- 'IsoB' is for isomorphic forms. Note: b must not have one of the standard
 -- forms. If it does, we'll get a run-time error when consuming.
@@ -212,7 +208,7 @@ data Buses :: * -> * where
   BoolB   :: Source -> Buses Bool
   IntB    :: Source -> Buses Int
   FloatB  :: Source -> Buses Float
-  DoubleB :: Source -> Buses Doubli
+  DoubleB :: Source -> Buses Double
   PairB   :: Buses a -> Buses b -> Buses (a :* b)
   FunB    :: (a :> b) -> Buses (a -> b)
   IsoB    :: Buses (Rep a) -> Buses a
@@ -304,7 +300,7 @@ instance GenBuses Float  where
   delay = primDelay
   ty = const FloatT
 
-instance GenBuses Doubli  where
+instance GenBuses Double  where
   genBuses' = genBus DoubleB 64
   delay = primDelay
   ty = const DoubleT
@@ -769,7 +765,7 @@ bottomScalar = mkCK (constComp UNDEFINED)
 
 BottomPrim(Bool)
 BottomPrim(Int)
-BottomPrim(Doubli)
+BottomPrim(Double)
 
 instance BottomCat (:>) Unit where
 --   bottomC = mkCK (const (return UnitB))
@@ -828,7 +824,7 @@ class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses Bool   where toBuses = BoolB
 instance SourceToBuses Int    where toBuses = IntB
 instance SourceToBuses Float  where toBuses = FloatB
-instance SourceToBuses Doubli where toBuses = DoubleB
+instance SourceToBuses Double where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
 sourceB = justA . toBuses
@@ -927,7 +923,7 @@ neOpt = noOpt
 
 EqPrim(Bool)
 EqPrim(Int)
-EqPrim(Doubli)
+EqPrim(Double)
 
 instance EqCat (:>) () where
   equal = constC True
@@ -961,7 +957,7 @@ geOpt = noOpt
 
 OrdPrim(Bool)
 OrdPrim(Int)
-OrdPrim(Doubli)
+OrdPrim(Double)
 
 instance OrdCat (:>) () where
   lessThan = constC False
