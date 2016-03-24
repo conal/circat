@@ -121,7 +121,7 @@ import System.Exit (ExitCode(ExitSuccess))
 import Control.Monad.State (State,execState,StateT)
 import qualified Control.Monad.State as Mtl
 
-import TypeUnary.Vec hiding (get)
+-- import TypeUnary.Vec hiding (get)
 
 -- TODO: Eliminate most of the following, as I move data types out of circat
 import Circat.Misc (Unit,(:*),(<~),Unop,Binop)
@@ -971,18 +971,6 @@ instance OrdCat (:>) () where
 
 -- instance NumCat (:>) Int  where { add = namedC "+" ; mul = namedC "×" }
 
--- Zero or one, yielding the False or True, respectively.
-pattern BitS :: Bool -> Source
-pattern BitS b <- Source _ (readBit -> Just b) [] 0
-
-readBit :: String -> Maybe Bool
-readBit "0" = Just False
-readBit "1" = Just True
-readBit _   = Nothing
-
--- pattern ZeroS <- ConstS "0"
--- pattern OneS  <- ConstS "1"
-
 -- More robust (works for Double as well):
 
 #define ValT(x,ty) (Val (x :: ty))
@@ -995,9 +983,6 @@ pattern NegateS a <- Source _ "negate" [a] 0
 
 pattern RecipS  :: Source -> Source
 pattern RecipS  a <- Source _ "recip"  [a] 0
-
-pattern BToIS :: Source -> Source
-pattern BToIS a <- Source _ BoolToInt [a] 0
 
 instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
       => NumCat (:>) a where
@@ -1026,10 +1011,13 @@ instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
               [x@ZeroT(a),_] -> sourceB x
               [_,y@ZeroT(a)] -> sourceB y
               _              -> nothingA
-
--- instance NumCat (:>) Int where
---  add = namedC "add"
---  mul = namedC "mul"
+  powIC   = primOpt     "↑" $ \ case
+              [Val x, Val y] -> newVal (x ^ (y :: Int))
+              [x@OneT(a) ,_] -> sourceB x
+              [x,   OneT(a)] -> sourceB x
+              [x@ZeroT(a),_] -> sourceB x
+              [_,  ZeroT(a)] -> newVal 1
+              _              -> nothingA
 
 instance (Fractional a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
       => FractionalCat (:>) a where
@@ -1108,7 +1096,21 @@ ifOpt = \ case
   _             -> nothingA
 
 ifOptI :: Opt Int
-#if 1
+
+#if 0
+
+-- Zero or one, yielding the False or True, respectively.
+pattern BitS :: Bool -> Source
+pattern BitS b <- Source _ (readBit -> Just b) [] 0
+
+readBit :: String -> Maybe Bool
+readBit "0" = Just False
+readBit "1" = Just True
+readBit _   = Nothing
+
+pattern BToIS :: Source -> Source
+pattern BToIS a <- Source _ BoolToInt [a] 0
+
 -- if c then 0 else b == if c then boolToInt False else b
 -- if c then 1 else b == if c then boolToInt True  else b
 -- 
@@ -1126,6 +1128,13 @@ bToIConst :: Bool -> (a :> Int)
 bToIConst x = boolToIntC . constC x
 
 #else
+
+pattern ZeroS :: Source
+pattern ZeroS <- ConstS "0"
+
+pattern OneS :: Source
+pattern OneS <- ConstS "1"
+
 -- (if c then 1 else 0) = boolToInt c
 -- (if c then 0 else 1) = boolToInt (not c)
 ifOptI = \ case
@@ -2210,6 +2219,12 @@ AbsTy((a,b,c))
 AbsTy((a,b,c,d))
 AbsTy(Maybe a)
 AbsTy(Either a b)
+AbsTy(Complex a)
+
+#if 1
+
+-- Moving types to ShapedTypes
+
 -- AbsTy(Pair a)  -- See below
 -- AbsTy(RTree.Tree Z a)
 -- AbsTy(RTree.Tree (S n) a)
@@ -2217,11 +2232,11 @@ AbsTy(Either a b)
 -- AbsTy(LTree.Tree (S n) a)
 -- AbsTy(Rag.Tree LU a)
 -- AbsTy(Rag.Tree (BU p q) a)
-AbsTy(Vec Z a)
-AbsTy(Vec (S n) a)
+-- AbsTy(Vec Z a)
+-- AbsTy(Vec (S n) a)
 -- TODO: Remove Vec instances & import. Switching to ShapedTypes.Vec
-AbsTy(Complex a)
 -- Newtypes. Alternatively, don't use them in external interfaces.
+
 AbsTy(Sum a)
 -- AbsTy(PrettyDouble)
 AbsTy(Product a)
@@ -2232,3 +2247,5 @@ AbsTy(Product a)
 -- Better yet, rework the Pair instances in a more generic form, e.g., using
 -- Traversable for genBuses', so that they become easy to generalize and apply
 -- easily and efficiently to Vec n and others.
+
+#endif

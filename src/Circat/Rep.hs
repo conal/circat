@@ -35,9 +35,10 @@ import Circat.Complex
 
 -- TODO: Eliminate most of the following when I drop these types.
 import Circat.Misc ((:*),(:+),Parity(..))
-import TypeUnary.TyNat (Z,S)
-import TypeUnary.Nat (Nat(..),IsNat(..))
-import TypeUnary.Vec (Vec(..))
+
+-- import TypeUnary.TyNat (Z,S)
+-- import TypeUnary.Nat (Nat(..),IsNat(..))
+-- import TypeUnary.Vec (Vec(..))
 
 -- | Convert to and from standard representations. Used for transforming case
 -- expression scrutinees and constructor applications. The 'repr' method should
@@ -65,6 +66,8 @@ instance HasRep (a,b,c,d) where
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
 
+#if 0
+-- Switching to ShapedTypes.Vec
 instance HasRep (Vec Z a) where
   type Rep (Vec Z a) = ()
   repr ZVec = ()
@@ -74,6 +77,24 @@ instance HasRep (Vec (S n) a) where
   type Rep (Vec (S n) a) = (a,Vec n a)
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
+
+instance HasRep (Nat Z) where
+  type Rep (Nat Z) = ()
+  repr Zero = ()
+  abst () = Zero
+
+instance IsNat n => HasRep (Nat (S n)) where
+  type Rep (Nat (S n)) = () :* Nat n
+  repr (Succ n) = ((),n)
+  abst ((),n) = Succ n
+-- The IsNat constraint comes from Succ.
+-- TODO: See about eliminating that constructor constraint.
+#endif
+
+#if 1
+
+-- I'm now synthesizing HasRep instances for newtypes.
+-- Oh! I still need support for explicit uses.
 
 #define WrapRep(abstT,reprT,con) \
 instance HasRep (abstT) where { type Rep (abstT) = reprT; repr (con a) = a ; abst a = con a }
@@ -90,21 +111,10 @@ WrapRep(Identity a,a,Identity)
 WrapRep(StateT s m a, s -> m (a,s), StateT)
 
 WrapRep(Parity,Bool,Parity)
+#endif
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
-
-instance HasRep (Nat Z) where
-  type Rep (Nat Z) = ()
-  repr Zero = ()
-  abst () = Zero
-
-instance IsNat n => HasRep (Nat (S n)) where
-  type Rep (Nat (S n)) = () :* Nat n
-  repr (Succ n) = ((),n)
-  abst ((),n) = Succ n
--- The IsNat constraint comes from Succ.
--- TODO: See about eliminating that constructor constraint.
 
 -- Experimental treatment of Maybe
 instance HasRep (Maybe a) where

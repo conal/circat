@@ -254,7 +254,9 @@ translateBinOp = \ case
   "−"   -> Just Minus
   "×"   -> Just Times
   "*"   -> Just Times
-  "∧"   -> Just And
+  "↑"   -> Just Pow
+  "˄"   -> Just Pow
+  "∧"   -> Just And  -- Hm. Looks a lot like Pow/^
   "&&"  -> Just And
   "∨"   -> Just Or
   "||"  -> Just Or
