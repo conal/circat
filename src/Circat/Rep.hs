@@ -2,6 +2,10 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-} -- experiment
+
+-- -- Experiment
+-- {-# LANGUAGE MagicHash #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -31,7 +35,8 @@ import Data.Functor.Identity (Identity(..))
 
 import Circat.Complex
 
--- import Data.Constraint
+-- -- Experiment
+-- import GHC.Exts (Int(..),Int#)
 
 -- TODO: Eliminate most of the following when I drop these types.
 import Circat.Misc ((:*),(:+),Parity(..))
@@ -183,3 +188,20 @@ instance HasRep ((G.:.:) f g p) where
   abst = G.Comp1
 
 -- TODO: Can I *replace* HasRep with Generic?
+
+{--------------------------------------------------------------------
+    Experiments
+--------------------------------------------------------------------}
+
+#if 0
+-- Represent unboxed types as boxed counterparts.
+
+instance HasRep Int# where
+  type Rep Int# = Int
+  abst (I# n) = n
+  repr n = I# n
+
+--     • Expecting a lifted type, but ‘Int#’ is unlifted
+--     • In the first argument of ‘HasRep’, namely ‘Int#’
+--       In the instance declaration for ‘HasRep Int#’
+#endif
