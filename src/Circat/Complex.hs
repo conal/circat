@@ -70,6 +70,13 @@ instance  (RealFloat a) => Num (Complex a)  where
     signum (0:+0)       =  0
     signum z@(x:+y)     =  x/r :+ y/r  where r = magnitude z
     fromInteger n       =  fromInteger n :+ 0
+    {-# INLINE (+)         #-}
+    {-# INLINE (-)         #-}
+    {-# INLINE (*)         #-}
+    {-# INLINE negate      #-}
+    {-# INLINE abs         #-}
+    {-# INLINE signum      #-}
+    {-# INLINE fromInteger #-}
 
 instance  (RealFloat a) => Fractional (Complex a)  where
     -- {-# SPECIALISE instance Fractional (Complex Float) #-}
