@@ -61,15 +61,19 @@ class HasRep a where
 -- abstRepr :: HasRep a => a -> a
 -- abstRepr = abst . repr
 
+#define INLINES {-# INLINE repr #-};{-# INLINE abst #-}
+
 instance HasRep (a,b,c) where
   type Rep (a,b,c) = ((a,b),c)
   repr (a,b,c) = ((a,b),c)
   abst ((a,b),c) = (a,b,c)
+  INLINES
 
 instance HasRep (a,b,c,d) where
   type Rep (a,b,c,d) = ((a,b),(c,d))
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
+  INLINES
 
 #if 0
 -- Switching to ShapedTypes.Vec
@@ -77,21 +81,25 @@ instance HasRep (Vec Z a) where
   type Rep (Vec Z a) = ()
   repr ZVec = ()
   abst () = ZVec
+  INLINES
 
 instance HasRep (Vec (S n) a) where
   type Rep (Vec (S n) a) = (a,Vec n a)
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
+  INLINES
 
 instance HasRep (Nat Z) where
   type Rep (Nat Z) = ()
   repr Zero = ()
   abst () = Zero
+  INLINES
 
 instance IsNat n => HasRep (Nat (S n)) where
   type Rep (Nat (S n)) = () :* Nat n
   repr (Succ n) = ((),n)
   abst ((),n) = Succ n
+  INLINES
 -- The IsNat constraint comes from Succ.
 -- TODO: See about eliminating that constructor constraint.
 #endif
@@ -150,42 +158,51 @@ instance HasRep (Complex a) where
   type Rep (Complex a) = a :* a
   repr (a :+ a') = (a,a')
   abst (a,a') = (a :+ a')
+  INLINES
 
 instance HasRep (G.U1 p) where
   type Rep (G.U1 p) = ()
   repr G.U1 = ()
   abst () = G.U1
+  INLINES
 
 instance HasRep (G.Par1 p) where
   type Rep (G.Par1 p) = p
   repr = G.unPar1
   abst = G.Par1
+  INLINES
 
 instance HasRep (G.K1 i c p) where
   type Rep (G.K1 i c p) = c
   repr = G.unK1
   abst = G.K1
+  INLINES
 
 instance HasRep (G.M1 i c f p) where
   type Rep (G.M1 i c f p) = f p
   repr = G.unM1
   abst = G.M1
+  INLINES
 
 instance HasRep ((G.:+:) f g p) where
   type Rep ((G.:+:) f g p) = f p :+ g p
-  repr (G.L1 x) = Left  x
-  repr (G.R1 x) = Right x
-  abst = either G.L1 G.R1
+  repr (G.L1  x) = Left  x
+  repr (G.R1  x) = Right x
+  abst (Left  x) = G.L1  x
+  abst (Right x) = G.R1  x
+  INLINES
 
 instance HasRep ((G.:*:) f g p) where
   type Rep ((G.:*:) f g p) = f p :* g p
   repr (x G.:*: y) = (x,y)
   abst (x,y) = (x G.:*: y)
+  INLINES
 
 instance HasRep ((G.:.:) f g p) where
   type Rep ((G.:.:) f g p) = f (g p)
   repr = G.unComp1
   abst = G.Comp1
+  INLINES
 
 -- TODO: Can I *replace* HasRep with Generic?
 
@@ -200,6 +217,7 @@ instance HasRep Int# where
   type Rep Int# = Int
   abst (I# n) = n
   repr n = I# n
+  INLINES
 
 --     • Expecting a lifted type, but ‘Int#’ is unlifted
 --     • In the first argument of ‘HasRep’, namely ‘Int#’
