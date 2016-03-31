@@ -89,6 +89,7 @@ import Control.Applicative ({-Applicative(..),-}liftA2)
 import Control.Monad (unless)
 import Control.Arrow (arr,Kleisli(..))
 import Data.Foldable ({-foldMap,-}toList)
+import qualified GHC.Generics as G
 -- import Data.Typeable                    -- TODO: imports
 -- import Data.Tuple (swap)
 import Data.Function (on)
@@ -1143,8 +1144,10 @@ ifOptI = \ case
   _              -> nothingA
 #endif
 
-instance IfCat (:>) Bool where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
-instance IfCat (:>) Int  where ifC = primOpt "if" (ifOpt `orOpt` ifOptI)
+instance IfCat (:>) Bool   where ifC = primOpt "if" (ifOpt `orOpt` ifOptB)
+instance IfCat (:>) Int    where ifC = primOpt "if" (ifOpt `orOpt` ifOptI)
+instance IfCat (:>) Float  where ifC = primOpt "if" ifOpt
+instance IfCat (:>) Double where ifC = primOpt "if" ifOpt
 
 -- instance IfCat (:>) Bool where ifC = namedC "if"
 -- instance IfCat (:>) Int  where ifC = namedC "if"
@@ -2247,5 +2250,13 @@ AbsTy(Product a)
 -- Better yet, rework the Pair instances in a more generic form, e.g., using
 -- Traversable for genBuses', so that they become easy to generalize and apply
 -- easily and efficiently to Vec n and others.
+
+AbsTy(G.U1 p)
+AbsTy(G.Par1 p)
+AbsTy(G.K1 i c p)
+AbsTy(G.M1 i c f p)
+AbsTy((G.:+:) f g p)
+AbsTy((G.:*:) f g p)
+AbsTy((G.:.:) f g p)
 
 #endif
