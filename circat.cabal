@@ -41,19 +41,23 @@ Library
                     Circat.Category
                     Circat.Classes
                     Circat.Rep
-                    Circat.Pair
-                    Circat.RTree
-                    Circat.LTree
-                    Circat.ApproxEq
-                    Circat.RaggedTree
-                    Circat.Shift
-                    Circat.Mealy
-                    Circat.Scan
                     Circat.Complex
-                    Circat.FFT
                     Circat.Circuit
                     Circat.Netlist
                     Circat.ShowUtils
+                    Circat.Mealy
+
+-- Moving the following to shaped-types
+
+--                     Circat.ApproxEq
+--                     Circat.Pair
+--                     Circat.RTree
+--                     Circat.LTree
+--                     Circat.RaggedTree
+--                     Circat.Shift
+--                     Circat.Scan
+--                     Circat.FFT
+
 --   other-modules:
 --                     Circat.Examples
   install-includes: Circat/AbsTy.inc

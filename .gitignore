@@ -16,3 +16,4 @@ out/
 # For instance, .#Help.page
 .#*
 src/Circat/Deriv.hs
+Unused/
