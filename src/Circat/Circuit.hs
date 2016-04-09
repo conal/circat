@@ -2221,7 +2221,7 @@ delayCRep a0 = abstC . delay (repr a0) . reprC
 AbsTy((a,b,c))
 AbsTy((a,b,c,d))
 AbsTy(Maybe a)
-AbsTy(Either a b)
+-- AbsTy(Either a b)
 AbsTy(Complex a)
 
 #if 1
