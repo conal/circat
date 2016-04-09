@@ -1,5 +1,5 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, EmptyCase, LambdaCase #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-} -- experiment
 
@@ -31,6 +31,7 @@ import qualified GHC.Generics as G
 
 import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
+-- import Data.Void (Void)
 -- TODO: more
 
 import Circat.Complex
@@ -142,12 +143,14 @@ instance HasRep (Maybe a) where
 
 -- Generalize Maybe to sums:
 
-instance HasRep (a :+ b) where
-  type Rep (a :+ b) = Bool :* (a :* b)
-  repr (Left  a) = (False,(a,undefined)) -- error "repr on Maybe: undefined value"
-  repr (Right b) = (True,(undefined,b))
-  abst (False,(a,_)) = Left  a
-  abst (True ,(_,b)) = Right b
+-- I use this version for circuits. Restore it later, after I'm handing :+ in reify-rules.
+
+-- instance HasRep (a :+ b) where
+--   type Rep (a :+ b) = Bool :* (a :* b)
+--   repr (Left  a) = (False,(a,undefined)) -- error "repr on Maybe: undefined value"
+--   repr (Right b) = (True,(undefined,b))
+--   abst (False,(a,_)) = Left  a
+--   abst (True ,(_,b)) = Right b
 
 -- -- TODO: Redefine `Maybe` representation as sum:
 -- 
@@ -159,6 +162,12 @@ instance HasRep (Complex a) where
   repr (a :+ a') = (a,a')
   abst (a,a') = (a :+ a')
   INLINES
+
+-- instance HasRep (G.V1 p) where
+--   type Rep (G.V1 p) = Void
+--   repr = \ case
+--   abst = \ case
+--   INLINES
 
 instance HasRep (G.U1 p) where
   type Rep (G.U1 p) = ()
@@ -184,16 +193,16 @@ instance HasRep (G.M1 i c f p) where
   abst = G.M1
   INLINES
 
-instance HasRep ((G.:+:) f g p) where
-  type Rep ((G.:+:) f g p) = f p :+ g p
+instance HasRep ((f G.:+: g) p) where
+  type Rep ((f G.:+: g) p) = f p :+ g p
   repr (G.L1  x) = Left  x
   repr (G.R1  x) = Right x
   abst (Left  x) = G.L1  x
   abst (Right x) = G.R1  x
   INLINES
 
-instance HasRep ((G.:*:) f g p) where
-  type Rep ((G.:*:) f g p) = f p :* g p
+instance HasRep ((f G.:*: g) p) where
+  type Rep ((f G.:*: g) p) = f p :* g p
   repr (x G.:*: y) = (x,y)
   abst (x,y) = (x G.:*: y)
   INLINES
