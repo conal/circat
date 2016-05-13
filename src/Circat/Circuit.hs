@@ -1,9 +1,9 @@
 {-# LANGUAGE CPP #-}
 
 -- #define NoOptimizeCircuit
+-- #define NoHashCons
 -- #define NoIfBotOpt
 -- #define NoIdempotence
--- #define NoHashCons
 
 #define MealyToArrow
 

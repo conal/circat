@@ -40,7 +40,7 @@ module Circat.Category
   , StrongCat(..), ClosedCat(..)
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
-  , NatCat(..), natA
+--   , NatCat(..), natA
   , HasRep(..), RepCat(..)
 --   , CoerceCat(..)
   , LoopCat(..), DelayCat(..)
@@ -68,7 +68,7 @@ import Data.Coerce
 
 import Control.Newtype
 
-import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
+-- import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
 
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
@@ -349,22 +349,22 @@ type BiCCC k = (ClosedCat k, CoproductCat k, TerminalCat k, DistribCat k)
 class HasUnitArrow k p where
   unitArrow :: p b -> Unit `k` b
 
-class Category k => NatCat k where
-  zeroA :: () `k` Nat Z
-  succA :: IsNat m => Nat m `k` Nat (S m) 
-  predA :: Nat (S m) `k` Nat m
+-- class Category k => NatCat k where
+--   zeroA :: () `k` Nat Z
+--   succA :: IsNat m => Nat m `k` Nat (S m) 
+--   predA :: Nat (S m) `k` Nat m
 
-natA :: forall k n. (NatCat k, IsNat n) => () `k` Nat n
-natA = mk nat
- where
-   mk :: Nat m -> (() `k` Nat m)
-   mk Zero     = zeroA
-   mk (Succ m) = succA . mk m
+-- natA :: forall k n. (NatCat k, IsNat n) => () `k` Nat n
+-- natA = mk nat
+--  where
+--    mk :: Nat m -> (() `k` Nat m)
+--    mk Zero     = zeroA
+--    mk (Succ m) = succA . mk m
 
-instance NatCat (->) where
-  zeroA = const Zero
-  succA = Succ
-  predA = predN
+-- instance NatCat (->) where
+--   zeroA = const Zero
+--   succA = Succ
+--   predA = predN
 
 #if 0
 -- | Categories with coercion. The 'Typeable' constraints help with non-standard

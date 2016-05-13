@@ -40,7 +40,7 @@ import Data.Proof.EQ ((:=:)(..))
 
 import Control.Compose ((:.)(..))
 
-import TypeUnary.Nat (Nat(..),natToZ)
+-- import TypeUnary.Nat (Nat(..),natToZ)
 
 -- | Unary transformation
 type Unop a = a -> a
@@ -74,6 +74,11 @@ xor = (/=)
 
 newtype Parity = Parity { getParity :: Bool }
 
+instance Newtype Parity where
+  type O Parity = Bool
+  pack = Parity
+  unpack (Parity x) = x
+
 instance Monoid Parity where
   mempty = Parity False
   Parity a `mappend` Parity b = Parity (a `xor` b)
@@ -94,12 +99,12 @@ delay _ _ = error "There is no delay for functions. Sorry!"
 
 -- Note: Circat re-introduces a 'boolToInt' circuit primitive.
 
-inNew :: (Newtype n o, Newtype n' o') =>
-         (o -> o') -> (n -> n')
+inNew :: (Newtype n, Newtype n') =>
+         (O n -> O n') -> (n -> n')
 inNew = pack <~ unpack
 
-inNew2 :: (Newtype n o, Newtype n' o', Newtype n'' o'') =>
-          (o -> o' -> o'') -> (n -> n' -> n'')
+inNew2 :: (Newtype n, Newtype n', Newtype n'') =>
+          (O n -> O n' -> O n'') -> (n -> n' -> n'')
 inNew2 = inNew <~ unpack
 
 infixl 1 <~
@@ -210,9 +215,9 @@ instance (Sized g, Sized f) => Sized (g :. f) where
   size = const (tySize(g) * tySize(f))
   {-# INLINE size #-}
 
--- | @2 ^ n@
-twoNat :: Integral m => Nat n -> m
-twoNat n = 2 ^ (natToZ n :: Int)
+-- -- | @2 ^ n@
+-- twoNat :: Integral m => Nat n -> m
+-- twoNat n = 2 ^ (natToZ n :: Int)
 
 -- | @'showsUnary' n d x@ produces the string representation of a unary data
 -- constructor with name @n@ and argument @x@, in precedence context @d@.
