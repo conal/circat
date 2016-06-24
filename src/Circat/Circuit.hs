@@ -214,8 +214,7 @@ data Buses :: * -> * where
   FunB    :: (a :> b) -> Buses (a -> b)
   IsoB    :: Buses (Rep a) -> Buses a
 
--- TODO: Move IsoB comment to the IsoB constructor when Haddock gets fixed. See
--- <https://mail.haskell.org/pipermail/haskell-cafe/2010-September/083507.html>.
+-- TODO: Try Buses as a type family instead of a GADT.
 
 instance Eq (Buses a) where
   UnitB     == UnitB        = True
