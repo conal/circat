@@ -55,18 +55,21 @@ instance Monad m => BoolCat (Kleisli m) where
 class Num a => NumCat k a where
   negateC :: a `k` a
   addC, subC, mulC :: (a :* a) `k` a
+  powIC :: (a :* Int) `k` a
 
 instance Num a => NumCat (->) a where
   negateC = negate
   addC    = uncurry (+)
   subC    = uncurry (-)
   mulC    = uncurry (*)
+  powIC   = uncurry (^)
 
 instance (Monad m, Num a) => NumCat (Kleisli m) a where
   negateC = arr negateC
   addC    = arr addC
   subC    = arr subC
   mulC    = arr mulC
+  powIC   = arr powIC
 
 class Fractional a => FractionalCat k a where
   recipC :: a `k` a

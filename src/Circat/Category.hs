@@ -2,6 +2,9 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts, MultiParamTypeClasses #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables, CPP #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
+#if __GLASGOW_HASKELL__ >= 800
+{-# LANGUAGE UndecidableSuperClasses #-} -- see below
+#endif
 
 {-# OPTIONS_GHC -Wall #-}
 
@@ -37,8 +40,8 @@ module Circat.Category
   , StrongCat(..), ClosedCat(..)
   , applyK, curryK, uncurryK 
   , unitFun, unUnitFun -- , constFun -- , constFun2
-  , NatCat(..), natA
-  , Rep, HasRep(..), RepCat(..)
+--   , NatCat(..), natA
+  , HasRep(..), RepCat(..)
 --   , CoerceCat(..)
   , LoopCat(..), DelayCat(..)
   , BiCCC
@@ -59,13 +62,13 @@ import qualified Control.Arrow as A
 import Control.Arrow (Kleisli(..),arr)
 import Control.Monad (liftM2) -- liftM,
 -- import Data.Traversable (Traversable,sequence)
-import GHC.Prim (Constraint)
+import GHC.Exts (Constraint)
 import Data.Typeable (Typeable,cast)
 import Data.Coerce
 
 import Control.Newtype
 
-import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
+-- import TypeUnary.Nat (Z,S,Nat(..),predN,IsNat(..))
 
 -- import FunctorCombo.StrictMemo (HasTrie(..),(:->:))
 
@@ -281,7 +284,7 @@ instance ClosedCat (->) where
   curry       = P.curry
   uncurry     = P.uncurry
 
-applyK   :: Monad m => Kleisli m (Kleisli m a b :* a) b
+applyK   ::            Kleisli m (Kleisli m a b :* a) b
 curryK   :: Monad m => Kleisli m (a :* b) c -> Kleisli m a (Kleisli m b c)
 uncurryK :: Monad m => Kleisli m a (Kleisli m b c) -> Kleisli m (a :* b) c
 
@@ -346,22 +349,22 @@ type BiCCC k = (ClosedCat k, CoproductCat k, TerminalCat k, DistribCat k)
 class HasUnitArrow k p where
   unitArrow :: p b -> Unit `k` b
 
-class Category k => NatCat k where
-  zeroA :: () `k` Nat Z
-  succA :: IsNat m => Nat m `k` Nat (S m) 
-  predA :: Nat (S m) `k` Nat m
+-- class Category k => NatCat k where
+--   zeroA :: () `k` Nat Z
+--   succA :: IsNat m => Nat m `k` Nat (S m) 
+--   predA :: Nat (S m) `k` Nat m
 
-natA :: forall k n. (NatCat k, IsNat n) => () `k` Nat n
-natA = mk nat
- where
-   mk :: Nat m -> (() `k` Nat m)
-   mk Zero     = zeroA
-   mk (Succ m) = succA . mk m
+-- natA :: forall k n. (NatCat k, IsNat n) => () `k` Nat n
+-- natA = mk nat
+--  where
+--    mk :: Nat m -> (() `k` Nat m)
+--    mk Zero     = zeroA
+--    mk (Succ m) = succA . mk m
 
-instance NatCat (->) where
-  zeroA = const Zero
-  succA = Succ
-  predA = predN
+-- instance NatCat (->) where
+--   zeroA = const Zero
+--   succA = Succ
+--   predA = predN
 
 #if 0
 -- | Categories with coercion. The 'Typeable' constraints help with non-standard
@@ -374,8 +377,8 @@ instance CoerceCat (->) where
 #else
 
 class RepCat k where
-  reprC :: (HasRep a, Rep a ~ a') => a `k` a'
-  abstC :: (HasRep a, Rep a ~ a') => a' `k` a
+  reprC :: HasRep a => a `k` Rep a
+  abstC :: HasRep a => Rep a `k` a
 
 instance RepCat (->) where
   reprC = repr
@@ -476,7 +479,6 @@ if_then_else p f g = (f ||| g) . guard p
 
 #endif
 
-
 type family OkayArr (k :: * -> * -> *) a b :: Constraint
 
 class OkayArr k (OkayDom k a b) (OkayRan k a b) => Uncurriable k a b where
@@ -486,7 +488,9 @@ class OkayArr k (OkayDom k a b) (OkayRan k a b) => Uncurriable k a b where
   type OkayRan k a b = b
   uncurries :: (a `k` b) -> (OkayDom k a b `k` OkayRan k a b)
 
-instance (ClosedCat k, Uncurriable k (a :* b) c)
+instance ( ClosedCat k, Uncurriable k (a :* b) c
+         , OkayArr k (OkayDom k (a :* b) c) (OkayRan k (a :* b) c) -- added for GHC 8.0
+         )
        => Uncurriable k a (b -> c) where
   type OkayDom k a (b -> c) = OkayDom k (a :* b) c
   type OkayRan k a (b -> c) = OkayRan k (a :* b) c

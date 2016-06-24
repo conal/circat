@@ -25,43 +25,21 @@
 
 module Circat.Complex (Complex(..)) where
 
-import Control.Applicative (liftA2)
 #if defined CustomComplex
+import Control.Applicative (liftA2)
 import Data.Typeable
 import Data.Data
+import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
 #else
 import Data.Complex
 #endif
-
-import Test.QuickCheck (Arbitrary(..),CoArbitrary(..))
-
-import Circat.Misc ((:*))
-import Circat.Rep
 
 #if defined CustomComplex
 infixl 1 :+
 data Complex a = a :+ a deriving (Functor,Eq,Show,Typeable,Data,Ord)
 
-#if 0
-
-instance Num a => Num (Complex a) where
-    (x0 :+ x1) + (y0 :+ y1) = (x0 + y0) :+ (x1 + y1)
-    (x0 :+ x1) - (y0 :+ y1) = (x0 - y0) :+ (x1 - y1)
-    -- negate = fmap negate
-    (x0 :+ x1) * (y0 :+ y1) = (x0 * y0 - x1 * y1) :+ (x0 * y1 + x1 * y0)
-    -- abs (x :+ y)    = round (sqrt (fromIntegral x ^ 2 + fromIntegral y ^ 2)) :+ 0
-    abs = error "abs on Complex not implemented."
-    signum = error "signum on Complex not implemented"
-    -- signum (x :+ _) = signum x :+ 0
-    fromInteger x   = fromInteger x :+ 0
-
--- cis :: RealFloat a => a -> Complex a
--- cis theta = cos theta :+ sin theta
-
-#else
-
 -- | The nonnegative magnitude of a complex number.
-{-# SPECIALISE magnitude :: Complex Double -> Double #-}
+-- {-# SPECIALISE magnitude :: Complex Double -> Double #-}
 magnitude :: (RealFloat a) => Complex a -> a
 
 magnitude (x:+y) = sqrt (x*x + y*y)
@@ -76,14 +54,14 @@ magnitude (x:+y) = sqrt (x*x + y*y)
 
 -- | The phase of a complex number, in the range @(-'pi', 'pi']@.
 -- If the magnitude is zero, then so is the phase.
-{-# SPECIALISE phase :: Complex Double -> Double #-}
+-- {-# SPECIALISE phase :: Complex Double -> Double #-}
 phase :: (RealFloat a) => Complex a -> a
 phase (0 :+ 0)   = 0            -- SLPJ July 97 from John Peterson
 phase (x:+y)     = atan2 y x
 
 instance  (RealFloat a) => Num (Complex a)  where
-    {-# SPECIALISE instance Num (Complex Float) #-}
-    {-# SPECIALISE instance Num (Complex Double) #-}
+    -- {-# SPECIALISE instance Num (Complex Float) #-}
+    -- {-# SPECIALISE instance Num (Complex Double) #-}
     (x:+y) + (x':+y')   =  (x+x') :+ (y+y')
     (x:+y) - (x':+y')   =  (x-x') :+ (y-y')
     (x:+y) * (x':+y')   =  (x*x'-y*y') :+ (x*y'+y*x')
@@ -92,10 +70,17 @@ instance  (RealFloat a) => Num (Complex a)  where
     signum (0:+0)       =  0
     signum z@(x:+y)     =  x/r :+ y/r  where r = magnitude z
     fromInteger n       =  fromInteger n :+ 0
+    {-# INLINE (+)         #-}
+    {-# INLINE (-)         #-}
+    {-# INLINE (*)         #-}
+    {-# INLINE negate      #-}
+    {-# INLINE abs         #-}
+    {-# INLINE signum      #-}
+    {-# INLINE fromInteger #-}
 
 instance  (RealFloat a) => Fractional (Complex a)  where
-    {-# SPECIALISE instance Fractional (Complex Float) #-}
-    {-# SPECIALISE instance Fractional (Complex Double) #-}
+    -- {-# SPECIALISE instance Fractional (Complex Float) #-}
+    -- {-# SPECIALISE instance Fractional (Complex Double) #-}
     recip z@(x:+y) = x/mag :+ (-y)/mag where mag = magnitude z
 --     (x:+y) / (x':+y')   =  (x*x''+y*y'') / d :+ (y*x''-x*y'') / d
 --                            where x'' = scaleFloat k x'
@@ -106,8 +91,8 @@ instance  (RealFloat a) => Fractional (Complex a)  where
     fromRational a      =  fromRational a :+ 0
 
 instance  (RealFloat a) => Floating (Complex a) where
-    {-# SPECIALISE instance Floating (Complex Float) #-}
-    {-# SPECIALISE instance Floating (Complex Double) #-}
+    -- {-# SPECIALISE instance Floating (Complex Float) #-}
+    -- {-# SPECIALISE instance Floating (Complex Double) #-}
     pi             =  pi :+ 0
     exp (x:+y)     =  expx * cos y :+ expx * sin y
                       where expx = exp x
@@ -147,21 +132,11 @@ instance  (RealFloat a) => Floating (Complex a) where
     acosh z        =  log (z + (z+1) * sqrt ((z-1)/(z+1)))
     atanh z        =  0.5 * log ((1.0+z) / (1.0-z))
 
-
-#endif
-
-instance (RealFloat a, Arbitrary a) => Arbitrary (Complex a) where
+instance Arbitrary a => Arbitrary (Complex a) where
   arbitrary = liftA2 (:+) arbitrary arbitrary
   shrink (x :+ y) = map (uncurry (:+)) (shrink (x,y))
 
-instance (RealFloat a, CoArbitrary a) => CoArbitrary (Complex a) where
+instance CoArbitrary a => CoArbitrary (Complex a) where
   coarbitrary (x :+ y) = coarbitrary x . coarbitrary y
 
 #endif
-
-type instance Rep (Complex a) = a :* a
-instance HasRep (Complex a) where
-  repr (a :+ a') = (a,a')
-  abst (a,a') = (a :+ a')
-
-

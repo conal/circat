@@ -1,7 +1,11 @@
 {-# LANGUAGE TypeFamilies, TypeOperators #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, EmptyCase, LambdaCase #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-} -- experiment
+
+-- -- Experiment
+-- {-# LANGUAGE MagicHash #-}
+
 {-# OPTIONS_GHC -Wall #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
@@ -18,24 +22,29 @@
 -- Convert to and from standard representations
 ----------------------------------------------------------------------
 
-module Circat.Rep (Rep,HasRep(..),bottom) where
+module Circat.Rep (HasRep(..)) where
 
 import Data.Monoid
-import Data.Newtypes.PrettyDouble
+-- import Data.Newtypes.PrettyDouble
 import Control.Applicative (WrappedMonad(..))
+import qualified GHC.Generics as G
 
 import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
+-- import Data.Void (Void)
 -- TODO: more
 
--- import Data.Constraint
+import Circat.Complex
 
+-- -- Experiment
+-- import GHC.Exts (Int(..),Int#)
+
+-- TODO: Eliminate most of the following when I drop these types.
 import Circat.Misc ((:*),(:+),Parity(..))
-import TypeUnary.TyNat (Z,S)
-import TypeUnary.Nat (Nat(..),IsNat(..))
-import TypeUnary.Vec (Vec(..))
 
-type family Rep a
+-- import TypeUnary.TyNat (Z,S)
+-- import TypeUnary.Nat (Nat(..),IsNat(..))
+-- import TypeUnary.Vec (Vec(..))
 
 -- | Convert to and from standard representations. Used for transforming case
 -- expression scrutinees and constructor applications. The 'repr' method should
@@ -43,44 +52,69 @@ type family Rep a
 -- such a representation, via another type with a 'HasRep' instance. The 'abst'
 -- method should reveal a constructor so that we can perform the
 -- case-of-known-constructor transformation.
+
 class HasRep a where
-  repr :: Rep a ~ a' => a -> a'
-  abst :: Rep a ~ a' => a' -> a
+  type Rep a
+  repr :: a -> Rep a
+  abst :: Rep a -> a
 
--- Note types:
--- 
---   repr :: forall a. HasRep a => forall a'. Rep a ~ a' => a' -> a
---   abst :: forall a. HasRep a => forall a'. Rep a ~ a' => a -> a'
--- 
--- Note: Using Rep a ~ a' rather than the reverse to make the calls a little to
--- construct (using normaliseType and no mkSymCo).
+-- -- Identity as @'abst' . 'repr'@.
+-- abstRepr :: HasRep a => a -> a
+-- abstRepr = abst . repr
 
-type instance Rep (a,b,c) = ((a,b),c)
+#define INLINES {-# INLINE repr #-};{-# INLINE abst #-}
+
 instance HasRep (a,b,c) where
+  type Rep (a,b,c) = ((a,b),c)
   repr (a,b,c) = ((a,b),c)
   abst ((a,b),c) = (a,b,c)
+  INLINES
 
-type instance Rep (a,b,c,d) = ((a,b),(c,d))
 instance HasRep (a,b,c,d) where
+  type Rep (a,b,c,d) = ((a,b),(c,d))
   repr (a,b,c,d) = ((a,b),(c,d))
   abst ((a,b),(c,d)) = (a,b,c,d)
+  INLINES
 
-type instance Rep (Vec Z a) = ()
+#if 0
+-- Switching to ShapedTypes.Vec
 instance HasRep (Vec Z a) where
+  type Rep (Vec Z a) = ()
   repr ZVec = ()
   abst () = ZVec
+  INLINES
 
-type instance Rep (Vec (S n) a) = (a,Vec n a)
 instance HasRep (Vec (S n) a) where
+  type Rep (Vec (S n) a) = (a,Vec n a)
   repr (a :< as) = (a, as)
   abst (a, as) = (a :< as)
+  INLINES
+
+instance HasRep (Nat Z) where
+  type Rep (Nat Z) = ()
+  repr Zero = ()
+  abst () = Zero
+  INLINES
+
+instance IsNat n => HasRep (Nat (S n)) where
+  type Rep (Nat (S n)) = () :* Nat n
+  repr (Succ n) = ((),n)
+  abst ((),n) = Succ n
+  INLINES
+-- The IsNat constraint comes from Succ.
+-- TODO: See about eliminating that constructor constraint.
+#endif
+
+#if 1
+
+-- I'm now synthesizing HasRep instances for newtypes.
+-- Oh! I still need support for explicit uses.
 
 #define WrapRep(abstT,reprT,con) \
-type instance Rep (abstT) = reprT; \
-instance HasRep (abstT) where { repr (con a) = a ; abst a = con a }
+instance HasRep (abstT) where { type Rep (abstT) = reprT; repr (con a) = a ; abst a = con a }
 
 WrapRep(Sum a,a,Sum)
-WrapRep(PrettyDouble,Double,PrettyDouble)
+-- WrapRep(PrettyDouble,Double,PrettyDouble)
 WrapRep(Product a,a,Product)
 WrapRep(All,Bool,All)
 WrapRep(Any,Bool,Any)
@@ -91,47 +125,110 @@ WrapRep(Identity a,a,Identity)
 WrapRep(StateT s m a, s -> m (a,s), StateT)
 
 WrapRep(Parity,Bool,Parity)
+#endif
 
 -- TODO: Generate these dictionaries on the fly during compilation, so we won't
 -- have to list them here.
 
-type instance Rep (Nat Z) = ()
-instance HasRep (Nat Z) where
-  repr Zero = ()
-  abst () = Zero
-
-type instance Rep (Nat (S n)) = () :* Nat n
-instance IsNat n => HasRep (Nat (S n)) where
-  repr (Succ n) = ((),n)
-  abst ((),n) = Succ n
--- The IsNat constraint comes from Succ.
--- TODO: See about eliminating that constructor constraint.
-
 -- Experimental treatment of Maybe
-type instance Rep (Maybe a) = Bool :* a
 instance HasRep (Maybe a) where
+  type Rep (Maybe a) = Bool :* a
   repr (Just a) = (True,a)
-  repr Nothing  = (False,bottom)
+  repr Nothing  = (False,undefined)
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
 
-bottom :: a
-bottom = error "bottom: Bottom!"
-{-# NOINLINE bottom #-}
-
--- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs, add
--- a string argument and tweak the reification.
+-- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs,
+-- replace with ErrorP (taking a string argument) and tweak the reification.
 
 -- Generalize Maybe to sums:
 
-type instance Rep (a :+ b) = Bool :* (a :* b)
-instance HasRep (a :+ b) where
-  repr (Left  a) = (False,(a,bottom)) -- error "repr on Maybe: undefined value"
-  repr (Right b) = (True,(bottom,b))
-  abst (False,(a,_)) = Left  a
-  abst (True ,(_,b)) = Right b
+-- I use this version for circuits. Restore it later, after I'm handing :+ in reify-rules.
+
+-- instance HasRep (a :+ b) where
+--   type Rep (a :+ b) = Bool :* (a :* b)
+--   repr (Left  a) = (False,(a,undefined)) -- error "repr on Maybe: undefined value"
+--   repr (Right b) = (True,(undefined,b))
+--   abst (False,(a,_)) = Left  a
+--   abst (True ,(_,b)) = Right b
 
 -- -- TODO: Redefine `Maybe` representation as sum:
 -- 
 -- type instance Rep (Maybe a) = Unit :+ a
 -- ...
+
+instance HasRep (Complex a) where
+  type Rep (Complex a) = a :* a
+  repr (a :+ a') = (a,a')
+  abst (a,a') = (a :+ a')
+  INLINES
+
+-- instance HasRep (G.V1 p) where
+--   type Rep (G.V1 p) = Void
+--   repr = \ case
+--   abst = \ case
+--   INLINES
+
+instance HasRep (G.U1 p) where
+  type Rep (G.U1 p) = ()
+  repr G.U1 = ()
+  abst () = G.U1
+  INLINES
+
+instance HasRep (G.Par1 p) where
+  type Rep (G.Par1 p) = p
+  repr = G.unPar1
+  abst = G.Par1
+  INLINES
+
+instance HasRep (G.K1 i c p) where
+  type Rep (G.K1 i c p) = c
+  repr = G.unK1
+  abst = G.K1
+  INLINES
+
+instance HasRep (G.M1 i c f p) where
+  type Rep (G.M1 i c f p) = f p
+  repr = G.unM1
+  abst = G.M1
+  INLINES
+
+instance HasRep ((f G.:+: g) p) where
+  type Rep ((f G.:+: g) p) = f p :+ g p
+  repr (G.L1  x) = Left  x
+  repr (G.R1  x) = Right x
+  abst (Left  x) = G.L1  x
+  abst (Right x) = G.R1  x
+  INLINES
+
+instance HasRep ((f G.:*: g) p) where
+  type Rep ((f G.:*: g) p) = f p :* g p
+  repr (x G.:*: y) = (x,y)
+  abst (x,y) = (x G.:*: y)
+  INLINES
+
+instance HasRep ((G.:.:) f g p) where
+  type Rep ((G.:.:) f g p) = f (g p)
+  repr = G.unComp1
+  abst = G.Comp1
+  INLINES
+
+-- TODO: Can I *replace* HasRep with Generic?
+
+{--------------------------------------------------------------------
+    Experiments
+--------------------------------------------------------------------}
+
+#if 0
+-- Represent unboxed types as boxed counterparts.
+
+instance HasRep Int# where
+  type Rep Int# = Int
+  abst (I# n) = n
+  repr n = I# n
+  INLINES
+
+--     • Expecting a lifted type, but ‘Int#’ is unlifted
+--     • In the first argument of ‘HasRep’, namely ‘Int#’
+--       In the instance declaration for ‘HasRep Int#’
+#endif

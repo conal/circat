@@ -25,7 +25,7 @@ module Circat.Netlist
   , saveAsVerilog
   ) where
 
-import Data.Monoid (mempty,(<>),mconcat)
+import Data.Monoid ((<>))
 import Control.Arrow (first)
 import Data.Maybe (fromMaybe)
 import Data.Map (Map)
@@ -254,7 +254,9 @@ translateBinOp = \ case
   "−"   -> Just Minus
   "×"   -> Just Times
   "*"   -> Just Times
-  "∧"   -> Just And
+  "↑"   -> Just Pow
+  "˄"   -> Just Pow
+  "∧"   -> Just And  -- Hm. Looks a lot like Pow/^
   "&&"  -> Just And
   "∨"   -> Just Or
   "||"  -> Just Or

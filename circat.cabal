@@ -1,13 +1,13 @@
 Name:               circat
-Version:            0.6.3
-Cabal-Version:      >= 1.6
+Version:            0.6.5
+Cabal-Version:      >= 1.18
 Synopsis:           A categorical framework for circuit construction
 Category:           circuits, categories
 Description: 
   Experiments in circuit construction using a categorical vocabulary
 Author:             Conal Elliott
 Maintainer:         conal@conal.net
-Copyright:          (c) 2013-2015 by Tabula Inc and Conal Elliott
+Copyright:          (c) 2013-2016 by Tabula Inc and Conal Elliott
 Homepage:           http://github.com/conal/circat
 License:            BSD3
 License-File:       COPYING
@@ -19,40 +19,48 @@ source-repository head
   location:         git://github.com/conal/circat
 
 Library
-  hs-Source-Dirs:   src/
-  Build-Depends:    base<5, ghc-prim, containers, process, directory, newtype, mtl
-                  , transformers, constraints
+  default-language: Haskell2010
+  hs-source-dirs:   src
+  include-dirs:     src
+  build-depends:    base<5, ghc-prim, containers, process, directory, newtype-generics
+                  , mtl, transformers, constraints
                   , QuickCheck >= 2.7.3
-                  , type-unary>=0.2.19
+--                   , type-unary >= 0.3.0
                   , TypeCompose
                   , ty >= 0.1.5
                   , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
-                  , treeviz >= 2.0.2
+--                   , treeviz >= 2.0.2
 
-  Exposed-Modules:     
+-- TODO: after I remove modules duplicated in shaped-types, trim build-depends
+
+  exposed-modules:     
                     Circat.Misc
                     Circat.Show
                     Circat.Category
                     Circat.Classes
                     Circat.Rep
-                    Circat.Pair
-                    Circat.RTree
-                    Circat.LTree
-                    Circat.ApproxEq
-                    Circat.RaggedTree
-                    Circat.Shift
-                    Circat.Mealy
-                    Circat.Scan
                     Circat.Complex
-                    Circat.FFT
                     Circat.Circuit
                     Circat.Netlist
                     Circat.ShowUtils
-                    Circat.Prim
-  Other-Modules:
-                    Circat.Examples
+                    Circat.Mealy
+
+-- Moving the following to shaped-types
+
+--                     Circat.ApproxEq
+--                     Circat.Pair
+--                     Circat.RTree
+--                     Circat.LTree
+--                     Circat.RaggedTree
+--                     Circat.Shift
+--                     Circat.Scan
+--                     Circat.FFT
+
+--   other-modules:
+--                     Circat.Examples
+  install-includes: Circat/AbsTy.inc
 
 
 -- TODO: Get Pair from uniform-pair, and move RTree & LTree elsewhere,

@@ -43,13 +43,12 @@ module Circat.Mealy
 import Prelude hiding (id,(.),sum,product,scanl)
 import Control.Category
 import Control.Arrow
-import Data.Functor ((<$>))
-import Control.Applicative (Applicative(..), liftA2)
-import Data.Monoid (Monoid(..),(<>),Sum(..),Product(..))
+import Control.Applicative (liftA2)
+import Data.Monoid ((<>),Sum(..),Product(..))
 import Data.Foldable (Foldable(..),sum,product)
 import Data.Tuple (swap)
 import Data.List (unfoldr)
-import GHC.Prim (Constraint)
+import GHC.Exts (Constraint)
 
 import Circat.Misc (dup) -- ,Unit,(:*)
 import qualified Circat.Misc as M
@@ -182,7 +181,7 @@ asFun (Mealy h s0) = mealy h s0
 -- asFun (Mealy h s0) = M.loop (h . second (M.delay s0))
 {-# INLINE asFun #-}
 
-mealy :: C s => ((a,s) -> (b,s)) -> s -> (a -> b)
+mealy :: ((a,s) -> (b,s)) -> s -> (a -> b)
 mealy h s0 = M.loop (h . second (M.delay s0))
 {-# INLINE mealy #-}
 
@@ -443,7 +442,7 @@ fib3 = proc () -> do rec a <- delay 0 -< b
                          b <- delay 1 -< a+b
                      returnA -< a
 
-testFib :: (C a, Num a) => Mealy () a -> [a]
+testFib :: Mealy () a -> [a]
 testFib fib = runMealy fib (replicate 10 ())
 
 
