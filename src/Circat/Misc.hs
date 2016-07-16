@@ -38,10 +38,6 @@ import GHC.Generics hiding (C)
 import Control.Newtype
 import Data.Proof.EQ ((:=:)(..))
 
-import Control.Compose ((:.)(..))
-
--- import TypeUnary.Nat (Nat(..),natToZ)
-
 -- | Unary transformation
 type Unop a = a -> a
 
@@ -209,15 +205,6 @@ instance Sized Par1 where
 instance (Sized g, Sized f) => Sized (g :.: f) where
   size = const (tySize(g) * tySize(f))
   {-# INLINE size #-}
-
--- Phasing out, in favor of Generics version ((:.:))
-instance (Sized g, Sized f) => Sized (g :. f) where
-  size = const (tySize(g) * tySize(f))
-  {-# INLINE size #-}
-
--- -- | @2 ^ n@
--- twoNat :: Integral m => Nat n -> m
--- twoNat n = 2 ^ (natToZ n :: Int)
 
 -- | @'showsUnary' n d x@ produces the string representation of a unary data
 -- constructor with name @n@ and argument @x@, in precedence context @d@.
