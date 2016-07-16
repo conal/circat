@@ -20,7 +20,7 @@
 
 module Circat.Netlist
   ( toNetlist, mk_module
-  , genVHDL, V.ppModule
+  , V.ppModule -- , genVHDL
   , outV  -- phasing out
   , saveAsVerilog
   ) where
@@ -45,7 +45,7 @@ import Language.Netlist.AST
   ( Module(..), Decl(..), Expr(..), ExprLit (..), Bit(..), Range(..)
   , BinaryOp(..), UnaryOp(..), Ident, Range, Event(..), Edge(..), Stmt(..) )
 
-import Language.Netlist.GenVHDL(genVHDL)
+-- import Language.Netlist.GenVHDL(genVHDL)
 import Language.Netlist.GenVerilog(mk_module)
 import qualified Language.Verilog as V
 
