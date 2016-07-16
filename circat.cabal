@@ -25,13 +25,11 @@ Library
   build-depends:    base<5, ghc-prim, containers, process, directory, newtype-generics
                   , mtl, transformers, constraints
                   , QuickCheck >= 2.7.3
---                   , type-unary >= 0.3.0
-                  , TypeCompose
                   , ty >= 0.1.5
                   , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
-                  , netlist-to-verilog >= 0.1.2, netlist-to-vhdl >= 0.3.1
---                   , treeviz >= 2.0.2
+                  , netlist-to-verilog >= 0.1.2
+--                   , netlist-to-vhdl >= 0.3.1
 
 -- TODO: after I remove modules duplicated in shaped-types, trim build-depends
 
