@@ -120,7 +120,12 @@ import System.Exit (ExitCode(ExitSuccess))
 
 -- mtl
 import Control.Monad.State (State,execState,StateT)
-import qualified Control.Monad.State as Mtl
+
+-- For AbsTy
+import qualified Data.Functor.Identity as M
+import qualified Control.Monad.Trans.Reader as M
+import qualified Control.Monad.Trans.Writer as M
+import qualified Control.Monad.State as M
 
 -- import TypeUnary.Vec hiding (get)
 
@@ -187,7 +192,7 @@ instance Show Source where
   show (Source b prim ins o) = printf "Source %s %s %s %d" (show b) (show prim) (show ins) o
 
 newPinId :: CircuitM PinId
-newPinId = do { (p:ps',comps) <- Mtl.get ; Mtl.put (ps',comps) ; return p }
+newPinId = do { (p:ps',comps) <- M.get ; M.put (ps',comps) ; return p }
 
 newBus :: Width -> CircuitM Bus
 newBus w = -- trace "newBus" $
@@ -248,7 +253,7 @@ instance Show (Buses a) where
 data Ty = UnitT | BoolT | IntT | FloatT | DoubleT | PairT Ty Ty deriving (Eq,Ord,Show)
 
 genBuses :: GenBuses b => Prim a b -> Sources -> CircuitM (Buses b)
-genBuses prim ins = Mtl.evalStateT (genBuses' (primName prim) ins) 0
+genBuses prim ins = M.evalStateT (genBuses' (primName prim) ins) 0
 
 type BusesM = StateT Int CircuitM
 
@@ -261,9 +266,9 @@ type GS a = (GenBuses a, Show a)
 
 genBus :: (Source -> Buses a) -> Width
        -> String -> Sources -> BusesM (Buses a)
-genBus wrap w prim ins = do o <- Mtl.get
-                            src <- Mtl.lift (newSource w prim ins o)
-                            Mtl.put (o+1)
+genBus wrap w prim ins = do o <- M.get
+                            src <- M.lift (newSource w prim ins o)
+                            M.put (o+1)
                             return (wrap src)
 
 instance GenBuses Unit where
@@ -426,15 +431,15 @@ genComp :: forall a b. GenBuses b => Prim a b -> BCirc a b
 #if !defined NoHashCons
 genComp prim a =
   do 
-     mb <- Mtl.gets (M.lookup key . snd)
+     mb <- M.gets (M.lookup key . snd)
      case mb of
        Just (Comp _ _ b', _) ->
-         do Mtl.modify (second (M.adjust (second succ) key))
+         do M.modify (second (M.adjust (second succ) key))
             return (unsafeCoerce b')
        Nothing               ->
          do b <- genBuses prim ins
             let comp = Comp prim a b
-            Mtl.modify (second (M.insert key (comp,0)))
+            M.modify (second (M.insert key (comp,0)))
             return b
  where
    ins  = flattenBHack "genComp" prim a
@@ -450,7 +455,7 @@ genComp prim a = -- trace (printf "genComp %s %s --> %s"
                  --         (show prim) (show a) (show (ty (undefined :: b)))) $
                  do b <- genBuses prim (flattenBHack "genComp" prim a)
                     -- trace (printf "gen'd buses %s" (show b)) (return ())
-                    Mtl.modify (second (Comp prim a b :))
+                    M.modify (second (Comp prim a b :))
                     -- trace (printf "added comp %s" (show (Comp prim a b))) (return ())
                     return b
 #endif
@@ -1410,9 +1415,9 @@ trimDGraph g = S.elems $ execState (mapM_ searchComp outComps) S.empty
    sComp = sourceComp g
    searchComp :: CompS -> Trimmer
    searchComp c =
-    do seen <- Mtl.gets (S.member c)
+    do seen <- M.gets (S.member c)
        unless seen $
-         do Mtl.modify (S.insert c)
+         do M.modify (S.insert c)
             mapM_ (searchComp . sComp) (compIns c)
    isOut = isJust . stripPrefix "Out"
 
@@ -1903,7 +1908,7 @@ extractBoth :: IsSourceP2 a b => a :+ b :> a :* b
 extractBoth = pureC ((pinsSource &&& pinsSource) . sumBuses)
 
 pinsSource :: IsSource a => Seq PinId -> a
-pinsSource pins = Mtl.evalState genSource (toList pins)
+pinsSource pins = M.evalState genSource (toList pins)
 
 pureC :: (Buses a -> Buses b) -> (a :> b)
 pureC = C . arr
@@ -2260,5 +2265,10 @@ AbsTy(G.M1 i c f p)
 AbsTy((G.:+:) f g p)
 AbsTy((G.:*:) f g p)
 AbsTy((G.:.:) f g p)
+
+AbsTy(M.Identity a)
+AbsTy(M.ReaderT e m a)
+AbsTy(M.WriterT w m a)
+AbsTy(M.StateT s m a)
 
 #endif

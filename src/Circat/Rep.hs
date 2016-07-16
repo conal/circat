@@ -29,8 +29,11 @@ import Data.Monoid
 import Control.Applicative (WrappedMonad(..))
 import qualified GHC.Generics as G
 
-import Control.Monad.Trans.State (StateT(..))
 import Data.Functor.Identity (Identity(..))
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Trans.Writer (WriterT(..))
+import Control.Monad.Trans.State (StateT(..))
+
 -- import Data.Void (Void)
 -- TODO: more
 
@@ -122,6 +125,8 @@ WrapRep(Dual a,a,Dual)
 WrapRep(Endo a,a->a,Endo)
 WrapRep(WrappedMonad m a,m a,WrapMonad)
 WrapRep(Identity a,a,Identity)
+WrapRep(ReaderT e m a, e -> m a, ReaderT)
+WrapRep(WriterT w m a, m (a,w), WriterT)
 WrapRep(StateT s m a, s -> m (a,s), StateT)
 
 WrapRep(Parity,Bool,Parity)
