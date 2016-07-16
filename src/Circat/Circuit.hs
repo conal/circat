@@ -296,7 +296,7 @@ instance GenBuses Int  where
   ty = const IntT
 
 instance GenBuses Float  where
-  genBuses' = genBus FloatB 64
+  genBuses' = genBus FloatB 32
   delay = primDelay
   ty = const FloatT
 
