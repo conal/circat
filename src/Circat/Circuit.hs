@@ -765,6 +765,7 @@ bottomScalar = mkCK (constComp UNDEFINED)
 
 BottomPrim(Bool)
 BottomPrim(Int)
+BottomPrim(Float)
 BottomPrim(Double)
 
 instance BottomCat (:>) Unit where
