@@ -4,14 +4,13 @@ packages:
 # netlist is a symlink to the KU netlist libraries
 - netlist/netlist/
 - netlist/netlist-to-verilog/
-- netlist/netlist-to-vhdl/
 - netlist/verilog/
 extra-deps:
-- TypeCompose-0.9.10
 - applicative-numbers-0.1.3
-- netlist-0.3.1
 - treeviz-2.0.3
-- ty-0.1.6
+- ty-0.1.7
 - type-unary-0.2.21
+- newtype-generics-0.4
 
-resolver: lts-2.22
+# resolver: lts-2.22
+resolver: nightly-2016-06-21
