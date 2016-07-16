@@ -923,6 +923,7 @@ neOpt = noOpt
 
 EqPrim(Bool)
 EqPrim(Int)
+EqPrim(Float)
 EqPrim(Double)
 
 instance EqCat (:>) () where
@@ -957,6 +958,7 @@ geOpt = noOpt
 
 OrdPrim(Bool)
 OrdPrim(Int)
+OrdPrim(Float)
 OrdPrim(Double)
 
 instance OrdCat (:>) () where
