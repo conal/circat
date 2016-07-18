@@ -1,0 +1,19 @@
+flags: {}
+packages:
+- '.'
+- location:
+    git: https://github.com/ku-fpg/netlist
+    commit: 9869fe5eca7b0478bb352d2f14b2d46a01e46938
+  extra-dep: true
+  subdirs:
+  - netlist
+  - verilog
+  - netlist-to-verilog
+extra-deps:
+- applicative-numbers-0.1.3
+- ty-0.1.7
+- type-unary-0.2.21
+- newtype-generics-0.4
+
+# resolver: lts-2.22
+resolver: nightly-2016-06-21
