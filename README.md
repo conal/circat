@@ -4,7 +4,5 @@ To visualize circuits, you'll need [Graphviz](http://graphviz.org) (or at least 
 See the `Circat.Examples` module for examples.
 For instance, run `outSimples` to construct some simple circuits, render them to PDF (easy to change), and display the results.
 
-Dependencies not on Hackage:
-
-*   The KU [netlist packages](https://github.com/ku-fpg/netlist)
+Install with `stack install`.
 
