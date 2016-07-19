@@ -142,6 +142,7 @@ instance HasRep (Maybe a) where
   repr Nothing  = (False,undefined)
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
+  INLINES
 
 -- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs,
 -- replace with ErrorP (taking a string argument) and tweak the reification.
