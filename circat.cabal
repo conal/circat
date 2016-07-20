@@ -26,12 +26,8 @@ Library
                   , mtl, transformers, constraints
                   , QuickCheck >= 2.7.3
                   , ty >= 0.1.5
-                  , applicative-numbers
                   , netlist >= 0.3.1, verilog >= 0.2
                   , netlist-to-verilog >= 0.1.2
---                   , netlist-to-vhdl >= 0.3.1
-
--- TODO: after I remove modules duplicated in shaped-types, trim build-depends
 
   exposed-modules:     
                     Circat.Misc
@@ -44,23 +40,4 @@ Library
                     Circat.Netlist
                     Circat.ShowUtils
                     Circat.Mealy
-
--- Moving the following to shaped-types
-
---                     Circat.ApproxEq
---                     Circat.Pair
---                     Circat.RTree
---                     Circat.LTree
---                     Circat.RaggedTree
---                     Circat.Shift
---                     Circat.Scan
---                     Circat.FFT
-
---   other-modules:
---                     Circat.Examples
   install-includes: Circat/AbsTy.inc
-
-
--- TODO: Get Pair from uniform-pair, and move RTree & LTree elsewhere,
--- e.g., type-unary. Wait until I've removed PairCat, VecCat, and
--- TreeCat.
