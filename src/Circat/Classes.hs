@@ -145,7 +145,7 @@ instance (Monad m, Ord a) => OrdCat (Kleisli m) a where
 class BottomCat k a where
   bottomC :: Unit `k` a
 
-instance BottomCat (->) a where bottomC = bottom
+instance BottomCat (->) a where bottomC = error "bottomC for (->) evaluated"
 
 {--------------------------------------------------------------------
     Misc
