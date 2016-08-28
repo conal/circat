@@ -1,9 +1,11 @@
 {-# LANGUAGE CPP #-}
 
 -- #define NoOptimizeCircuit
+
 -- #define NoHashCons
 -- #define NoIfBotOpt
 -- #define NoIdempotence
+-- #define NoBusSize
 
 #define MealyToArrow
 
@@ -33,6 +35,7 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
+{-# LANGUAGE TypeApplications #-}
 
 #ifdef ChurchSums
 {-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes, EmptyDataDecls #-}
@@ -827,6 +830,7 @@ pattern XorS :: Source -> Source -> Source
 pattern XorS a b <- Source _ "⊕" [a,b] 0
 
 class SourceToBuses a where toBuses :: Source -> Buses a
+instance SourceToBuses ()     where toBuses = const UnitB
 instance SourceToBuses Bool   where toBuses = BoolB
 instance SourceToBuses Int    where toBuses = IntB
 instance SourceToBuses Float  where toBuses = FloatB
@@ -913,6 +917,8 @@ boolToIntC = namedC BoolToInt
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
+#if 0
+
 noOpt :: Opt b
 noOpt = const nothingA
 
@@ -923,8 +929,8 @@ neOpt = noOpt
 
 #define EqPrim(ty) \
  instance EqCat (:>) (ty) where { \
-    equal    = primOpt "≡" eqOpt ;\
-    notEqual = primOpt "≠" neOpt  \
+    equal    = primOptSort "≡" eqOpt ;\
+    notEqual = primOptSort "≠" neOpt  \
   }
 
 EqPrim(Bool)
@@ -937,8 +943,6 @@ instance EqCat (:>) () where
 
 instance (EqCat (:>) a, EqCat (:>) b) => EqCat (:>) (a,b) where
   equal = andC . (equal *** equal) . transposeP
-
--- TODO: Move to a general definition in Circat.Classes, and reference here.
 
 -- TODO: optimizations.
 ltOpt, gtOpt, leOpt, geOpt :: Opt Bool
@@ -974,6 +978,41 @@ instance OrdCat (:>) () where
 -- 
 -- instance (OrdCat (:>) a, OrdCat (:>) b) => OrdCat (:>) (a,b) where
 --   ...
+
+-- TODO: Move to a general definition in Circat.Classes, and reference here.
+
+#else
+
+instance (Read a, Eq a) => EqCat (:>) a where
+    equal    = primOptSort "≡" $ \ case
+                 [Val (x :: a), Val y] -> newVal (x == y)
+                 [a,b] | a == b -> newVal True
+                 _              -> nothingA
+    notEqual = primOptSort "≠" $ \ case
+                 [Val (x :: a), Val y] -> newVal (x /= y)
+                 [a,b] | a == b -> newVal False
+                 _              -> nothingA
+
+instance (Read a, Ord a) => OrdCat (:>) a where
+   lessThan           = primOpt "<" $ \ case
+                          [Val (x :: a), Val y] -> newVal (x < y)
+                          [a,b] | a == b        -> newVal False
+                          _                     -> nothingA
+   greaterThan        = primOpt ">" $ \ case
+                          [Val (x :: a), Val y] -> newVal (x > y)
+                          [a,b] | a == b        -> newVal False
+                          _                     -> nothingA
+   lessThanOrEqual    = primOpt "≤" $ \ case
+                          [Val (x :: a), Val y] -> newVal (x <= y)
+                          [a,b] | a == b        -> newVal True
+                          _                     -> nothingA
+   greaterThanOrEqual = primOpt "≥" $ \ case
+                          [Val (x :: a), Val y] -> newVal (x >= y)
+                          [a,b] | a == b        -> newVal True
+                          _                     -> nothingA
+
+
+#endif
 
 -- TODO: Move to a general definition in Circat.Classes, and reference here.
 
@@ -1567,8 +1606,12 @@ recordDots depths = nodes ++ edges
 #else
             constraint = []
 #endif
+#ifdef NoBusSize
+            label _ = []
+#else
             label 1 = []
             label w = [printf "label=%d,fontsize=10" w]
+#endif
    port :: Dir -> (CompNum,PortNum) -> String
    port dir (cnum,np) =
      printf "%s:%s" (compLab cnum) (portLab dir np)
