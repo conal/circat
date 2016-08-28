@@ -983,8 +983,9 @@ instance OrdCat (:>) () where
 
 #define ValT(x,ty) (Val (x :: ty))
 
-#define ZeroT(ty) ValT(0,ty)
-#define  OneT(ty) ValT(1,ty)
+#define   ZeroT(ty) ValT( 0,ty)
+#define    OneT(ty) ValT( 1,ty)
+#define NegOneT(ty) ValT(-1,ty)
 
 pattern NegateS :: Source -> Source
 pattern NegateS a <- Source _ "negate" [a] 0
@@ -1014,10 +1015,12 @@ instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
               _              -> nothingA
   mulC    = primOptSort "×" $ \ case
               [Val x, Val y] -> newVal (x*y)
-              [OneT(a) ,y]   -> sourceB y
-              [x,OneT(a) ]   -> sourceB x
+              [OneT(a),y]    -> sourceB y
+              [x,OneT(a)]    -> sourceB x
               [x@ZeroT(a),_] -> sourceB x
               [_,y@ZeroT(a)] -> sourceB y
+              [NegOneT(a) ,y] -> newComp1 negateC y
+              [x,NegOneT(a) ] -> newComp1 negateC x
               _              -> nothingA
   powIC   = primOpt     "↑" $ \ case
               [Val x, Val y] -> newVal (x ^ (y :: Int))
