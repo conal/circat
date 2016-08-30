@@ -5,7 +5,8 @@
 -- #define NoHashCons
 -- #define NoIfBotOpt
 -- #define NoIdempotence
--- #define NoBusSize
+
+#define NoBusSize
 
 #define MealyToArrow
 
@@ -63,7 +64,7 @@
 module Circat.Circuit
   ( CircuitM, (:>)
   , PinId, Width, Bus(..), Source(..)
-  , GenBuses(..), GS, genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
+  , GenBuses(..), GS, GST, genBusesRep', delayCRep, tyRep, bottomRep, unDelayName
   , namedC, constS, constC
   , SourceToBuses(..)
 --   , litUnit, litBool, litInt
@@ -500,11 +501,29 @@ constComp str = const (constComp' str)
 -- == (), defined as flip genComp UnitB. Add domain flexibility in lambda-ccc
 -- instead.
 
-constM :: GS b => b -> BCirc a b
+type GST a = (GS a, Tweakable a)
+
+constM :: GST b => b -> BCirc a b
 constM b = constComp (constName b)
 
-constName :: Show b => b -> String
-constName = show
+class Tweakable a where
+  tweakVal :: a -> a
+  tweakVal = id
+
+instance Tweakable ()
+instance Tweakable Bool
+instance Tweakable Int
+instance Tweakable Float  where tweakVal = pullZero 1e-7
+instance Tweakable Double where tweakVal = pullZero 1e-14
+-- TODO: tune the deltas
+
+-- Hack to help eliminate numeric errors involved
+pullZero :: (Ord a, Num a) => a -> a -> a
+pullZero delta a | abs a < delta = 0
+                 | otherwise     = a
+
+constName :: (Tweakable b, Show b) => b -> String
+constName = show . tweakVal
 
 {--------------------------------------------------------------------
     Circuit category
@@ -570,10 +589,10 @@ newComp3R :: (SourceToBuses a, SourceToBuses b, SourceToBuses c) =>
              (a :* (b :* c) :> d) -> Source -> Source -> Source -> CircuitM (Maybe (Buses d))
 newComp3R cir a b c = newComp cir (PairB (toBuses a) (PairB (toBuses b) (toBuses c)))
 
-newVal :: GS b => b -> CircuitM (Maybe (Buses b))
+newVal :: GST b => b -> CircuitM (Maybe (Buses b))
 newVal b = Just <$> constM' b
 
-constM' :: GS b => b -> CircuitM (Buses b)
+constM' :: GST b => b -> CircuitM (Buses b)
 constM' b = constComp' (constName b)
 
 -- noOpt :: Opt b
@@ -611,7 +630,7 @@ primOpt name _ = namedC name
 primOptSort = primOpt
 #endif
 
-primNoOpt1 :: (GenBuses b, Show b, Read a) => String -> (a -> b) -> a :> b
+primNoOpt1 :: (GST b, Read a) => String -> (a -> b) -> a :> b
 primNoOpt1 name fun = 
   primOpt name $
     \ case [Val x] -> newVal (fun x)
@@ -625,7 +644,7 @@ constSM mkB = mkCK (const mkB)
 constS :: Buses b -> (a :> b)
 constS b = constSM (return b)
 
-constC :: GS b => b -> a :> b
+constC :: GST b => b -> a :> b
 constC = mkCK . constM
 
 -- Phasing out constC
@@ -1032,7 +1051,7 @@ pattern NegateS a <- Source _ "negate" [a] 0
 pattern RecipS  :: Source -> Source
 pattern RecipS  a <- Source _ "recip"  [a] 0
 
-instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+instance (Num a, Read a, GST a, Eq a, SourceToBuses a)
       => NumCat (:>) a where
   negateC = primOpt "negate" $ \ case
               [Val x]        -> newVal (negate x)
@@ -1069,7 +1088,7 @@ instance (Num a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
               [_,  ZeroT(a)] -> newVal 1
               _              -> nothingA
 
-instance (Fractional a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
+instance (Fractional a, Read a, Eq a, GST a, SourceToBuses a)
       => FractionalCat (:>) a where
   recipC  = primOpt "recip" $ \ case
               [Val x]        -> newVal (recip x)
@@ -1082,13 +1101,14 @@ instance (Fractional a, Read a, Show a, Eq a, GenBuses a, SourceToBuses a)
               [x,NegateS y]  -> newComp2 (negateC . divideC) x y
               _              -> nothingA
 
-instance (Floating a, Read a, Show a, GenBuses a)
-      => FloatingCat (:>) a where
+instance (Floating a, Read a, GST a) => FloatingCat (:>) a where
   expC = primNoOpt1 "exp" exp
   cosC = primNoOpt1 "cos" cos
   sinC = primNoOpt1 "sin" sin
 
-instance (Integral a, Num b, Read a, GenBuses b, Show b)
+-- TODO: optimizations, e.g., sin & cos of negative angles.
+
+instance (Integral a, Num b, Read a, GST b)
       => FromIntegralCat (:>) a b where
   fromIntegralC = primNoOpt1 "fromIntegral" fromIntegral
 
