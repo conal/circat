@@ -1,10 +1,13 @@
 {-# LANGUAGE CPP #-}
 
 -- #define NoOptimizeCircuit
-
 -- #define NoHashCons
+
 -- #define NoIfBotOpt
 -- #define NoIdempotence
+
+-- -- Improves hash consing, but can obscure equivalent circuits
+-- #define NoCommute
 
 #define NoBusSize
 
@@ -30,13 +33,14 @@
 {-# LANGUAGE ExistentialQuantification, TypeSynonymInstances, GADTs #-}
 {-# LANGUAGE Rank2Types, ScopedTypeVariables #-}
 {-# LANGUAGE UndecidableInstances #-} -- see below
--- {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE DataKinds #-} -- for LU & BU
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecursiveDo #-}
 {-# LANGUAGE DeriveFunctor, DeriveDataTypeable #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications, AllowAmbiguousTypes #-}
+
+-- TODO: trim language extensions
 
 #ifdef ChurchSums
 {-# LANGUAGE LiberalTypeSynonyms, ImpredicativeTypes, EmptyDataDecls #-}
@@ -45,6 +49,21 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-} -- for OkayArr
 {-# OPTIONS_GHC -fno-warn-unticked-promoted-constructors #-}
+
+-- This module compiles pretty slowly. Some of my pattern matching style led to
+-- the following warning:
+-- 
+--        Pattern match checker exceeded (2000000) iterations in
+--        a case alternative. (Use -fmax-pmcheck-iterations=n
+--        to set the maximun number of iterations to n)
+-- 
+-- I've simplified my style by replacing uses of the Eql macro by explicit
+-- equality checks. To find at least some problematic definitions, lower
+-- -fmax-pmcheck-iterations from default of 2000000. I'd like to simplify
+-- further. Ideally, use constructor pattern matching in the rewrites, instead
+-- of comparing string.
+
+{-# OPTIONS_GHC -fmax-pmcheck-iterations=1000000 #-}
 
 -- {-# OPTIONS_GHC -fno-warn-unused-imports #-} -- TEMP
 -- {-# OPTIONS_GHC -fno-warn-unused-binds   #-} -- TEMP
@@ -618,8 +637,11 @@ primOpt name opt =
 tryCommute :: a :> a
 tryCommute = mkCK try
  where
+#if !defined NoCommute
    try (PairB (BoolB a) (BoolB a')) | a > a' = return (PairB (BoolB a') (BoolB a))
    try (PairB (IntB  a) (IntB  a')) | a > a' = return (PairB (IntB  a') (IntB  a))
+   -- TODO: Float & Double
+#endif
    try b = return b
 
 -- Like primOpt, but sorts. Use for commutative operations to improve reuse
@@ -848,6 +870,14 @@ pattern NotS a <- Source _ "¬" [a] 0
 pattern XorS :: Source -> Source -> Source
 pattern XorS a b <- Source _ "⊕" [a,b] 0
 
+pattern EqS :: Source -> Source -> Source
+pattern EqS a b <- Source _ "≡" [a,b] 0
+
+pattern NeS :: Source -> Source -> Source
+pattern NeS a b <- Source _ "≠" [a,b] 0
+
+-- TODO: state names like "⊕" and "≡" just once.
+
 class SourceToBuses a where toBuses :: Source -> Buses a
 instance SourceToBuses ()     where toBuses = const UnitB
 instance SourceToBuses Bool   where toBuses = BoolB
@@ -857,6 +887,12 @@ instance SourceToBuses Double where toBuses = DoubleB
 
 sourceB :: SourceToBuses a => Source -> CircuitM (Maybe (Buses a))
 sourceB = justA . toBuses
+
+unknownName :: PrimName
+unknownName = "??"
+
+instance GenBuses b => UnknownCat (:>) a b where
+  unknownC = namedC unknownName
 
 #define Sat(pred) ((pred) -> True)
 #define Eql(x) Sat(==(x))
@@ -873,54 +909,67 @@ primDelay a0 = primOpt (delayName a0s) $ \ case
 
 instance BoolCat (:>) where
   notC = primOpt "¬" $ \ case
-           [NotS a]     -> sourceB a
-           [Val x]      -> newVal (not x)
-           _            -> nothingA
+           [NotS a]  -> sourceB a
+           [Val x]   -> newVal (not x)
+           _         -> nothingA
+  -- TODO: I want to add more like the following:
+  -- 
+  --      [EqS a b] -> newComp2 notEqual a b
+  --      
+  -- But
+  -- 
+  --   Ambiguous type variable ‘b0’ arising from a use of ‘newComp2’
+  --   prevents the constraint ‘(SourceToBuses b0)’ from being solved.
+  -- 
+  -- Optimizations are limited by not having static access to source types. I
+  -- think I can fix it by adding a `Ty` (statically typed type GADT) to
+  -- `Source`. Or maybe a simpler version for primitive types only.
   andC = primOptSort "∧" $ \ case
-           [TrueS ,y]   -> sourceB y
-           [x,TrueS ]   -> sourceB x
-           [x@FalseS,_] -> sourceB x
-           [_,y@FalseS] -> sourceB y
+           [TrueS ,y]            -> sourceB y
+           [x,TrueS ]            -> sourceB x
+           [x@FalseS,_]          -> sourceB x
+           [_,y@FalseS]          -> sourceB y
 #if !defined NoIdempotence
-           [x,Eql(x)]   -> sourceB x
+           [x,x']      | x' == x -> sourceB x
 #endif
-           [x,NotS (Eql(x))] -> newVal False
-           [NotS x,Eql(x)]   -> newVal False
-           _            -> nothingA
+           [x,NotS x'] | x' == x -> newVal False
+           [NotS x,x'] | x' == x -> newVal False
+           _                     -> nothingA
   orC  = primOptSort "∨" $ \ case
-           [FalseS,y]   -> sourceB y
-           [x,FalseS]   -> sourceB x
-           [x@TrueS ,_] -> sourceB x
-           [_,y@TrueS ] -> sourceB y
+           [FalseS,y]            -> sourceB y
+           [x,FalseS]            -> sourceB x
+           [x@TrueS ,_]          -> sourceB x
+           [_,y@TrueS ]          -> sourceB y
 #if !defined NoIdempotence
-           [x,Eql(x)]   -> sourceB x
+           [x,x']      | x' == x -> sourceB x
 #endif
-           [x,NotS (Eql(x))] -> newVal True
-           [NotS x,Eql(x)]   -> newVal True
-           -- not a || not b == not (a && b)
+           [x,NotS x'] | x' == x -> newVal True
+           [NotS x,x'] | x' == x -> newVal True
+           -- not a    || not b == not (a && b)
            -- TODO: Handle more elegantly.
-           [NotS x, NotS y] -> do o <- unmkCK andC (PairB (BoolB x) (BoolB y))
-                                  newComp notC o
-           _            -> nothingA
+           [NotS x, NotS y]      ->
+             do o <- unmkCK andC (PairB (BoolB x) (BoolB y))
+                newComp notC o
+           _                     -> nothingA
   xorC = primOptSort "⊕" $ \ case
-           [FalseS,y]        -> sourceB y
-           [x,FalseS]        -> sourceB x
-           [TrueS,y ]        -> newComp1 notC y
-           [x,TrueS ]        -> newComp1 notC x
-           [x,Eql(x)]        -> newVal False
-           [x,NotS (Eql(x))] -> newVal True
-           [NotS x,Eql(x)]   -> newVal True
+           [FalseS,y]            -> sourceB y
+           [x,FalseS]            -> sourceB x
+           [TrueS,y ]            -> newComp1 notC y
+           [x,TrueS ]            -> newComp1 notC x
+           [x,x']      | x' == x -> newVal False
+           [x,NotS x'] | x' == x -> newVal True
+           [NotS x,x'] | x' == x -> newVal True
 #if 1
            -- not x `xor` y == not (x `xor` y)
-           [NotS x, y]       -> newComp2 (notC . xorC) x y
-           [x, NotS y]       -> newComp2 (notC . xorC) x y
+           [NotS x, y]                -> newComp2 (notC . xorC) x y
+           [x, NotS y]                -> newComp2 (notC . xorC) x y
            -- x `xor` (x `xor` y) == y
-           [x, Eql(x) `XorS` y] -> sourceB y
-           [x, y `XorS` Eql(x)] -> sourceB y
-           [x `XorS` y, Eql(x)] -> sourceB y
-           [y `XorS` x, Eql(x)] -> sourceB y
+           [x, x' `XorS` y] | x' == x -> sourceB y
+           [x, y `XorS` x'] | x' == x -> sourceB y
+           [x `XorS` y, x'] | x' == x -> sourceB y
+           [y `XorS` x, x'] | x' == x -> sourceB y
 #endif
-           _                 -> nothingA
+           _                          -> nothingA
 
 #define BoolToInt "Bool→Int"
 
@@ -936,26 +985,97 @@ boolToIntC = namedC BoolToInt
 -- TODO: After I have more experience with these graph optimizations, reconsider
 -- the interface.
 
-#if 0
+#if 1
 
-noOpt :: Opt b
-noOpt = const nothingA
+-- noOpt :: Opt b
+-- noOpt = const nothingA
 
--- TODO: optimizations.
-eqOpt, neOpt :: Opt Bool
-eqOpt = noOpt
-neOpt = noOpt
+eqOpt, neOpt :: forall a. (Read a, Eq a) => Opt Bool
+eqOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x == y)
+  [a,b] | a == b -> newVal True
+  _              -> nothingA
+neOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x /= y)
+  [a,b] | a == b -> newVal False
+  _              -> nothingA
 
 #define EqPrim(ty) \
  instance EqCat (:>) (ty) where { \
-    equal    = primOptSort "≡" eqOpt ;\
-    notEqual = primOptSort "≠" neOpt  \
+    equal    = primOptSort "≡" (eqOpt @(ty)) ;\
+    notEqual = primOptSort "≠" (neOpt @(ty))  \
   }
 
-EqPrim(Bool)
+iffC :: EqCat k Bool => (Bool :* Bool) `k` Bool
+iffC = equal
+
+eqOptB, neOptB :: Opt Bool
+-- eqOptB = noOpt
+-- neOptB = noOpt
+
+eqOptB = \ case
+  [TrueS,y]                           -> sourceB y
+  [x,TrueS]                           -> sourceB x
+  [FalseS,y ]                         -> newComp1 notC y
+  [x,FalseS ]                         -> newComp1 notC x
+  [x,NotS x']      | x' == x          -> newVal False
+  [NotS x,x']      | x' == x          -> newVal False
+  -- not x == y == not (x == y)
+  [NotS x, y]                         -> newComp2 (notC . iffC) x y
+  [x, NotS y]                         -> newComp2 (notC . iffC) x y
+  -- x == (x /= y) == not y
+  [x, x' `XorS` y] | x' == x          -> newComp1 notC y
+  [x, y `XorS` x'] | x' == x          -> newComp1 notC y
+  [x `XorS` y, x'] | x' == x          -> newComp1 notC y
+  [y `XorS` x, x'] | x' == x          -> newComp1 notC y
+  -- x == (x == y) == y
+  [x, x' `EqS` y]  | x' == x          -> sourceB y
+  [x, y `EqS` x']  | x' == x          -> sourceB y
+  [x `EqS` y, z]   | z == x || z == y -> sourceB y
+  _                                   -> nothingA
+
+--   [x `EqS` y, Eql(x)]  -> sourceB y
+--   [y `EqS` x, Eql(x)]  -> sourceB y
+-- 
+--     Pattern match checker exceeded (2000000) iterations in
+--     a case alternative.
+
+neOptB = \ case
+  [FalseS,y]                          -> sourceB y
+  [x,FalseS]                          -> sourceB x
+  [TrueS,y ]                          -> newComp1 notC y
+  [x,TrueS ]                          -> newComp1 notC x
+  [x,x']           | x' == x          -> newVal False
+  [x,NotS x']      | x' == x          -> newVal True
+  [NotS x,x']      | x' == x          -> newVal True
+  -- not x `xor` y == not (x `xor` y)
+  [NotS x, y]                         -> newComp2 (notC . xorC) x y
+  [x, NotS y]                         -> newComp2 (notC . xorC) x y
+  -- x `xor` (x `xor` y) == y
+  [x, x' `XorS` y] | x' == x          -> sourceB y
+  [x, y `XorS` x'] | x' == x          -> sourceB y
+  [x `XorS` y, x'] | x' == x          -> sourceB y
+  [y `XorS` x, x'] | x' == x          -> sourceB y
+  -- x `xor` (x == y) == not y
+  [x, x' `EqS` y]  | x' == x          -> newComp1 notC y
+  [x, y `EqS` x']  | x' == x          -> newComp1 notC y
+  [x `EqS` y, z]   | z == x || z == y -> newComp1 notC y
+  _                                   -> nothingA
+
+--   [x `EqS` y, Eql(x)]  -> newComp1 notC y
+--   [y `EqS` x, Eql(x)]  -> newComp1 notC y
+-- 
+--     Pattern match checker exceeded (2000000) iterations in
+--     a case alternative.
+
+-- EqPrim(Bool)
 EqPrim(Int)
 EqPrim(Float)
 EqPrim(Double)
+
+instance EqCat (:>) Bool where
+  equal    = primOptSort "≡" (eqOpt @Bool `orOpt` eqOptB)
+  notEqual = primOptSort "⊕" (neOpt @Bool `orOpt` neOptB)
 
 instance EqCat (:>) () where
   equal = constC True
@@ -964,11 +1084,28 @@ instance (EqCat (:>) a, EqCat (:>) b) => EqCat (:>) (a,b) where
   equal = andC . (equal *** equal) . transposeP
 
 -- TODO: optimizations.
-ltOpt, gtOpt, leOpt, geOpt :: Opt Bool
-ltOpt = noOpt
-gtOpt = noOpt
-leOpt = noOpt
-geOpt = noOpt
+ltOpt, gtOpt, leOpt, geOpt :: forall a. (Read a, Ord a) => Opt Bool
+-- ltOpt = noOpt
+-- gtOpt = noOpt
+-- leOpt = noOpt
+-- geOpt = noOpt
+
+ltOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x < y)
+  [a,b] | a == b        -> newVal False
+  _                     -> nothingA
+gtOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x > y)
+  [a,b] | a == b        -> newVal False
+  _                     -> nothingA
+leOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x <= y)
+  [a,b] | a == b        -> newVal True
+  _                     -> nothingA
+geOpt = \ case
+  [Val (x :: a), Val y] -> newVal (x >= y)
+  [a,b] | a == b        -> newVal True
+  _                     -> nothingA
 
 -- ltOpt = \ case
 --   [Val x, Val y] -> newVal (x < y)
@@ -979,10 +1116,10 @@ geOpt = noOpt
 
 #define OrdPrim(ty) \
  instance OrdCat (:>) (ty) where { \
-   lessThan           = primOpt "<" ltOpt ; \
-   greaterThan        = primOpt ">" gtOpt ; \
-   lessThanOrEqual    = primOpt "≤" leOpt ; \
-   greaterThanOrEqual = primOpt "≥" geOpt ; \
+   lessThan           = primOpt "<" (ltOpt @(ty)) ; \
+   greaterThan        = primOpt ">" (gtOpt @(ty)) ; \
+   lessThanOrEqual    = primOpt "≤" (leOpt @(ty)) ; \
+   greaterThanOrEqual = primOpt "≥" (geOpt @(ty)) ; \
  }
 
 OrdPrim(Bool)
@@ -1357,11 +1494,12 @@ writeDot attrs (name,depths,report) =
 
 displayDot :: (String,String) -> String -> IO ()
 displayDot (outType,res) name = 
-  do systemSuccess $
-       printf "dot %s -T%s %s -o %s" res outType dotFile picFile
-     printf "Wrote %s\n" picFile
+  do putStrLn dotCommand
+     systemSuccess dotCommand
+     -- printf "Wrote %s\n" picFile
      systemSuccess $ printf "%s %s" open picFile
  where
+   dotCommand = printf "dot %s -T%s %s -o %s" res outType dotFile picFile
    dotFile = outFile name "dot"
    picFile = outFile name outType
    open = case SI.os of
@@ -1502,7 +1640,8 @@ graphDot name attrs depths =
   printf "digraph %s {\n%s}\n" (tweak <$> name)
          (concatMap wrap (prelude ++ recordDots depths))
  where
-   prelude = [ "rankdir=LR"
+   prelude = [ "margin=0"
+             , "rankdir=LR"
              , "node [shape=Mrecord]"
              , "bgcolor=transparent"
              , "nslimit=20"  -- helps with very large rank graphs
@@ -1570,9 +1709,14 @@ recordDots depths = nodes ++ edges
     where
       node :: CompS -> String
       node (CompS nc prim ins outs _) =
-        printf "%s%s [label=\"{%s%s%s}\"]" prefix (compLab nc) 
-          (ports "" (labs In ins) "|") (escape prim) (ports "|" (labs Out outs) "")
+        printf "%s%s [label=\"{%s%s%s}\"%s]" prefix (compLab nc) 
+          (ports "" (labs In ins) "|")
+          (escape prim)
+          (ports "|" (labs Out outs) "")
+          extras
        where
+         extras | prim == unknownName = ",fontcolor=red,color=red,style=bold"
+                | otherwise = ""
          prefix =
            if hideNoPorts && null ins && null outs then "// " else ""
          ports _ "" _ = ""
