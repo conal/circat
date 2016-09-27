@@ -278,3 +278,10 @@ repIf = abstC . ifC . second (twiceP reprC)
 == \ (c,(a,a')) -> abstC (ifC (second (twiceP reprC) (c,((a,a')))))
 == abstC . ifC . second (twiceP reprC)
 #endif
+
+class UnknownCat k a b where
+  unknownC :: a `k` b
+
+instance UnknownCat (->) a b where
+  unknownC = error "unknown"
+
