@@ -79,6 +79,30 @@ instance HasRep (a,b,c,d) where
   abst ((a,b),(c,d)) = (a,b,c,d)
   INLINES
 
+instance HasRep (a,b,c,d,e) where
+  type Rep (a,b,c,d,e) = ((a,b,c,d),e)
+  repr (a,b,c,d,e) = ((a,b,c,d),e)
+  abst ((a,b,c,d),e) = (a,b,c,d,e)
+  INLINES
+
+instance HasRep (a,b,c,d,e,f) where
+  type Rep (a,b,c,d,e,f) = ((a,b,c,d),(e,f))
+  repr (a,b,c,d,e,f) = ((a,b,c,d),(e,f))
+  abst ((a,b,c,d),(e,f)) = (a,b,c,d,e,f)
+  INLINES
+
+instance HasRep (a,b,c,d,e,f,g) where
+  type Rep (a,b,c,d,e,f,g) = ((a,b,c,d),(e,f,g))
+  repr (a,b,c,d,e,f,g) = ((a,b,c,d),(e,f,g))
+  abst ((a,b,c,d),(e,f,g)) = (a,b,c,d,e,f,g)
+  INLINES
+
+instance HasRep (a,b,c,d,e,f,g,h) where
+  type Rep (a,b,c,d,e,f,g,h) = ((a,b,c,d),(e,f,g,h))
+  repr (a,b,c,d,e,f,g,h) = ((a,b,c,d),(e,f,g,h))
+  abst ((a,b,c,d),(e,f,g,h)) = (a,b,c,d,e,f,g,h)
+  INLINES
+
 #if 0
 -- Switching to ShapedTypes.Vec
 instance HasRep (Vec Z a) where
@@ -142,6 +166,7 @@ instance HasRep (Maybe a) where
   repr Nothing  = (False,undefined)
   abst (True,a ) = Just a
   abst (False,_) = Nothing 
+  INLINES
 
 -- TODO: LambdaCCC.Prim has an BottomP primitive. If the error ever occurs,
 -- replace with ErrorP (taking a string argument) and tweak the reification.
