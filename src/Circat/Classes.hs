@@ -142,26 +142,10 @@ instance (Monad m, Ord a) => OrdCat (Kleisli m) a where
   lessThanOrEqual    = arr lessThanOrEqual
   greaterThanOrEqual = arr greaterThanOrEqual
 
-#if 1
 class BottomCat k a where
   bottomC :: Unit `k` a
 
-instance BottomCat (->) a where bottomC = error "bottom"
-
-#else
-#if 0
-class BottomCat k where
-  type BottomKon k a :: Constraint
-  type BottomKon k a = Yes a
-  bottomC :: BottomKon k a => Unit `k` a
--- The constraint is problematic for the HasUnitArrow instance on Prim in
--- LambdaCCC.Prim. Drop the constraint, and add BotB in Circat.Circuit.
-#else
-class BottomCat k where
-  bottomC :: Unit `k`a
-instance BottomCat (->) where bottom = error "bottom"
-#endif
-#endif
+instance BottomCat (->) a where bottomC = error "bottomC for (->) evaluated"
 
 {--------------------------------------------------------------------
     Misc

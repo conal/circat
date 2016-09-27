@@ -10,7 +10,6 @@ packages:
   - verilog
   - netlist-to-verilog
 extra-deps:
-- applicative-numbers-0.1.3
 - ty-0.1.7
 - newtype-generics-0.4
 

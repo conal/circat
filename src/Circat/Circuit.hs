@@ -805,7 +805,6 @@ constM' :: GS b => b -> CircuitM (Buses b)
 
 #define UNDEFINED "⊥"
 
--- bottomScalar :: GenBuses b => CircuitM (Buses b)
 bottomScalar :: GenBuses b => Unit :> b
 bottomScalar = mkCK (constComp UNDEFINED)
 
